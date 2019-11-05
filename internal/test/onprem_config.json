@@ -1,0 +1,9 @@
+{
+    "mode": "onprem",
+    "endpoint": "https://localhost:9090",
+    "username": "",
+    "password": "",
+    "tablePrefix": "Go",
+    "reCreateTables": true,
+    "dropTablesOnTearDown": false
+}

@@ -1,0 +1,696 @@
+//
+// Copyright (C) 2019 Oracle and/or its affiliates. All rights reserved.
+//
+// Licensed under the Universal Permissive License v 1.0 as shown at https://oss.oracle.com/licenses/upl
+//
+// Please see LICENSE.txt file included in the top-level directory of the
+// appropriate download for a copy of the license and additional information.
+//
+
+package nosqldb
+
+import (
+	"fmt"
+	"math/big"
+	"strings"
+	"time"
+
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
+	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
+	"github.com/oracle/nosql-go-sdk/nosqldb/types"
+)
+
+var (
+	_ planIterState = (*aggrIterState)(nil)
+	_ aggrPlanIter  = (*funcSumIter)(nil)
+	_ aggrPlanIter  = (*funcMinMaxIter)(nil)
+)
+
+// aggrIterState represents the state for an aggregate plan iterator.
+type aggrIterState struct {
+	*iterState
+
+	// The sum value.
+	// This is used by the sum(*) and avg(*) functions.
+	sum interface{}
+
+	// The number of input values for the aggregate operation.
+	// This is used by the avg(*) function.
+	count int
+
+	// The min or max value.
+	// This is used by the min(*) and max(*) functions.
+	minMax interface{}
+
+	// nullInputOnly indicates if input values supplied to the aggregate
+	// operation are all NULLs.
+	nullInputOnly bool
+}
+
+func newAggrIterState() *aggrIterState {
+	return &aggrIterState{
+		iterState:     newIterState(),
+		sum:           int64(0),
+		count:         0,
+		minMax:        types.NullValueInstance,
+		nullInputOnly: true,
+	}
+}
+
+func (st *aggrIterState) reset() error {
+	st.sum = int64(0)
+	st.count = 0
+	st.minMax = types.NullValueInstance
+	st.nullInputOnly = true
+	return st.iterState.reset()
+}
+
+// funcSumIter implements the built-in SQL sum(*) aggregate function.
+// It is used to re-sum partial sums and counts received from the Oracle NoSQL database servers.
+type funcSumIter struct {
+	*planIterDelegate
+
+	// The input plan iterator.
+	input planIter
+}
+
+func newFuncSumIter(r proto.Reader) (iter *funcSumIter, err error) {
+	delegate, err := newPlanIterDelegate(r, fnSum)
+	if err != nil {
+		return
+	}
+
+	input, err := deserializePlanIter(r)
+	if err != nil {
+		return
+	}
+
+	iter = &funcSumIter{
+		planIterDelegate: delegate,
+		input:            input,
+	}
+	return
+}
+
+func (iter *funcSumIter) open(rcb *runtimeControlBlock) (err error) {
+	rcb.setState(iter.statePos, newAggrIterState())
+	return iter.input.open(rcb)
+}
+
+// reset resets the input iterator so that the next input value can be computed.
+//
+// This method does not reset the state for funcSumIter, it is the getAggrValue()
+// method that resets the state.
+func (iter *funcSumIter) reset(rcb *runtimeControlBlock) (err error) {
+	return iter.input.reset(rcb)
+}
+
+func (iter *funcSumIter) close(rcb *runtimeControlBlock) (err error) {
+	state := rcb.getState(iter.statePos)
+	if state == nil {
+		return nil
+	}
+
+	if err = iter.input.close(rcb); err != nil {
+		return
+	}
+
+	return state.close()
+}
+
+// next does not actually return a value, it just adds a new value
+// (if it is of a numeric type) to the current sum kept in the state.
+func (iter *funcSumIter) next(rcb *runtimeControlBlock) (more bool, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return false, fmt.Errorf("wrong iterator state type for funcSumIter, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	if state.isDone() {
+		return false, nil
+	}
+
+	var value types.FieldValue
+
+	for {
+		more, err = iter.input.next(rcb)
+		if err != nil {
+			return false, err
+		}
+
+		if !more {
+			return true, nil
+		}
+
+		value = iter.input.getResult(rcb)
+		rcb.trace(2, "funcSumIter.next() : summing up value %v", value)
+
+		if value == types.NullValueInstance {
+			continue
+		}
+
+		state.nullInputOnly = false
+		err = iter.computeSum(state, value)
+		if err != nil {
+			return false, err
+		}
+	}
+}
+
+// computeSum computes the new sum by adding the specified value.
+func (iter *funcSumIter) computeSum(state *aggrIterState, value types.FieldValue) (err error) {
+	switch v := value.(type) {
+	case int:
+		err = iter.addInt(state, v)
+	case int64:
+		err = iter.addInt64(state, v)
+	case float64:
+		err = iter.addFloat64(state, v)
+	case *big.Rat:
+		err = iter.addBigRat(state, v)
+	default:
+		return fmt.Errorf("unsupported type of input value for the sum(*) function: %T", value)
+	}
+
+	if err != nil {
+		return
+	}
+
+	state.count++
+	return
+}
+
+// addInt computes the new sum by adding the specified int value v.
+func (iter *funcSumIter) addInt(state *aggrIterState, v int) error {
+	switch sum := state.sum.(type) {
+	case int:
+		sum += v
+		state.sum = sum
+
+	case int64:
+		sum += int64(v)
+		state.sum = sum
+
+	case float64:
+		sum += float64(v)
+		state.sum = sum
+
+	case *big.Rat:
+		newVal := new(big.Rat).SetInt64(int64(v))
+		sum.Add(sum, newVal)
+		state.sum = sum
+
+	default:
+		return fmt.Errorf("unsupported sum type for the sum(*) function: %T", state.sum)
+	}
+
+	return nil
+}
+
+// addInt64 computes the new sum by adding the specified int64 value v.
+func (iter *funcSumIter) addInt64(state *aggrIterState, v int64) error {
+	switch sum := state.sum.(type) {
+	case int:
+		state.sum = int64(sum) + v
+
+	case int64:
+		state.sum = sum + v
+
+	case float64:
+		sum += float64(v)
+		state.sum = sum
+
+	case *big.Rat:
+		newVal := new(big.Rat).SetInt64(v)
+		sum.Add(sum, newVal)
+		state.sum = sum
+
+	default:
+		return fmt.Errorf("unsupported sum type for the sum(*) function: %T", state.sum)
+	}
+
+	return nil
+}
+
+// addFloat64 computes the new sum by adding the specified float64 value v.
+func (iter *funcSumIter) addFloat64(state *aggrIterState, v float64) error {
+	switch sum := state.sum.(type) {
+	case int:
+		state.sum = float64(sum) + v
+
+	case int64:
+		state.sum = float64(sum) + v
+
+	case float64:
+		sum += v
+		state.sum = sum
+
+	case *big.Rat:
+		newVal := new(big.Rat).SetFloat64(v)
+		sum.Add(sum, newVal)
+		state.sum = sum
+
+	default:
+		return fmt.Errorf("unsupported sum type for the sum(*) function: %T", state.sum)
+	}
+
+	return nil
+}
+
+// addBigRat computes the new sum by adding the specified big.Rat value v.
+func (iter *funcSumIter) addBigRat(state *aggrIterState, v *big.Rat) error {
+	switch sum := state.sum.(type) {
+	case int:
+		newSum := new(big.Rat).SetInt64(int64(sum))
+		newSum.Add(newSum, v)
+		state.sum = newSum
+
+	case int64:
+		newSum := new(big.Rat).SetInt64(sum)
+		newSum.Add(newSum, v)
+		state.sum = newSum
+
+	case float64:
+		newSum := new(big.Rat).SetFloat64(sum)
+		newSum.Add(newSum, v)
+		state.sum = newSum
+
+	case *big.Rat:
+		sum.Add(sum, v)
+		state.sum = sum
+
+	default:
+		return fmt.Errorf("unsupported sum type for the sum(*) function: %T", state.sum)
+	}
+
+	return nil
+}
+
+// getAggrValue returns the final result of the aggregate operation, it also
+// resets the iterator state if the reset flag is set.
+//
+// This implements the aggrPlanIter interface.
+func (iter *funcSumIter) getAggrValue(rcb *runtimeControlBlock, reset bool) (v types.FieldValue, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return nil, fmt.Errorf("wrong iterator state type for funcSumIter, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	if state.nullInputOnly {
+		return types.NullValueInstance, nil
+	}
+
+	sum := state.sum
+	if reset {
+		state.reset()
+	}
+
+	rcb.trace(4, "funcSumIter.getAggrValue() : got sum=%v", state.sum)
+	return sum, nil
+}
+
+func (iter *funcSumIter) getPlan() string {
+	return iter.planIterDelegate.getExecPlan(iter)
+}
+
+func (iter *funcSumIter) displayContent(sb *strings.Builder, f *planFormatter) {
+	iter.planIterDelegate.displayPlan(iter.input, sb, f)
+}
+
+// funcMinMaxIter implements the built-in SQL min() and max() aggregate functions.
+//
+// It is required by the driver to compute the total min/max from the partial
+// mins/maxs received from the NoSQL database servers.
+type funcMinMaxIter struct {
+	*planIterDelegate
+
+	// The input plan iterator.
+	input planIter
+
+	// fnCode indicates if this is min() or max() function.
+	fnCode funcCode
+}
+
+func newFuncMinMaxIter(r proto.Reader) (iter *funcMinMaxIter, err error) {
+	delegate, err := newPlanIterDelegate(r, fnMinMax)
+	if err != nil {
+		return
+	}
+
+	fnCode, err := r.ReadInt16()
+	if err != nil {
+		return
+	}
+
+	input, err := deserializePlanIter(r)
+	if err != nil {
+		return
+	}
+
+	iter = &funcMinMaxIter{
+		planIterDelegate: delegate,
+		input:            input,
+		fnCode:           funcCode(int(fnCode)),
+	}
+	return
+}
+
+// getFuncCode returns the function code.
+//
+// This implements the funcPlanIter interface.
+func (iter *funcMinMaxIter) getFuncCode() funcCode {
+	return iter.fnCode
+}
+
+func (iter *funcMinMaxIter) open(rcb *runtimeControlBlock) (err error) {
+	rcb.setState(iter.statePos, newAggrIterState())
+	return iter.input.open(rcb)
+}
+
+func (iter *funcMinMaxIter) reset(rcb *runtimeControlBlock) (err error) {
+	return iter.input.reset(rcb)
+}
+
+func (iter *funcMinMaxIter) close(rcb *runtimeControlBlock) (err error) {
+	state := rcb.getState(iter.statePos)
+	if state == nil {
+		return nil
+	}
+
+	if err = iter.input.close(rcb); err != nil {
+		return
+	}
+
+	return state.close()
+}
+
+func (iter *funcMinMaxIter) next(rcb *runtimeControlBlock) (more bool, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return false, fmt.Errorf("wrong iterator state type for funcMinMaxIter, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	if state.isDone() {
+		return false, nil
+	}
+
+	var value types.FieldValue
+
+	for {
+		more, err = iter.input.next(rcb)
+		if err != nil {
+			return false, err
+		}
+
+		if !more {
+			return true, nil
+		}
+
+		value = iter.input.getResult(rcb)
+
+		if value == types.NullValueInstance || value == types.JSONNullValueInstance {
+			continue
+		}
+
+		err = iter.computeMinMax(rcb, state, value)
+		if err != nil {
+			return false, err
+		}
+	}
+}
+
+// computeMinMax computes the min or max value.
+func (iter *funcMinMaxIter) computeMinMax(rcb *runtimeControlBlock, state *aggrIterState, value types.FieldValue) (err error) {
+	if state.minMax == types.NullValueInstance {
+		state.minMax = value
+		return nil
+	}
+
+	compareRes, err := compareAtomicValues(rcb, state.minMax, value)
+	if err != nil {
+		return
+	}
+
+	rcb.trace(2, "funcMinMaxIter.computeMinMax() : compared values %v and %v, result=%#v",
+		state.minMax, value, *compareRes)
+
+	if iter.fnCode == fnMin {
+		if compareRes.incompatible || compareRes.comp < 0 {
+			return
+		}
+	} else {
+		if compareRes.incompatible || compareRes.comp > 0 {
+			return
+		}
+	}
+
+	state.minMax = value
+	return
+}
+
+// getAggrValue returns the final result of the aggregate operation, it also
+// resets the iterator state if the reset flag is set.
+//
+// This implements the aggrPlanIter interface.
+func (iter *funcMinMaxIter) getAggrValue(rcb *runtimeControlBlock, reset bool) (v types.FieldValue, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return nil, fmt.Errorf("wrong iterator state type for funcMinMaxIter, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	minMax := state.minMax
+	if reset {
+		state.reset()
+	}
+
+	return minMax, nil
+}
+
+func (iter *funcMinMaxIter) getPlan() string {
+	return iter.planIterDelegate.getExecPlan(iter)
+}
+
+func (iter *funcMinMaxIter) displayContent(sb *strings.Builder, f *planFormatter) {
+	iter.displayPlan(iter.input, sb, f)
+}
+
+// fieldValueSlice represents a slice of field values.
+//
+// It implements the sort.Interface.
+type fieldValueSlice []types.FieldValue
+
+// Len returns the number of field values.
+func (p fieldValueSlice) Len() int {
+	return len(p)
+}
+
+// Swap swaps the field value with index i and j.
+func (p fieldValueSlice) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+// Less reports whether the field value with index i should sort before the one with index j.
+func (p fieldValueSlice) Less(i, j int) bool {
+	res, _ := compareAtomicValues(nil, p[i], p[j])
+	return res.comp < 0
+}
+
+type compareResult struct {
+	incompatible bool
+	hasNull      bool
+	comp         int
+}
+
+func (r *compareResult) reset() {
+	r.incompatible = false
+	r.hasNull = false
+	r.comp = 0
+}
+
+// compareAtomicValues compares 2 atomic values and returns the result of comparison.
+func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res *compareResult, err error) {
+	if rcb != nil {
+		rcb.trace(4, "compareAtomicValues() : comparing values %v and %v", v1, v2)
+	}
+
+	res = &compareResult{}
+
+	if v1 == types.NullValueInstance || v2 == types.NullValueInstance {
+		res.hasNull = true
+		return
+	}
+
+	if v1 == types.JSONNullValueInstance {
+		if v2 == types.JSONNullValueInstance {
+			res.comp = 0
+			return
+		}
+
+		res.incompatible = true
+		return
+	}
+
+	if v2 == types.JSONNullValueInstance {
+		if v1 == types.JSONNullValueInstance {
+			res.comp = 0
+			return
+		}
+
+		res.incompatible = true
+		return
+	}
+
+	switch v1 := v1.(type) {
+	case int:
+		switch v2 := v2.(type) {
+		case int:
+			res.comp = compareInts(v1, v2)
+		case int64:
+			res.comp = compareInt64s(int64(v1), v2)
+		case float64:
+			res.comp = compareFloat64s(float64(v1), v2)
+		case *big.Rat:
+			rat1 := new(big.Rat).SetInt64(int64(v1))
+			res.comp = rat1.Cmp(v2)
+		default:
+			res.incompatible = true
+		}
+
+	case int64:
+		switch v2 := v2.(type) {
+		case int:
+			res.comp = compareInt64s(v1, int64(v2))
+		case int64:
+			res.comp = compareInt64s(v1, v2)
+		case float64:
+			res.comp = compareFloat64s(float64(v1), v2)
+		case *big.Rat:
+			rat1 := new(big.Rat).SetInt64(v1)
+			res.comp = rat1.Cmp(v2)
+		default:
+			res.incompatible = true
+		}
+
+	case float64:
+		switch v2 := v2.(type) {
+		case int:
+			res.comp = compareFloat64s(float64(v1), float64(v2))
+		case int64:
+			res.comp = compareFloat64s(float64(v1), float64(v2))
+		case float64:
+			res.comp = compareFloat64s(float64(v1), v2)
+		case *big.Rat:
+			rat1 := new(big.Rat).SetFloat64(v1)
+			res.comp = rat1.Cmp(v2)
+		default:
+			res.incompatible = true
+		}
+
+	case *big.Rat:
+		rat2 := new(big.Rat)
+		switch v2 := v2.(type) {
+		case int:
+			rat2.SetInt64(int64(v2))
+			res.comp = v1.Cmp(rat2)
+		case int64:
+			rat2.SetInt64(v2)
+			res.comp = v1.Cmp(rat2)
+		case float64:
+			rat2.SetFloat64(v2)
+			res.comp = v1.Cmp(rat2)
+		case *big.Rat:
+			res.comp = v1.Cmp(v2)
+		default:
+			res.incompatible = true
+		}
+
+	case string:
+		if v2, ok := v2.(string); ok {
+			res.comp = compareStrings(v1, v2)
+		} else {
+			res.incompatible = true
+		}
+
+	case bool:
+		if v2, ok := v2.(bool); ok {
+			if v1 == v2 {
+				res.comp = 0
+			} else {
+				res.comp = -1
+			}
+		} else {
+			res.incompatible = true
+		}
+
+	case time.Time:
+		if v2, ok := v2.(time.Time); ok {
+			switch {
+			case v1.Equal(v2):
+				res.comp = 0
+			case v1.Before(v2):
+				res.comp = -1
+			default:
+				res.comp = 1
+			}
+		} else {
+			res.incompatible = true
+		}
+
+	default:
+		err = nosqlerr.NewIllegalState("unexpected operand type in comparison operator: %T", v1)
+	}
+
+	return
+}
+
+func compareInts(x, y int) int {
+	switch {
+	case x < y:
+		return -1
+	case x > y:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareInt64s(x, y int64) int {
+	switch {
+	case x < y:
+		return -1
+	case x > y:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareFloat64s(x, y float64) int {
+	switch {
+	case x < y:
+		return -1
+	case x > y:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareStrings(x, y string) int {
+	switch {
+	case x < y:
+		return -1
+	case x > y:
+		return 1
+	default:
+		return 0
+	}
+}
