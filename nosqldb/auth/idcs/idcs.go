@@ -363,7 +363,7 @@ func (p *AccessTokenProvider) AuthorizationString(req auth.Request) (auth string
 }
 
 // bearer token providers don't do anything with request signing
-func (p *AccessTokenProvider) SignHttpRequest(req *http.Request) error {
+func (p *AccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }
 

@@ -207,7 +207,8 @@ func (p *AccessTokenProvider) AuthorizationString(req auth.Request) (auth string
 	return p.login()
 }
 
-func (p *AccessTokenProvider) SignHttpRequest(req *http.Request) error {
+// SignHTTPRequest is unused in kvstore on-prem logic
+func (p *AccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }
 

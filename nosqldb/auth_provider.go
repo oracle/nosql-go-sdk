@@ -49,7 +49,7 @@ type AuthorizationProvider interface {
 	// Some authorization providers need the entire http request to sign it
 	// note this method may add or change header fields (but should never modify the
 	// http data payload)
-	SignHttpRequest(httpReq *http.Request) error
+	SignHTTPRequest(httpReq *http.Request) error
 
 	// Close releases resources allocated by the provider.
 	Close() error

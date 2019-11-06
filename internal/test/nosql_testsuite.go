@@ -217,7 +217,7 @@ func (p DummyAccessTokenProvider) AuthorizationString(req auth.Request) (string,
 	return auth.BearerToken + " " + p.TenantId, nil
 }
 
-func (p DummyAccessTokenProvider) SignHttpRequest(req *http.Request) error {
+func (p DummyAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }
 

@@ -936,7 +936,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 			httpReq.Header.Set("Authorization", authStr)
 		}
 
-		err = c.signHttpRequest(httpReq)
+		err = c.signHTTPRequest(httpReq)
 		if err != nil {
 			return nil, err
 		}
@@ -1021,7 +1021,7 @@ func (c *Client) getAuthString(opReq Request) (string, error) {
 	return c.AuthorizationProvider.AuthorizationString(req)
 }
 
-func (c *Client) signHttpRequest(httpReq *http.Request) error {
+func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 	if c.AuthorizationProvider == nil {
 		return nil
 	}
@@ -1029,7 +1029,7 @@ func (c *Client) signHttpRequest(httpReq *http.Request) error {
 	switch c.AuthorizationProvider.AuthorizationScheme() {
 	case auth.Signature:
 		// currently this is the only provider that uses an actual http.Request
-		return c.AuthorizationProvider.SignHttpRequest(httpReq)
+		return c.AuthorizationProvider.SignHTTPRequest(httpReq)
 	case auth.BearerToken:
 		// no changes to http req for this method
 		return nil

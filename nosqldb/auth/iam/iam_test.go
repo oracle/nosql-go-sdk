@@ -32,12 +32,16 @@ type testProviderInfo struct {
 	tenancy     *string
 	region      *string
 	shortDesc   *string
+	compartment *string
+	expectAuth  *string
 	expectErr   bool
 }
 
-var (
-	testKeyFile    = "testdata/test-iam.valid.pem"
-	testBadKeyFile = "testdata/test-iam.corrupted.pem"
+const (
+	testKeyFile       = "testdata/test-iam.valid.pem"
+	testBadKeyFile    = "testdata/test-iam.corrupted.pem"
+	testExpectedAuth  = "Signature version=\"1\",headers=\"date (request-target) host\",keyId=\"ocid1.tenancy.oc1..aaaaaaaaba3pv6wkcr4jqae5f15p2b2m2yt2j6rx32uzr4h25vqstifsfdsq/ocid1.user.oc1..aaaaaaaat5nvwcna5j6aqzjcaty5eqbb6qt2jvpkanghtgdaqedqw3rynjq/20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34\",algorithm=\"rsa-sha256\",signature=\"FY0I/Jwl2oiQrug9/tB/tPiajq2zDqiLdU+YtxDaQ5onMvF90RtSGjPRwqbLl9+n4MPhgVVMXgpPXWe9l5TZ30/yF9O97CDLVOEGZ2DhSclSmejLVVuNrl14v559VKfxookpXwjYxLA1mT4mgq50MV/6e+mRi18U62uiJ3seZZI=\""
+	testCompartmentID = "ocid1.compartment.oc1..aaaaaaaaba3pv6wkcr4bbchskrnmgf4hjsakfd843hjsj4h25vqstifsfdsq"
 )
 
 var testCasesForNewProvider = []*testProviderInfo{
@@ -51,8 +55,24 @@ var testCasesForNewProvider = []*testProviderInfo{
 		keyFile:     SP(testKeyFile),
 		tenancy:     SP(testTenancyOCID),
 		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  SP(testExpectedAuth),
 		shortDesc:   SP("Basic passing case"),
 		expectErr:   false,
+	},
+	// Use an alternate compartmentID
+	{
+		user:        SP(testUserOCID),
+		fingerprint: SP(testFingerprint),
+		keyFile:     SP(testKeyFile),
+		tenancy:     SP(testTenancyOCID),
+		region:      SP(testRegion),
+		compartment: SP(testCompartmentID),
+		// Note: compartmentID is not used in signature calculation, so we expect
+		//       the same signature with any compartmentID
+		expectAuth: SP(testExpectedAuth),
+		shortDesc:  SP("Basic passing case with alternate compartmentID"),
+		expectErr:  false,
 	},
 	// Specify a non-exist file for "key_file" property.
 	{
@@ -61,6 +81,8 @@ var testCasesForNewProvider = []*testProviderInfo{
 		keyFile:     nil,
 		tenancy:     SP(testTenancyOCID),
 		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
 		shortDesc:   SP("Missing key file"),
 		expectErr:   true,
 	},
@@ -71,6 +93,8 @@ var testCasesForNewProvider = []*testProviderInfo{
 		keyFile:     SP(testBadKeyFile),
 		tenancy:     SP(testTenancyOCID),
 		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
 		shortDesc:   SP("Corrupted key file"),
 		expectErr:   true,
 	},
@@ -81,6 +105,8 @@ var testCasesForNewProvider = []*testProviderInfo{
 		keyFile:     SP(testKeyFile),
 		tenancy:     SP(testTenancyOCID),
 		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
 		shortDesc:   SP("Missing \"user=\" property"),
 		expectErr:   true,
 	},
@@ -91,13 +117,15 @@ var testCasesForNewProvider = []*testProviderInfo{
 		keyFile:     SP(testKeyFile),
 		tenancy:     SP(testTenancyOCID),
 		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
 		shortDesc:   SP("Missing \"fingerprint=\" property"),
 		expectErr:   true,
 	},
 	// TODO:
 	// invalid/mangled user, tenancy, region, fingerprint
 	// invalid format, empty, binary config file
-	// calls to SignHttpRequest():
+	// calls to SignHTTPRequest():
 	// compare signature given valid date string
 	// compare signature with invalid / empty date
 }
@@ -107,6 +135,7 @@ func (suite *iamTestSuite) TestNewSignatureProvider() {
 	var err error
 	var f string
 	var msgPrefix string
+	var compID string
 
 	for i, r := range testCasesForNewProvider {
 		if r == nil {
@@ -121,7 +150,14 @@ func (suite *iamTestSuite) TestNewSignatureProvider() {
 			defer os.Remove(f)
 		}
 
-		p, err = NewSignatureProvider(f, "")
+		if r != nil && r.compartment != nil {
+			compID = *r.compartment
+		} else {
+			compID = ""
+		}
+
+		p, err = NewSignatureProvider(f, "", compID)
+
 		if r == nil || r.expectErr {
 			suite.Errorf(err, msgPrefix+"NewSignatureProvider() should have failed, but succeeded")
 			continue
@@ -171,10 +207,8 @@ func createPropFile(props testProviderInfo) (string, error) {
 
 func (suite *iamTestSuite) checkSignatureGeneration(p *SignatureProvider, r *testProviderInfo, prefix string) error {
 
-	var expectedAuth = "Signature version=\"1\",headers=\"date (request-target) host\",keyId=\"ocid1.tenancy.oc1..aaaaaaaaba3pv6wkcr4jqae5f15p2b2m2yt2j6rx32uzr4h25vqstifsfdsq/ocid1.user.oc1..aaaaaaaat5nvwcna5j6aqzjcaty5eqbb6qt2jvpkanghtgdaqedqw3rynjq/20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34\",algorithm=\"rsa-sha256\",signature=\"FY0I/Jwl2oiQrug9/tB/tPiajq2zDqiLdU+YtxDaQ5onMvF90RtSGjPRwqbLl9+n4MPhgVVMXgpPXWe9l5TZ30/yF9O97CDLVOEGZ2DhSclSmejLVVuNrl14v559VKfxookpXwjYxLA1mT4mgq50MV/6e+mRi18U62uiJ3seZZI=\""
-
 	// create an http request, sign it, then verify the signature
-	body := bytes.NewBufferString("CREATE TABLE IF NOT EXISTS audienceData (cookie_id LONG, audience_data STRING, PRIMARY KEY(cookie_id))")
+	body := bytes.NewBufferString("CREATE TABLE IF NOT EXISTS testData (id LONG, test_string STRING, PRIMARY KEY(id))")
 
 	req, err := http.NewRequest("POST", "/V0/nosql/data", body)
 	if err != nil {
@@ -195,8 +229,8 @@ func (suite *iamTestSuite) checkSignatureGeneration(p *SignatureProvider, r *tes
 
 	gotAuth := req.Header.Get(requestHeaderAuthorization)
 
-	if gotAuth != expectedAuth {
-		return fmt.Errorf("Authorization header failed: expected=\n%s\nactual=\n%s\n", expectedAuth, gotAuth)
+	if r.expectAuth != nil && gotAuth != *r.expectAuth {
+		return fmt.Errorf("authorization header failed: expected=%s\nactual=%s", *r.expectAuth, gotAuth)
 	}
 	return nil
 }

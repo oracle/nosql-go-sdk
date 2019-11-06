@@ -40,6 +40,6 @@ func (p *DummyAccessTokenProvider) Close() error {
 	return nil
 }
 
-func (p DummyAccessTokenProvider) SignHttpRequest(req *http.Request) error {
+func (p DummyAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }

@@ -23,7 +23,7 @@ import (
 const (
 	requestHeaderDate                = "Date"
 	requestHeaderAuthorization       = "Authorization"
-	requestHeaderXNoSQLCompartmentId = "X-Nosql-Compartment-Id"
+	requestHeaderXNoSQLCompartmentID = "X-Nosql-Compartment-Id"
 )
 
 // SignatureProvider is an signature provider for use with cloud IAM.
@@ -34,8 +34,8 @@ type SignatureProvider struct {
 	// the signer we use to sign each request
 	signer HTTPRequestSigner
 
-	// we need this for default compartmentId (TODO: add compartments in api)
-	compartmentId string
+	// we need this for default compartmentID
+	compartmentID string
 
 	// cached signature string
 	signature string
@@ -56,7 +56,9 @@ type SignatureProvider struct {
 // NewSignatureProvider creates a signature provider based on the contents of
 // the OCI IAM credentials file passed in.
 //
-func NewSignatureProvider(configFilePath string, privateKeyPassword string) (*SignatureProvider, error) {
+// compartmentID is optional; if empty, the tenancyOCID is used in its place.
+//
+func NewSignatureProvider(configFilePath string, privateKeyPassword string, compartmentID string) (*SignatureProvider, error) {
 
 	// open/read creds config file
 	configProvider, err := ConfigurationProviderFromFile(configFilePath, privateKeyPassword)
@@ -69,8 +71,10 @@ func NewSignatureProvider(configFilePath string, privateKeyPassword string) (*Si
 		return nil, err
 	}
 
-	// the default compartmentId is the tenancyID
-	compartmentId, _ := configProvider.TenancyOCID()
+	// the default compartmentID is the tenancyID
+	if compartmentID == "" {
+		compartmentID, _ = configProvider.TenancyOCID()
+	}
 
 	// we currently don't sign the -body- of the requests
 	signer := RequestSignerExcludeBody(configProvider)
@@ -78,21 +82,15 @@ func NewSignatureProvider(configFilePath string, privateKeyPassword string) (*Si
 		return nil, fmt.Errorf("can't create request signer")
 	}
 
-	// set the next signature expiration to an hour ago so we'll create a new signature on
-	// the first request
-	now := time.Now()
-	dur, _ := time.ParseDuration("-1h")
-	now.Add(dur)
-
 	// create a new signature every 5 minutes
 	expiryInterval, _ := time.ParseDuration("5m")
 
 	p := &SignatureProvider{
 		signature:              "",
-		signatureExpiresAt:     now,
+		signatureExpiresAt:     time.Now(),
 		signatureFormattedDate: "",
 		expiryInterval:         expiryInterval,
-		compartmentId:          compartmentId,
+		compartmentID:          compartmentID,
 		signer:                 signer,
 	}
 
@@ -105,12 +103,13 @@ func (p *SignatureProvider) AuthorizationScheme() string {
 	return auth.Signature
 }
 
-// This isn't used for IAM; instead, each individual request is signed via SignHttpRequest()
+// AuthorizationString isn't used for IAM; instead, each individual request is
+// signed via SignHTTPRequest()
 func (p *SignatureProvider) AuthorizationString(req auth.Request) (auth string, err error) {
 	return "", nil
 }
 
-// SignHttpRequest signs the request, add the signature to the Authentication: header, add
+// SignHTTPRequest signs the request, add the signature to the Authentication: header, add
 // the Date: header, and add the "x-nosql-compartment-id" header
 //
 // The Authorization header looks like:
@@ -120,16 +119,14 @@ func (p *SignatureProvider) AuthorizationString(req auth.Request) (auth string, 
 // This method uses the cached signature if it was generated within the expiry time
 // specified in signatureExpiry. Else it gets the current date/time and uses that to
 // generate a new signature.
-func (p *SignatureProvider) SignHttpRequest(req *http.Request) error {
+func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 
-	// no matter what, we set the compartmentId if we have it
-	if p.compartmentId != "" {
-		req.Header.Set(requestHeaderXNoSQLCompartmentId, p.compartmentId)
-	}
+	// no matter what, we set the compartmentID in the header
+	req.Header.Set(requestHeaderXNoSQLCompartmentID, p.compartmentID)
 
 	// use cached signature and date, if not expired
 	now := time.Now()
-	if p.signatureExpiresAt.After(now) {
+	if p.signature != "" && p.signatureExpiresAt.After(now) {
 		p.mutex.RLock()
 		defer p.mutex.RUnlock()
 		req.Header.Set(requestHeaderDate, p.signatureFormattedDate)
