@@ -8,6 +8,102 @@
 //
 
 // Package examples provides common functions used by the examples that are in sub folders.
+//
+// To build the examples, use the command:
+//
+//   cd nosql-go-sdk
+//   make build-examples
+//
+// If build succeeds, the example binaries "basic", "delete" and "index" can
+// be found at the nosql-go-sdk/bin/examples directory.
+//
+// The examples can run with the Oracle NoSQL Cloud Simulator, the Oracle NoSQL
+// Cloud Service and the Oracle NoSQL Database on-premise.
+//
+// 1. Run examples against the Oracle NoSQL Cloud Simulator.
+//
+// (1) Download the Oracle NoSQL Cloud Simulator and start an instance of the
+// Cloud Simulator. See https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/download-oracle-nosql-cloud-simulator.html
+// for more details.
+//
+// (2) Assume the Cloud Simulator is running at localhost:8080, use the command:
+//
+//   cd nosql-go-sdk/bin/examples
+//   # Run the basic example.
+//   # To run other examples, replace "basic" with the desired example binary.
+//   ./basic localhost:8080
+//
+// 2. Run examples against the Oracle NoSQL Cloud Service with IAM configuration.
+//
+// (1) Create an IAM configuration file (e.g. ~/iam_config).
+// See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
+// for the format and contents of an IAM configuration file.
+//
+//   [DEFAULT]
+//   user=ocid1.user.oc1..aaaaaaaa65vwl75tewwm32rgqvm6i34unq
+//   fingerprint=20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34
+//   key_file=~/.oci/oci_api_key.pem
+//   pass_phrase=examplephrase
+//   tenancy=ocid1.tenancy.oc1..aaaaaaaaba3pv6wuzr4h25vqstifsfdsq
+//   region=us-ashburn-1
+//
+// (2) Assume the Oracle NoSQL Cloud Service is running at https://ndcs.us-ashburn-1.oraclecloud.com,
+// use the command:
+//
+//   cd nosql-go-sdk/bin/examples
+//   # Run the basic example.
+//   # To run other examples, replace "basic" with the desired example binary.
+//   ./basic -config=iam -configFile=~/iam_config https://ndcs.us-ashburn-1.oraclecloud.com
+//
+// 3. Run examples against the Oracle NoSQL Cloud Service with IDCS configuration.
+//
+// (1) Create an IDCS configuration file (e.g. ~/idcs_config).
+// See https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs#NewAccessTokenProviderWithFile
+// for the format and contents of an IDCS configuration file.
+//
+//   idcs_url=https://idcs-xxxxxx.identity.oraclecloud.com
+//   creds_file=~/.andc/credentials
+//   entitlement_id=abcd-efgh-ijkl-mnop
+//
+// (2) Assume the Oracle NoSQL Cloud Service endpoint is https://ndcs.us-ashburn-1.oraclecloud.com,
+// use the command:
+//
+//   cd nosql-go-sdk/bin/examples
+//   # Run the basic example.
+//   # To run other examples, replace "basic" with the desired example binary.
+//   ./basic -config=idcs -configFile=~/idcs_config https://ndcs.us-ashburn-1.oraclecloud.com
+//
+// 4. Run examples against the Oracle NoSQL Database on-premise.
+//
+// (1) Download the Oracle NoSQL Database Server and Oracle NoSQL Database
+// Proxy (aka HTTP Proxy) at https://www.oracle.com/database/technologies/nosql-database-server-downloads.html.
+// Start an instance of the HTTP Proxy that connects to the Oracle NoSQL Database Server.
+//
+// (2) If the Oracle NoSQL Database Server has security configuration enabled,
+// create a configuration file that specifies the username and password used to
+// authenticate with the server, for example (~/kvstore_config):
+//
+//   username=user1
+//   password=NoSql00__123456
+//
+// (3) Assume the HTTP Proxy is running at https://localhost:8080, use the command to
+// run examples against the Oracle NoSQL Database Server that has security
+// configuration enabled:
+//
+//   cd nosql-go-sdk/bin/examples
+//   # Run the basic example.
+//   # To run other examples, replace "basic" with the desired example binary.
+//   ./basic -config=kvstore -configFile=~/kvstore_config https://localhost:8080
+//
+// Assume the HTTP Proxy is running at http://localhost:8080, use the command to
+// run examples against the Oracle NoSQL Database Server that has security
+// configuration disabled:
+//
+//   cd nosql-go-sdk/bin/examples
+//   # Run the basic example.
+//   # To run other examples, replace "basic" with the desired example binary.
+//   ./basic -config=kvstore localhost:8080
+//
 package examples
 
 import (
@@ -20,81 +116,128 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
 // Command line flags.
-//
-// iamConfigFile is required when running with Oracle NoSQL Cloud Service.
-//
-// idcsUrl and entitlementId (IDCS params) will be removed in future releases. Please
-// use IAM instead.
-//
-// See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm for the
-// format and contents of an IAM configuration file.
-//
-// iamPassPhrase is required if the PEM key referenced in the IAM config file
-// requires a passphrase.
-//
-var iamConfigFile = flag.String("iamConfigFile", "", "Specify the path to the Oracle IAM config file")
-var iamPassPhrase = flag.String("PassPhrase", "", "(optional) passphrase for PEM key referenced in IAM config file")
-var iamCompartmentId = flag.String("iamCompartmentId", "", "(optional) IAM compartmentId to use for requests")
-var idcsUrl = flag.String("idcsUrl", "", "IDCS URL which is specific to your tenant.")
-var entitlementId = flag.String("entitlementId", "", "IDCS entitlement id")
+var (
+	config = flag.String("config", "cloudsim", "Specify a configuration for the Oracle NoSQL Database "+
+		"that the examples are run against.\nThe available configurations are:\n"+
+		"\tiam      : connect to the Oracle NoSQL Cloud Service with IAM configuration\n"+
+		"\tidcs     : connect to the Oracle NoSQL Cloud Service with IDCS configuration\n"+
+		"\tkvstore  : connect to the Oracle NoSQL Database Server on-premise\n"+
+		"\tcloudsim : connect to the Oracle NoSQL Cloud Simulator\n")
 
+	compartmentID = flag.String("iamCompartmentId", "", "(optional) IAM `compartment id` to use for requests.")
+
+	// configFile specifies the path to the configuration file.
+	//
+	// This flag is required if connect to the Oracle NoSQL Cloud Service with
+	// IAM configuration, the Oracle NoSQL Cloud Service with IDCS configuration,
+	// or the Oracle NoSQL Database Server on-premise with security enabled.
+	//
+	// The format and content of the configuration file is dependent on how you
+	// connect the Oracle NoSQL Database. The sample files for different
+	// configurations are displayed as follows:
+	//
+	// 1. Connect to the Oracle NoSQL Cloud Service with IAM configuration.
+	// See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
+	// for the format and contents of an IAM configuration file.
+	//
+	//   [DEFAULT]
+	//   user=ocid1.user.oc1..aaaaaaaa65vwl75tewwm32rgqvm6i34unq
+	//   fingerprint=20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34
+	//   key_file=~/.oci/oci_api_key.pem
+	//   pass_phrase=examplephrase
+	//   tenancy=ocid1.tenancy.oc1..aaaaaaaaba3pv6wuzr4h25vqstifsfdsq
+	//   region=us-ashburn-1
+	//
+	// 2. Connect to the Oracle NoSQL Database Server on-premise (with security enabled).
+	// Specify the username and password that used to authenticate with the server.
+	//
+	//   username=user1
+	//   password=NoSql00__123456
+	//
+	// 3. Connect to the Oracle NoSQL Cloud Service with IDCS configuration.
+	// See https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs#NewAccessTokenProviderWithFile
+	// for the format and contents of an IDCS configuration file.
+	//
+	//   idcs_url=https://idcs-xxxxxx.identity.oraclecloud.com
+	//   creds_file=~/.andc/credentials
+	//   entitlement_id=abcd-efgh-ijkl-mnop
+	//
+	configFile = flag.String("configFile", "", "Specify the path to the `configuration file`.\n"+
+		"This is required when -config=iam or -config=idcs, or -config=kvstore where the NoSQL "+
+		"Database Server (on-premise) security configuration is enabled.")
+)
+
+// Args represents the command line arguments supplied to run the examples.
 type Args struct {
-	IAMConfigFile    string
-	IAMPassPhrase    string
-	IAMCompartmentId string
-	Endpoint         string
-	IDCSUrl          string
-	EntitlementId    string
+	// NoSQL service endpoint.
+	Endpoint      string
+	config        string
+	configFile    string
+	compartmentID string
 }
 
-// ParseArgs parses command line arguments.
+// ParseArgs parses and validates command line arguments.
 func ParseArgs() *Args {
 	flag.CommandLine.SetOutput(os.Stderr)
 	flag.Usage = printExampleUsage
 	flag.Parse()
-	if len(os.Args) < 2 {
+	// At least one non-flag argument is required, which specifies the NoSQL service endpoint.
+	if flag.NArg() < 1 {
+		printExampleUsage()
+		os.Exit(1)
+	}
+
+	switch *config {
+	case "kvstore", "cloudsim":
+	case "iam", "idcs":
+		if len(*configFile) == 0 {
+			fmt.Fprintf(os.Stderr, "Please specify a configuration file for %s.\n\n", *config)
+			printExampleUsage()
+			os.Exit(1)
+		}
+	default:
 		printExampleUsage()
 		os.Exit(1)
 	}
 
 	return &Args{
-		Endpoint:         os.Args[1],
-		IAMConfigFile:    *iamConfigFile,
-		IAMPassPhrase:    *iamPassPhrase,
-		IAMCompartmentId: *iamCompartmentId,
-		IDCSUrl:          *idcsUrl,
-		EntitlementId:    *entitlementId,
+		Endpoint:      flag.Args()[0],
+		config:        *config,
+		configFile:    *configFile,
+		compartmentID: *compartmentID,
 	}
 }
 
 // CreateAuthorizationProvider creates an appropriate authorization provider
 // according to user specified command line arguments.
 func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.AuthorizationProvider, err error) {
-	var p nosqldb.AuthorizationProvider
-	// Use IAM cloud service.
-	if len(args.IAMConfigFile) > 0 { // Use IAM cloud service.
-		p, err = iam.NewSignatureProvider(args.IAMConfigFile, args.IAMPassPhrase, args.IAMCompartmentId)
-	} else if len(args.IDCSUrl) > 0 { // Use IDCS cloud service.
-		if len(args.EntitlementId) > 0 {
-			p, err = idcs.NewAccessTokenProviderWithEntitlementId(args.IDCSUrl, args.EntitlementId)
-		} else {
-			p, err = idcs.NewAccessTokenProviderWithURL(args.IDCSUrl)
+	switch args.config {
+	case "iam":
+		return iam.NewSignatureProvider(args.configFile, "", args.compartmentID)
+	case "idcs":
+		return idcs.NewAccessTokenProviderWithFile(args.configFile)
+	case "cloudsim":
+		return &ExampleAccessTokenProvider{TenantID: "ExampleTenantId"}, nil
+	case "kvstore":
+		if len(args.configFile) == 0 {
+			return &kvstore.AccessTokenProvider{}, nil
 		}
-	} else { // Use Cloud Simulator.
-		p = &ExampleAccessTokenProvider{TenantId: "ExampleTenantId"}
+		return kvstore.NewAccessTokenProviderWithFile(args.configFile)
+	default:
+		return nil, fmt.Errorf("invalid configuration %s", args.config)
 	}
-
-	return p, err
 }
 
 func printExampleUsage() {
-	fmt.Fprintf(os.Stderr, "Usage:\n\t%s <endpoint>\n"+
-		"\t\t[-iamConfigFile <IAM_configfile_path>] [-iamPassPhrase <IAM PEM key passphrase>]\n"+
-		"\t\t[-idcsUrl IDCS_URL] [-entitlementId entitlement_id]\n\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage:\n%s [-config <iam | idcs | kvstore | cloudsim>] "+
+		"[-configFile <config file path>] [-iamCompartmentId <compartment id>] "+
+		"<NoSQL service endpoint>\n\n",
+		os.Args[0])
 	flag.PrintDefaults()
 }
 
@@ -160,28 +303,34 @@ func RunQuery(client *nosqldb.Client, query string) (results []*types.MapValue, 
 	return
 }
 
-// ExampleAccessTokenProvider implements the nosqldb.AccessTokenProvider
-// interface. It supports running examples against the Oracle NoSQL Cloud
-// Simulator by providing a dummy access token.
+// ExampleAccessTokenProvider implements the nosqldb.AuthorizationProvider interface.
+// It provides a dummy access token for the examples that run against the Oracle
+// NoSQL Cloud Simulator.
 //
 // This should only be used when running with the Cloud Simulator, it is not
 // recommended for use in production.
 type ExampleAccessTokenProvider struct {
-	TenantId string
+	TenantID string
 }
 
+// AuthorizationScheme returns a string representation of the supported authorization scheme.
 func (p *ExampleAccessTokenProvider) AuthorizationScheme() string {
 	return auth.BearerToken
 }
 
+// AuthorizationString returns an authorization string for the specified request.
 func (p *ExampleAccessTokenProvider) AuthorizationString(req auth.Request) (string, error) {
-	return auth.BearerToken + " " + p.TenantId, nil
+	return auth.BearerToken + " " + p.TenantID, nil
 }
 
+// Close releases resources allocated by the provider.
+// It is no-op for this provider.
 func (p *ExampleAccessTokenProvider) Close() error {
 	return nil
 }
 
+// SignHTTPRequest signs the specified HTTP request.
+// It is no-op for this provider.
 func (p *ExampleAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }

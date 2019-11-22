@@ -7,7 +7,19 @@
 // appropriate download for a copy of the license and additional information.
 //
 
-// A sample program that demonstrates how to perform basic operations on a Oracle NoSQL table.
+// The basic example shows how to perform basic operations on an Oracle NoSQL table.
+// For example:
+//
+//   Create a table in Oracle NoSQL database
+//   Put a row into the table
+//   Get a row from the table
+//   Use SQL query to retrieve rows from the table
+//   Delete a row from the table
+//   Drop the table
+//
+// See https://godoc.org/github.com/oracle/nosql-go-sdk/examples for more details
+// on how to build and run the examples.
+//
 package main
 
 import (

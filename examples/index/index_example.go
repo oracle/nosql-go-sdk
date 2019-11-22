@@ -7,7 +7,18 @@
 // appropriate download for a copy of the license and additional information.
 //
 
-// A sample program that demonstrates how to create and use the index on a table.
+// The index example shows how to create and use the index on a table.
+// For example:
+//
+//   Create a table in Oracle NoSQL database
+//   Create an index on the table
+//   Put rows into the table
+//   Get the rows using the index
+//   Drop the table
+//
+// See https://godoc.org/github.com/oracle/nosql-go-sdk/examples for more details
+// on how to build and run the examples.
+//
 package main
 
 import (
