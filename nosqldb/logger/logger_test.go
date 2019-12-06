@@ -43,7 +43,7 @@ func (suite *LoggerTestSuite) TestNewLogger() {
 		{&out, Debug, false, false},
 		{&out, Info, true, false},
 		{&out, Info, false, false},
-		{&out, Warn, false, false},
+		{&out, Warn, true, false},
 		{&out, Warn, false, false},
 		{&out, Error, true, false},
 		{&out, Error, false, false},

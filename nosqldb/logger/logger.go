@@ -127,10 +127,6 @@ func New(out io.Writer, level LogLevel, useLocalTime bool) *Logger {
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Fine(messageFormat string, messageArgs ...interface{}) {
-	if l == nil {
-		return
-	}
-
 	l.Log(Fine, messageFormat, messageArgs...)
 }
 
@@ -139,10 +135,6 @@ func (l *Logger) Fine(messageFormat string, messageArgs ...interface{}) {
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Debug(messageFormat string, messageArgs ...interface{}) {
-	if l == nil {
-		return
-	}
-
 	l.Log(Debug, messageFormat, messageArgs...)
 }
 
@@ -151,10 +143,6 @@ func (l *Logger) Debug(messageFormat string, messageArgs ...interface{}) {
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Info(messageFormat string, messageArgs ...interface{}) {
-	if l == nil {
-		return
-	}
-
 	l.Log(Info, messageFormat, messageArgs...)
 }
 
@@ -163,10 +151,6 @@ func (l *Logger) Info(messageFormat string, messageArgs ...interface{}) {
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Warn(messageFormat string, messageArgs ...interface{}) {
-	if l == nil {
-		return
-	}
-
 	l.Log(Warn, messageFormat, messageArgs...)
 }
 
@@ -175,10 +159,6 @@ func (l *Logger) Warn(messageFormat string, messageArgs ...interface{}) {
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Error(messageFormat string, messageArgs ...interface{}) {
-	if l == nil {
-		return
-	}
-
 	l.Log(Error, messageFormat, messageArgs...)
 }
 
