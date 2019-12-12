@@ -112,6 +112,8 @@ func NewAccessTokenProviderWithFile(configFile string, options ...auth.ProviderO
 		return nil, err
 	}
 
+	prop.Load()
+
 	username, err := prop.Get("username")
 	if err != nil {
 		return nil, err
@@ -224,19 +226,20 @@ func (p *AccessTokenProvider) AuthorizationString(req auth.Request) (auth string
 	token, ok, needRenew := p.getCachedToken()
 	p.mutex.RUnlock()
 
-	if ok {
-		if needRenew {
-			p.wg.Add(1)
-			go func() {
-				defer p.wg.Done()
-				p.renewToken()
-			}()
-		}
-
-		return token.AuthString(), nil
+	// Cached token is nil or expired.
+	if !ok {
+		return p.login()
 	}
 
-	return p.login()
+	if needRenew {
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			p.renewToken()
+		}()
+	}
+
+	return token.AuthString(), nil
 }
 
 // SignHTTPRequest is unused in kvstore on-prem logic
