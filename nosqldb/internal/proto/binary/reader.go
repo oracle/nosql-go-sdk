@@ -22,27 +22,31 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
-// Reader is a binary protocol reader that reads byte sequences from the server
-// and interprets them into objects according to the protocol established
-// between client and server.
-//
-// The ReadXXX() methods of the Reader reads a fixed length or variable length
-// of bytes and decodes them as the corresponding values using big endian byte order.
+// Reader reads byte sequences from the underlying io.Reader and decodes the
+// bytes to construct in-memory representations according to the Binary Protocol
+// which defines the data exchange format between the Oracle NoSQL Database
+// proxy and drivers.
 //
 // Reader implements the io.Reader and io.ByteReader interfaces.
 type Reader struct {
 	// The underlying io.Reader.
 	rd io.Reader
+
+	// A buffer that holds the bytes for decoding.
+	buf []byte
 }
 
-// NewReader creates a new binary protocol Reader.
+// NewReader creates a reader for the binary protocol.
 // If the provided io.Reader is already a binary protocol Reader, it returns
 // the provided one without creating a new Reader.
 func NewReader(r io.Reader) *Reader {
 	if r, ok := r.(*Reader); ok {
 		return r
 	}
-	return &Reader{rd: r}
+	return &Reader{
+		rd:  r,
+		buf: make([]byte, 64, 256),
+	}
 }
 
 // Read reads up to len(p) bytes into p.
@@ -51,21 +55,20 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	return r.rd.Read(p)
 }
 
-// ReadByte reads and returns the next byte from the input or any error encountered.
+// ReadByte reads and returns a single byte or any error encountered.
 func (r *Reader) ReadByte() (byte, error) {
 	buf, err := r.readFull(1)
 	return buf[0], err
 }
 
-// ReadBoolean reads 1 byte, decodes the byte and returns as a bool value or any error encountered.
+// ReadBoolean reads and decodes a single byte as a bool value.
 // A zero byte is decoded as false, and any other non-zero byte is decoded as true.
 func (r *Reader) ReadBoolean() (bool, error) {
 	b, err := r.ReadByte()
 	return b != 0, err
 }
 
-// ReadInt16 reads 2 bytes, decodes the bytes using big endian byte order and
-// returns as an int16 value or any error encountered.
+// ReadInt16 reads and decodes 2 bytes as an int16 value.
 func (r *Reader) ReadInt16() (int16, error) {
 	buf, err := r.readFull(2)
 	if err != nil {
@@ -75,8 +78,7 @@ func (r *Reader) ReadInt16() (int16, error) {
 	return int16(value), nil
 }
 
-// ReadInt reads 4 bytes, decodes the bytes using big endian byte order and
-// returns an int value or any error encountered.
+// ReadInt reads and decodes 4 bytes as an int32 value.
 func (r *Reader) ReadInt() (int, error) {
 	buf, err := r.readFull(4)
 	if err != nil {
@@ -87,53 +89,54 @@ func (r *Reader) ReadInt() (int, error) {
 }
 
 // ReadPackedInt reads a variable length of bytes that is an encoding of packed
-// int value, decodes the bytes using big endian byte order and returns as an
-// int value or any error encountered.
+// integer, decodes the bytes as an int32 value.
 func (r *Reader) ReadPackedInt() (int, error) {
-	buf := make([]byte, maxPackedInt32Length)
-	_, err := io.ReadFull(r, buf[:1])
+	r.ensure(maxPackedInt32Length)
+	_, err := io.ReadFull(r, r.buf[:1])
 	if err != nil {
 		return 0, err
 	}
 
-	byteLen := getReadSortedInt32Length(buf, 0)
-	if byteLen < 1 || byteLen > len(buf) {
+	byteLen := getReadSortedInt32Length(r.buf[:1], 0)
+	if byteLen < 1 || byteLen > maxPackedInt32Length {
 		return 0, errors.New("binary.Reader: invalid packed int")
 	}
 
-	_, err = io.ReadFull(r, buf[1:byteLen])
-	if err != nil {
-		return 0, err
+	if byteLen > 1 {
+		_, err = io.ReadFull(r, r.buf[1:byteLen])
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return int(readSortedInt32(buf[:byteLen], 0)), nil
+	return int(readSortedInt32(r.buf[:byteLen], 0)), nil
 }
 
 // ReadPackedLong reads a variable length of bytes that is an encoding of packed
-// long value, decodes the bytes using big endian byte order and returns as an
-// int64 value or any error encountered.
+// long value, decodes the bytes as an int64 value.
 func (r *Reader) ReadPackedLong() (int64, error) {
-	buf := make([]byte, maxPackedInt64Length)
-	_, err := io.ReadFull(r, buf[:1])
+	r.ensure(maxPackedInt64Length)
+	_, err := io.ReadFull(r, r.buf[:1])
 	if err != nil {
 		return 0, err
 	}
 
-	byteLen := getReadSortedInt64Length(buf[:1], 0)
-	if byteLen < 1 || byteLen > len(buf) {
+	byteLen := getReadSortedInt64Length(r.buf[:1], 0)
+	if byteLen < 1 || byteLen > maxPackedInt64Length {
 		return 0, errors.New("binary.Reader: invalid packed long")
 	}
 
-	_, err = io.ReadFull(r, buf[1:byteLen])
-	if err != nil {
-		return 0, err
+	if byteLen > 1 {
+		_, err = io.ReadFull(r, r.buf[1:byteLen])
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return readSortedInt64(buf[:byteLen], 0), nil
+	return readSortedInt64(r.buf[:byteLen], 0), nil
 }
 
-// ReadDouble reads 8 bytes, decodes the bytes using big endian byte order and
-// returns as a float64 value or any error encountered.
+// ReadDouble reads and decodes 8 bytes as a float64 value.
 func (r *Reader) ReadDouble() (float64, error) {
 	buf, err := r.readFull(8)
 	if err != nil {
@@ -146,8 +149,8 @@ func (r *Reader) ReadDouble() (float64, error) {
 }
 
 // ReadString reads a variable length of bytes that is an encoding of packed
-// UTF-8 string value, decodes the bytes using big endian byte order and returns
-// as a pointer to the string value or any error encountered.
+// UTF-8 string value, decodes the bytes as a string. It returns a pointer to
+// the string value or any error encountered.
 func (r *Reader) ReadString() (*string, error) {
 	byteLen, err := r.ReadPackedInt()
 	if err != nil {
@@ -180,17 +183,22 @@ func (r *Reader) ReadString() (*string, error) {
 	return &s, nil
 }
 
-// ReadVersion reads byte sequences and returns as a types.Version or any error encountered.
+// ReadVersion reads byte sequences and decodes as a types.Version.
 func (r *Reader) ReadVersion() (types.Version, error) {
 	return r.ReadByteArray()
 }
 
 // ReadMap reads a structured byte sequences that represent the encoding of a
-// Map value, decodes the bytes and returns as an ordered *types.MapValue or any error encountered.
+// Map value, decodes the bytes and returns as an ordered *types.MapValue.
 func (r *Reader) ReadMap() (*types.MapValue, error) {
-	// Read and discard the length of bytes.
-	r.ReadInt()
+	// The integer value that represents the number of bytes consumed by the map.
+	// This is discarded as it is not used.
+	_, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
 
+	// The number of entries in the map.
 	size, err := r.ReadInt()
 	if err != nil {
 		return nil, err
@@ -217,11 +225,16 @@ func (r *Reader) ReadMap() (*types.MapValue, error) {
 }
 
 // ReadArray reads a structured byte sequences that represent the encoding of an
-// array, decodes the bytes and returns as a slice of types.FieldValue or any error encountered.
+// array, decodes the bytes and returns as a slice of types.FieldValue.
 func (r *Reader) ReadArray() ([]types.FieldValue, error) {
-	// Read and discard the length of bytes.
-	r.ReadInt()
+	// The integer value that represents the number of bytes consumed by the array.
+	// This is discarded as it is not used.
+	_, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
 
+	// The number of elements in the array.
 	size, err := r.ReadInt()
 	if err != nil {
 		return nil, err
@@ -229,12 +242,10 @@ func (r *Reader) ReadArray() ([]types.FieldValue, error) {
 
 	value := make([]types.FieldValue, size)
 	for i := 0; i < size; i++ {
-		v, err := r.ReadFieldValue()
+		value[i], err = r.ReadFieldValue()
 		if err != nil {
 			return nil, err
 		}
-
-		value[i] = v
 	}
 
 	return value, nil
@@ -324,6 +335,7 @@ func (r *Reader) ReadFieldValue() (types.FieldValue, error) {
 }
 
 // ReadByteArray reads byte sequences and returns as a slice of byte or any error encountered.
+// The returned bytes could be nil.
 func (r *Reader) ReadByteArray() ([]byte, error) {
 	byteLen, err := r.ReadPackedInt()
 	if err != nil {
@@ -345,6 +357,7 @@ func (r *Reader) ReadByteArray() ([]byte, error) {
 }
 
 // ReadByteArrayWithInt reads byte sequences and returns as a slice of byte or any error encountered.
+// The returned bytes is non-nil.
 func (r *Reader) ReadByteArrayWithInt() ([]byte, error) {
 	byteLen, err := r.ReadInt()
 	if err != nil {
@@ -360,8 +373,19 @@ func (r *Reader) ReadByteArrayWithInt() ([]byte, error) {
 	return buf, err
 }
 
-func (r *Reader) readFull(byteLen int) ([]byte, error) {
-	buf := make([]byte, byteLen)
-	_, err := io.ReadFull(r, buf)
-	return buf, err
+// ensure checks if there are space available in the buffer to hold n more bytes.
+// It grows the buffer if needed to guarantee space for n more bytes.
+func (r *Reader) ensure(n int) {
+	if n <= cap(r.buf) {
+		r.buf = r.buf[:n]
+	} else {
+		r.buf = make([]byte, n, 2*n)
+	}
+}
+
+// readFull reads exactly n bytes from the underlying reader into the buffer.
+func (r *Reader) readFull(n int) ([]byte, error) {
+	r.ensure(n)
+	_, err := io.ReadFull(r, r.buf)
+	return r.buf, err
 }

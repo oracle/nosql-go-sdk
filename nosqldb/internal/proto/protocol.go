@@ -100,5 +100,7 @@ type Writer interface {
 	WriteTTL(ttl *types.TimeToLive) (int, error)
 	WriteVersion(version types.Version) (int, error)
 	WriteSerialVersion(serialVersion int16) (int, error)
-	NumBytes() int
+	Size() int
+	Reset()
+	Bytes() []byte
 }

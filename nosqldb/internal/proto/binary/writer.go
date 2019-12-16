@@ -10,12 +10,10 @@
 package binary
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
 	"strconv"
@@ -26,81 +24,120 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
-// Writer is a binary protocol writer that writes the atomic values or objects
-// as byte sequences according to the protocol established between client and server.
+// Writer encodes data into the wire format for the Binary Protocol and writes
+// to a buffer. The Binary Protocol defines the data exchange format between
+// the Oracle NoSQL Database proxy and drivers.
 //
 // Writer implements the io.Write and io.ByteWriter interfaces.
 type Writer struct {
-	wr io.Writer
-	n  int
+	// The underlying byte buffer.
+	buf []byte
 }
 
-// NewWriter creates a new binary protocol Writer.
-// If the provided io.Writer is already a binary protocol Writer, it returns
-// the provided one without creating a new Writer.
-func NewWriter(w io.Writer) *Writer {
-	if w, ok := w.(*Writer); ok {
-		w.n = 0
-		return w
+// Initial capacity for the buffer.
+const initCap int = 64
+
+// NewWriter creates a writer for the binary protocol.
+func NewWriter() *Writer {
+	return &Writer{
+		buf: make([]byte, 0, initCap),
 	}
-	return &Writer{wr: w}
 }
 
-// Write writes len(p) bytes from p to the output.
+// Write writes len(p) bytes from p to the buffer.
 func (w *Writer) Write(p []byte) (n int, err error) {
-	n, err = w.wr.Write(p)
-	w.n += n
-	return
+	off := w.ensure(len(p))
+	n = copy(w.buf[off:], p)
+	return n, nil
 }
 
-// WriteByte writes the specified byte to the output.
+// ensure checks if there are space available in the buffer to hold n more bytes.
+// It grows the buffer if needed to guarantee space for n more bytes.
+// It returns the offset in the buffer where bytes should be written.
+func (w *Writer) ensure(n int) (off int) {
+	off = len(w.buf)
+	if n <= cap(w.buf)-off {
+		w.buf = w.buf[:off+n]
+		return off
+	}
+
+	// Grow the buffer.
+	newCap := 2*cap(w.buf) + n
+	bs := make([]byte, off+n, newCap)
+	copy(bs, w.buf[:off])
+	w.buf = bs
+	return off
+}
+
+// WriteByte writes a single byte.
+//
+// This implements io.ByteWriter.
 func (w *Writer) WriteByte(b byte) error {
-	_, err := w.Write([]byte{b})
-	return err
+	off := w.ensure(1)
+	w.buf[off] = b
+	return nil
 }
 
-// NumBytes returns the number of bytes that have been written.
-func (w *Writer) NumBytes() int {
-	return w.n
+// Size returns the number of bytes in the buffer.
+func (w *Writer) Size() int {
+	return len(w.buf)
 }
 
-// WriteInt16 writes the specified int16 value to the output.
+// Bytes returns a slice of bytes in the buffer.
+func (w *Writer) Bytes() []byte {
+	return w.buf
+}
+
+// Reset resets the buffer.
+func (w *Writer) Reset() {
+	if len(w.buf) > 0 {
+		w.buf = w.buf[:0]
+	}
+}
+
+// WriteInt16 encodes and writes the int16 value to the buffer.
 func (w *Writer) WriteInt16(value int16) (int, error) {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, uint16(value))
-	return w.Write(buf)
+	off := w.ensure(2)
+	binary.BigEndian.PutUint16(w.buf[off:], uint16(value))
+	return 2, nil
 }
 
-// WriteInt writes the specified int value to the output.
+// WriteInt encodes and writes the int value to the buffer.
+// It assumes the provided value fits into a signed 32-bit integer.
 func (w *Writer) WriteInt(value int) (int, error) {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(value))
-	return w.Write(buf)
+	off := w.ensure(4)
+	binary.BigEndian.PutUint32(w.buf[off:], uint32(value))
+	return 4, nil
 }
 
-// WritePackedInt writes the specified int value using packed int encoding to the output.
+// WritePackedInt encodes the int value using packed integer encoding
+// and writes to the buffer.
+// It assumes the provided value fits into a signed 32-bit integer.
 func (w *Writer) WritePackedInt(value int) (int, error) {
-	buf := make([]byte, maxPackedInt32Length)
-	off := writeSortedInt32(buf, 0, int32(value))
-	return w.Write(buf[:off])
+	n := getWriteSortedInt32Length(int32(value))
+	off := w.ensure(n)
+	writeSortedInt32(w.buf, uint(off), int32(value))
+	return n, nil
 }
 
-// WritePackedLong writes the specified int64 value using packed long encoding to the output.
+// WritePackedLong encodes the int64 value using packed long encoding
+// and writes to the buffer.
 func (w *Writer) WritePackedLong(value int64) (int, error) {
-	buf := make([]byte, maxPackedInt64Length)
-	off := writeSortedInt64(buf, 0, value)
-	return w.Write(buf[:off])
+	n := getWriteSortedInt64Length(value)
+	off := w.ensure(n)
+	writeSortedInt64(w.buf, uint(off), value)
+	return n, nil
 }
 
-// WriteDouble writes the specified float64 value to the output.
+// WriteDouble encodes and writes the float64 value to the buffer.
 func (w *Writer) WriteDouble(value float64) (int, error) {
+	off := w.ensure(8)
 	bits := math.Float64bits(value)
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, bits)
-	return w.Write(buf)
+	binary.BigEndian.PutUint64(w.buf[off:], bits)
+	return 8, nil
 }
 
-// WriteString writes the specified string value to the output.
+// WriteString encodes and writes the string value to the buffer.
 func (w *Writer) WriteString(value *string) (n int, err error) {
 	if value == nil {
 		return w.WritePackedInt(-1)
@@ -111,23 +148,23 @@ func (w *Writer) WriteString(value *string) (n int, err error) {
 	for _, r := range rs {
 		byteLen += utf8.RuneLen(r)
 	}
+
 	n, err = w.WritePackedInt(byteLen)
 	if err != nil || byteLen == 0 {
 		return
 	}
 
-	buf := make([]byte, byteLen)
-	off := 0
+	off := w.ensure(byteLen)
+	startOff := off
 	for _, r := range rs {
-		off += utf8.EncodeRune(buf[off:], r)
+		off += utf8.EncodeRune(w.buf[off:], r)
 	}
-	cnt, err := w.Write(buf[:off])
-	n += cnt
+	n += (off - startOff)
 	return
 }
 
-// WriteBoolean writes the specified bool value to the output.
-// A true value is written as one and a false value is written as zero.
+// WriteBoolean encodes and writes the bool value to the buffer.
+// A true value is encoded as 1 while a false value is encoded as 0.
 func (w *Writer) WriteBoolean(value bool) (int, error) {
 	if value {
 		return w.writeOneByte(1)
@@ -135,142 +172,206 @@ func (w *Writer) WriteBoolean(value bool) (int, error) {
 	return w.writeOneByte(0)
 }
 
-// WriteMap writes the specified MapValue to the output.
+// WriteMap encodes and writes the map value to the buffer.
 func (w *Writer) WriteMap(value *types.MapValue) (n int, err error) {
 	if value == nil {
 		return 0, errors.New("binary.Writer: nil MapValue")
 	}
 
-	var buf bytes.Buffer
-	contentWr := NewWriter(&buf)
-	size := value.Len()
-
-	// Ignores the number of bytes that were written because the content was
-	// written into a bytes.Buffer temporarily, it has not been written into
-	// the user provided io.Writer.
-	_, err = contentWr.WriteInt(size)
+	off := len(w.buf)
+	// We don't know the number of bytes needed to store the encoded MapValue
+	// until all entries in the MapValue are written, so write a dummy value 0
+	// as a place holder.
+	c, err := w.WriteInt(0)
 	if err != nil {
-		return
+		return w.Size() - off, err
+	}
+
+	startOff := off + c
+	// The number of entries in the MapValue.
+	size := value.Len()
+	_, err = w.WriteInt(size)
+	if err != nil {
+		return w.Size() - off, err
 	}
 
 	for k, v := range value.Map() {
-		_, err = contentWr.WriteString(&k)
+		_, err = w.WriteString(&k)
 		if err != nil {
-			return
+			return w.Size() - off, err
 		}
 
-		_, err = contentWr.WriteFieldValue(v)
+		_, err = w.WriteFieldValue(v)
 		if err != nil {
-			return
+			return w.Size() - off, err
 		}
 	}
 
-	return w.WriteByteArrayWithInt(buf.Bytes())
+	// Calculate the number of bytes consumed by the MapValue and overwrite
+	// the dummy value 0.
+	numBytes := w.Size() - startOff
+	binary.BigEndian.PutUint32(w.buf[off:off+c], uint32(numBytes))
+	return w.Size() - off, nil
 }
 
-// WriteArray writes the specified slice of FieldValues to the output.
+// WriteArray encodes and writes an array of FieldValues to the buffer.
 func (w *Writer) WriteArray(value []types.FieldValue) (n int, err error) {
-	var buf bytes.Buffer
-	contentWr := NewWriter(&buf)
-	size := len(value)
-	_, err = contentWr.WriteInt(size)
+	off := len(w.buf)
+	// We don't know the number of bytes needed to store the encoded array
+	// until all elements in the array are written, so write a dummy value 0
+	// as a place holder.
+	c, err := w.WriteInt(0)
 	if err != nil {
-		return
+		return w.Size() - off, err
+	}
+
+	startOff := off + c
+	// The number of elements in the array.
+	size := len(value)
+	_, err = w.WriteInt(size)
+	if err != nil {
+		return w.Size() - off, err
 	}
 
 	for _, v := range value {
-		_, err = contentWr.WriteFieldValue(v)
+		_, err = w.WriteFieldValue(v)
 		if err != nil {
-			return
+			return w.Size() - off, err
 		}
 	}
 
-	return w.WriteByteArrayWithInt(buf.Bytes())
+	// Calculate the number of bytes consumed by the array and overwrite
+	// the dummy value 0.
+	numBytes := w.Size() - startOff
+	binary.BigEndian.PutUint32(w.buf[off:off+c], uint32(numBytes))
+	return w.Size() - off, nil
 }
 
-// WriteByteArray writes the specified slice of bytes to the output.
+// WriteByteArray encodes and writes a slice of bytes to the buffer.
+// The slice of bytes could be nil.
 func (w *Writer) WriteByteArray(value []byte) (n int, err error) {
-	var byteLen int
-	// value is nil or len(value) == 0
-	if byteLen = len(value); byteLen == 0 {
+	if value == nil {
 		return w.WritePackedInt(-1)
 	}
 
+	byteLen := len(value)
 	n, err = w.WritePackedInt(byteLen)
-	if err != nil {
+	if err != nil || byteLen == 0 {
 		return
 	}
+
 	cnt, err := w.Write(value)
 	n += cnt
 	return
 }
 
-// WriteByteArrayWithInt writes the specified slice of bytes to the output.
+// WriteByteArrayWithInt encodes and writes a slice of bytes to the buffer.
+// The slice of bytes must be non-nil.
 func (w *Writer) WriteByteArrayWithInt(value []byte) (n int, err error) {
 	n, err = w.WriteInt(len(value))
 	if err != nil {
 		return
 	}
+
 	cnt, err := w.Write(value)
 	n += cnt
 	return
 }
 
-// WriteFieldRange writes the specified FieldRange to the output.
+// WriteFieldRange encodes and writes the FieldRange to the buffer.
 func (w *Writer) WriteFieldRange(fieldRange *types.FieldRange) (n int, err error) {
 	if fieldRange == nil {
 		return w.WriteBoolean(false)
 	}
 
-	var buf bytes.Buffer
-	contentWr := NewWriter(&buf)
-	contentWr.WriteBoolean(true)
-	contentWr.WriteString(&fieldRange.FieldPath)
+	off := w.Size()
+	_, err = w.WriteBoolean(true)
+	if err != nil {
+		return w.Size() - off, err
+	}
+
+	_, err = w.WriteString(&fieldRange.FieldPath)
+	if err != nil {
+		return w.Size() - off, err
+	}
+
 	if fieldRange.Start != nil {
-		contentWr.WriteBoolean(true)
-		contentWr.WriteFieldValue(fieldRange.Start)
-		contentWr.WriteBoolean(fieldRange.StartInclusive)
+		_, err = w.WriteBoolean(true)
+		if err != nil {
+			return w.Size() - off, err
+		}
+
+		_, err = w.WriteFieldValue(fieldRange.Start)
+		if err != nil {
+			return w.Size() - off, err
+		}
+
+		_, err = w.WriteBoolean(fieldRange.StartInclusive)
+		if err != nil {
+			return w.Size() - off, err
+		}
+
 	} else {
-		contentWr.WriteBoolean(false)
+		_, err = w.WriteBoolean(false)
+		if err != nil {
+			return w.Size() - off, err
+		}
 	}
 
 	if fieldRange.End != nil {
-		contentWr.WriteBoolean(true)
-		contentWr.WriteFieldValue(fieldRange.End)
-		contentWr.WriteBoolean(fieldRange.EndInclusive)
+		_, err = w.WriteBoolean(true)
+		if err != nil {
+			return w.Size() - off, err
+		}
+
+		_, err = w.WriteFieldValue(fieldRange.End)
+		if err != nil {
+			return w.Size() - off, err
+		}
+
+		_, err = w.WriteBoolean(fieldRange.EndInclusive)
+		if err != nil {
+			return w.Size() - off, err
+		}
+
 	} else {
-		contentWr.WriteBoolean(false)
+		_, err = w.WriteBoolean(false)
+		if err != nil {
+			return w.Size() - off, err
+		}
 	}
 
-	return w.Write(buf.Bytes())
+	return w.Size() - off, err
 }
 
-// WriteSerialVersion writes the specified SerialVersion v to the output.
+// WriteSerialVersion encodes and writes the SerialVersion v to the buffer.
 func (w *Writer) WriteSerialVersion(v int16) (int, error) {
 	return w.WriteInt16(v)
 }
 
-// WriteOpCode writes the specified OpCode op to the output.
+// WriteOpCode encodes and writes the OpCode op to the buffer.
 func (w *Writer) WriteOpCode(op proto.OpCode) (int, error) {
 	return w.writeOneByte(byte(op))
 }
 
-// WriteTimeout writes the specified timeout to the output.
+// WriteTimeout encodes and writes the timeout value to the buffer.
 func (w *Writer) WriteTimeout(timeout time.Duration) (int, error) {
+	// Starting with go1.13, use timeout.Milliseconds()
 	timeoutMs := int(timeout.Nanoseconds() / 1e6)
 	return w.WritePackedInt(timeoutMs)
 }
 
-// WriteConsistency writes the specified consistency to the output.
+// WriteConsistency encodes and writes the consistency value to the buffer.
 func (w *Writer) WriteConsistency(c types.Consistency) (int, error) {
 	return w.writeOneByte(w.getConsistency(c))
 }
 
-// WriteTTL writes the specified TTL value to the output.
+// WriteTTL encodes and writes the TTL value to the buffer.
 func (w *Writer) WriteTTL(ttl *types.TimeToLive) (n int, err error) {
 	if ttl == nil {
 		return w.WritePackedLong(-1)
 	}
+
 	if ttl.Unit != types.Days && ttl.Unit != types.Hours {
 		return 0, errors.New("binary.Writer: invalid TTL unit")
 	}
@@ -278,20 +379,21 @@ func (w *Writer) WriteTTL(ttl *types.TimeToLive) (n int, err error) {
 	if n, err = w.WritePackedLong(ttl.Value); err != nil {
 		return
 	}
+
 	cnt, err := w.writeOneByte(byte(ttl.Unit))
 	n += cnt
 	return
 }
 
-// WriteVersion writes the specified version to the output.
+// WriteVersion encodes and writes the specified version to the buffer.
 func (w *Writer) WriteVersion(version types.Version) (int, error) {
 	if version == nil {
-		return 0, errors.New("binary.Writer: version cannot be null")
+		return 0, errors.New("binary.Writer: nil version")
 	}
 	return w.WriteByteArray(version)
 }
 
-// WriteFieldValue writes the specified field value to the output.
+// WriteFieldValue encodes and writes the specified field value to the buffer.
 func (w *Writer) WriteFieldValue(value types.FieldValue) (int, error) {
 	switch v := value.(type) {
 	case string:
@@ -401,7 +503,6 @@ func (w *Writer) WriteFieldValue(value types.FieldValue) (int, error) {
 			return w.writeDoubleValue(fv)
 		}
 		return w.writeNumberValue(v.String())
-		// return 0, fmt.Errorf("unable to parse json.Number as int64 or float64, got %v, %T", v, v)
 
 	case *types.EmptyValue:
 		return w.writeOneByte(byte(types.Empty))
@@ -512,7 +613,7 @@ func (w *Writer) writeBinaryValue(value []byte) (n int, err error) {
 }
 
 // getConsistency returns the consistency value accepted by server, which is
-// types.Consistency minus one
+// types.Consistency minus one.
 func (w *Writer) getConsistency(c types.Consistency) byte {
 	if c == types.Absolute || c == types.Eventual {
 		return byte(c) - 1
@@ -520,6 +621,8 @@ func (w *Writer) getConsistency(c types.Consistency) byte {
 	return byte(c)
 }
 
+// writeOneByte is a wrapper for WriteByte. It writes a byte to the buffer and
+// returns the number of bytes written.
 func (w *Writer) writeOneByte(b byte) (n int, err error) {
 	err = w.WriteByte(b)
 	if err == nil {

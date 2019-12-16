@@ -10,7 +10,6 @@
 package nosqldb
 
 import (
-	"bytes"
 	"container/heap"
 	"crypto/md5"
 	"fmt"
@@ -468,8 +467,7 @@ func (iter *receiveIter) checkDuplicate(rcb *runtimeControlBlock, state *receive
 // createBinaryPrimKey serializes the primary key values as byte sequences.
 // This is used for duplicate elimination.
 func (iter *receiveIter) createBinaryPrimKey(res *types.MapValue) ([]byte, error) {
-	var buf bytes.Buffer
-	w := binary.NewWriter(&buf)
+	w := binary.NewWriter()
 	var err error
 
 	for i, fieldName := range iter.primKeyFields {
@@ -503,7 +501,7 @@ func (iter *receiveIter) createBinaryPrimKey(res *types.MapValue) ([]byte, error
 		}
 	}
 
-	return buf.Bytes(), nil
+	return w.Bytes(), nil
 }
 
 // initPartitionSort tries to receive and cache at least one result per partition

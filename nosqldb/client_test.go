@@ -353,12 +353,11 @@ func (m *mockExecutor) generateResponse(err error, httpReq *http.Request) *http.
 
 	if ne, ok := err.(*nosqlerr.Error); ok {
 		// Generate an HTTP OK response with nosqlerr.Error
-		var buf bytes.Buffer
-		wr := binary.NewWriter(&buf)
+		wr := binary.NewWriter()
 		wr.Write([]byte{byte(ne.Code)})
 		wr.WriteString(&ne.Message)
 
-		body := buf.Bytes()
+		body := wr.Bytes()
 		httpResp.StatusCode = 200
 		httpResp.Status = "200 OK"
 		httpResp.Body = ioutil.NopCloser(bytes.NewReader(body))

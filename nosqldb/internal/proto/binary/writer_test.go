@@ -10,133 +10,150 @@
 package binary
 
 import (
-	"bytes"
-	"math"
-	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
-func TestSimpleTypeValues(t *testing.T) {
-	// Binary
-	binTests := [][]byte{
-		make([]byte, 0),
-		[]byte{0},
-		[]byte{0, 0},
-		genBytes(1024),
+func BenchmarkWrite(b *testing.B) {
+	w := NewWriter()
+	p := []byte{1, 2, 3, 4}
+	b.SetBytes(int64(len(p)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.Write(p)
+		w.Reset()
 	}
-	for _, v := range binTests {
-		roundTrip(t, v)
-	}
-
-	// Boolean
-	boolTests := []bool{true, false}
-	for _, v := range boolTests {
-		roundTrip(t, v)
-	}
-
-	// Integer
-	intTests := []int{0, math.MinInt32, math.MaxInt32, -123456789, 123456789}
-	for _, v := range intTests {
-		roundTrip(t, v)
-	}
-
-	// Long
-	longTests := []int64{0, math.MinInt64, math.MaxInt64, -1234567890123456789, 1234567890123456789}
-	for _, v := range longTests {
-		roundTrip(t, v)
-	}
-
-	// Float
-	floatTests := []float32{math.SmallestNonzeroFloat32, math.MaxFloat32, 0.0, -1.1231421, 132124.1}
-	for _, v := range floatTests {
-		roundTrip(t, float64(v))
-	}
-
-	// Double
-	doubleTests := []float64{math.SmallestNonzeroFloat64, math.MaxFloat64, 0.0, -1.1231421132132132, 132124.132132132132}
-	for _, v := range doubleTests {
-		roundTrip(t, v)
-	}
-
-	// String
-	stringTests := []string{
-		"",
-		" ",
-		"nil",
-		"null",
-		genString(0),
-		genString(1024),
-		"☺☻☹",
-		"日a本b語ç日ð本Ê語þ日¥本¼語i日©",
-		"你好, 世界",
-	}
-	for _, v := range stringTests {
-		roundTrip(t, v)
-	}
-
-	//TODO -- test more type
 }
 
-func roundTrip(t *testing.T, in types.FieldValue) {
-	var buf bytes.Buffer
-	w := NewWriter(&buf)
-	w.WriteFieldValue(in)
-
-	br := bytes.NewReader(buf.Bytes())
-	r := NewReader(br)
-	out, err := r.ReadFieldValue()
-	if err != nil {
-		t.Errorf("ReadFieldValue() got error %v", err)
+func BenchmarkWriteByte(b *testing.B) {
+	w := NewWriter()
+	b.SetBytes(1)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteByte(byte(i))
+		w.Reset()
 	}
-
-	outKind := reflect.TypeOf(out).Kind()
-	switch outKind {
-	// slice cannot be compared directly
-	case reflect.Slice:
-		// compare byte slice
-		if in, ok := in.([]byte); ok {
-			if out, ok := out.([]byte); ok {
-				if bytes.Compare(in, out) != 0 {
-					t.Errorf("ReadFieldValue() got value %v; want %v", out, in)
-				}
-			}
-			return
-		}
-	case reflect.Ptr:
-		// ReadFieldValue may return *string
-		v := reflect.ValueOf(out).Elem()
-		if v.Kind() == reflect.String {
-			if in, ok := in.(string); ok {
-				if in != v.String() {
-					t.Errorf("ReadFieldValue() got value %s; want %s", v, in)
-					return
-				}
-			}
-		}
-
-	default:
-		if in != out {
-			t.Errorf("ReadFieldValue() got value %[1]v (type %[1]T); want %[2]v (type %[2]T)", out, in)
-		}
-	}
-
 }
 
-func genBytes(n int) []byte {
-	buf := make([]byte, n)
-	rand.Read(buf)
-	return buf
+func BenchmarkWriteInt16(b *testing.B) {
+	w := NewWriter()
+	b.SetBytes(2)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteInt16(int16(i))
+		w.Reset()
+	}
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func genString(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+func BenchmarkWriteInt(b *testing.B) {
+	w := NewWriter()
+	b.SetBytes(4)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteInt(i)
+		w.Reset()
 	}
-	return string(b)
+}
+
+func BenchmarkWritePackedInt(b *testing.B) {
+	w := NewWriter()
+	// The maxinum number of bytes required for a packed int.
+	b.SetBytes(maxPackedInt32Length)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WritePackedInt(i)
+		w.Reset()
+	}
+}
+
+func BenchmarkWritePackedLong(b *testing.B) {
+	w := NewWriter()
+	// The maxinum number of bytes required for a packed long.
+	b.SetBytes(maxPackedInt64Length)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WritePackedLong(int64(i))
+		w.Reset()
+	}
+}
+
+func BenchmarkWriteDouble(b *testing.B) {
+	w := NewWriter()
+	d := float64(3.1415926)
+	b.SetBytes(8)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteDouble(d)
+		w.Reset()
+	}
+}
+
+func BenchmarkWriteString(b *testing.B) {
+	w := NewWriter()
+	str := "Oracle NoSQL Database"
+	b.SetBytes(int64(len(str)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteString(&str)
+		w.Reset()
+	}
+}
+
+func BenchmarkWriteByteArray(b *testing.B) {
+	w := NewWriter()
+	p := []byte{1, 2, 3, 4}
+	b.SetBytes(int64(len(p)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteByteArray(p)
+		w.Reset()
+	}
+}
+
+func BenchmarkWriteByteArrayWithInt(b *testing.B) {
+	w := NewWriter()
+	p := []byte{1, 2, 3, 4}
+	b.SetBytes(int64(len(p)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteByteArrayWithInt(p)
+		w.Reset()
+	}
+}
+
+func BenchmarkWriteMap(b *testing.B) {
+	w := NewWriter()
+	mv := &types.MapValue{}
+	mv.Put("int", 1).Put("long", int64(1))
+	mv.Put("float32", float32(3.14)).Put("float64", float64(3.14))
+	mv.Put("string", "Oracle NoSQL Database")
+	mv.Put("map", map[string]interface{}{"k1": 1001, "k2": "str1001"})
+	mv.Put("array", []types.FieldValue{1, 2, 3, 4})
+	mv.Put("bytes", []byte{1, 2, 3, 4, 5, 6, 7, 8})
+	n, _ := w.WriteMap(mv)
+	b.SetBytes(int64(n))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteMap(mv)
+		w.Reset()
+	}
+}
+
+func BenchmarkWriteArray(b *testing.B) {
+	w := NewWriter()
+	arr := []types.FieldValue{
+		1, int64(1), float32(3.14), float64(3.14),
+		"Oracle NoSQL Database",
+		map[string]interface{}{"k1": 1001, "k2": "str1001"},
+		[]types.FieldValue{1, 2, 3, 4},
+		[]byte{1, 2, 3, 4, 5, 6, 7, 8},
+	}
+	n, _ := w.WriteArray(arr)
+	b.SetBytes(int64(n))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		w.WriteArray(arr)
+		w.Reset()
+	}
 }

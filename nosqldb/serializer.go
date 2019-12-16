@@ -659,7 +659,7 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer) (err error) {
 
 	var subReq Request
 	for _, operation := range req.Operations {
-		n1 := w.NumBytes()
+		n1 := w.Size()
 		if _, err = w.WriteBoolean(operation.AbortOnFail); err != nil {
 			return
 		}
@@ -676,7 +676,7 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer) (err error) {
 			return
 		}
 
-		n := w.NumBytes() - n1
+		n := w.Size() - n1
 		// Check size limit for each sub request.
 		if err = checkRequestSizeLimit(subReq, n); err != nil {
 			return

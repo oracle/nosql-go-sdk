@@ -32,7 +32,6 @@ import (
 type BadProtocolTestSuite struct {
 	*test.NoSQLTestSuite
 	bpTestClient *nosqldb.Client
-	buf          bytes.Buffer
 	wr           proto.Writer
 	table        string
 	index        string
@@ -62,7 +61,7 @@ func (suite *BadProtocolTestSuite) SetupSuite() {
 	suite.index = "idx1"
 	suite.createTableAndIndex()
 
-	suite.wr = binary.NewWriter(&suite.buf)
+	suite.wr = binary.NewWriter()
 	// Calculate the number of bytes that would be written for table name.
 	suite.tableNameLen, _ = suite.wr.WriteString(&suite.table)
 }
@@ -213,9 +212,9 @@ func (suite *BadProtocolTestSuite) TestBadGetRequest() {
 		if i > 0 {
 			copy(data, origData)
 		}
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WriteConsistency(r.value)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, r.wantErr)
 	}
 
@@ -225,9 +224,9 @@ func (suite *BadProtocolTestSuite) TestBadGetRequest() {
 	for _, r := range invalidPKTypes {
 		desc = fmt.Sprintf("invalid value type of PrimaryKey: %d", r)
 		copy(data, origData)
-		suite.buf.Reset()
+		suite.wr.Reset()
 		writeByte(suite.wr, byte(r))
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 	}
 }
@@ -277,9 +276,9 @@ func (suite *BadProtocolTestSuite) TestBadGetIndexesRequest() {
 		if i > 0 {
 			copy(data, origData)
 		}
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WriteString(r.value)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, r.wantErr)
 	}
 }
@@ -310,10 +309,10 @@ func (suite *BadProtocolTestSuite) TestBadGetTableRequest() {
 	opId := 5678
 	desc = fmt.Sprintf("invalid operation id: %d", opId)
 
-	suite.buf.Reset()
+	suite.wr.Reset()
 	// Write operation id as an Integer, rather than a string.
 	suite.wr.WriteInt(opId)
-	copy(data[off:], suite.buf.Bytes())
+	copy(data[off:], suite.wr.Bytes())
 	suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 }
 
@@ -340,18 +339,18 @@ func (suite *BadProtocolTestSuite) TestBadListTablesRequest() {
 	off := seekPos(lengths, 3)
 	value := -1
 	desc = fmt.Sprintf("invalid start index : %d", value)
-	suite.buf.Reset()
+	suite.wr.Reset()
 	suite.wr.WriteInt(value)
-	copy(data[off:], suite.buf.Bytes())
+	copy(data[off:], suite.wr.Bytes())
 	suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 
 	// invalid limit
 	off = seekPos(lengths, 4)
 	desc = fmt.Sprintf("invalid limit : %d", value)
 	copy(data, origData)
-	suite.buf.Reset()
+	suite.wr.Reset()
 	suite.wr.WriteInt(value)
-	copy(data[off:], suite.buf.Bytes())
+	copy(data[off:], suite.wr.Bytes())
 	suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 }
 
@@ -392,9 +391,9 @@ func (suite *BadProtocolTestSuite) TestBadPrepareRequest() {
 		if i > 0 {
 			copy(data, origData)
 		}
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WriteString(s)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 	}
 
@@ -407,9 +406,9 @@ func (suite *BadProtocolTestSuite) TestBadPrepareRequest() {
 	for _, value := range testStmtLengths {
 		desc = fmt.Sprintf("invalid statement, its length is %d", value)
 		copy(data, origData)
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WritePackedInt(value)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 	}
 }
@@ -471,9 +470,9 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 	for _, value := range testStmtLengths {
 		desc = fmt.Sprintf("invalid statement, its length is %d", value)
 		copy(data, origData)
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WriteInt(value)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 	}
 
@@ -487,9 +486,9 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 	for _, value := range testVarNumLengths {
 		desc = fmt.Sprintf("invalid number of variables: %d", value)
 		copy(data, origData)
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WriteInt(value)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 	}
 
@@ -507,9 +506,9 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 			desc = fmt.Sprintf("invalid variable name: %q", *value)
 		}
 		copy(data, origData)
-		suite.buf.Reset()
+		suite.wr.Reset()
 		suite.wr.WriteString(value)
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
 	}
 
@@ -525,9 +524,9 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 	for _, r := range testVarTypes {
 		desc = fmt.Sprintf("invalid variable value type: %s", r.valueType)
 		copy(data, origData)
-		suite.buf.Reset()
+		suite.wr.Reset()
 		writeByte(suite.wr, byte(r.valueType))
-		copy(data[off:], suite.buf.Bytes())
+		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, r.wantErr)
 	}
 }

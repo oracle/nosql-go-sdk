@@ -1043,8 +1043,7 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 // will be sent to the server. The serial version is always written followed by
 // the actual request payload.
 func serializeRequest(req Request) (data []byte, err error) {
-	var buf bytes.Buffer
-	wr := binary.NewWriter(&buf)
+	wr := binary.NewWriter()
 	if _, err = wr.WriteSerialVersion(proto.SerialVersion); err != nil {
 		return
 	}
@@ -1054,11 +1053,11 @@ func serializeRequest(req Request) (data []byte, err error) {
 	}
 
 	// check request size limit
-	if err = checkRequestSizeLimit(req, buf.Len()); err != nil {
+	if err = checkRequestSizeLimit(req, wr.Size()); err != nil {
 		return
 	}
 
-	return buf.Bytes(), nil
+	return wr.Bytes(), nil
 }
 
 // processResponse processes the http response returned from server.
