@@ -9,8 +9,6 @@
 //
 //
 
-// This file implements reading and writing Java style properties files.
-
 package sdkutil
 
 import (
@@ -25,6 +23,11 @@ import (
 	"sync"
 )
 
+// Properties is used to read and write properties files.
+// The properties in the file must be written in the form:
+//
+//   name=value
+//
 type Properties struct {
 	file  string
 	props map[string]string
@@ -32,17 +35,22 @@ type Properties struct {
 	mu    sync.RWMutex
 }
 
-func NewProperties(filePath string) (p *Properties, err error) {
-	if err = checkFile(filePath); err != nil {
+// NewProperties creates a Properties with the specified properties file.
+func NewProperties(file string) (p *Properties, err error) {
+	if err = checkFile(file); err != nil {
 		return
 	}
-	p = &Properties{
-		file:  filePath,
+
+	return &Properties{
+		file:  file,
 		props: make(map[string]string),
-	}
-	return
+	}, nil
 }
 
+// Load reads properties from the file. If any errors occur during read,
+// the error is reported in the Err() method.
+//
+// Empty lines and lines that start with the '#' mark are ignored.
 func (p *Properties) Load() {
 	// reset error
 	p.err = nil
@@ -62,10 +70,12 @@ func (p *Properties) Load() {
 		if len(line) == 0 || line[0] == '#' {
 			continue
 		}
+
 		idx := strings.Index(line, "=")
-		if idx <= 0 || len(line) <= idx+1 {
+		if idx <= 0 {
 			continue
 		}
+
 		if key := strings.TrimSpace(line[:idx]); len(key) > 0 {
 			value := strings.TrimSpace(line[idx+1:])
 			p.props[key] = value
@@ -78,10 +88,13 @@ func (p *Properties) Load() {
 	}
 }
 
+// Err reports any error occurs during Load().
 func (p *Properties) Err() error {
 	return p.err
 }
 
+// Save saves the properties to the file.
+// The properties are sorted in lexical order according to property name when saved.
 func (p *Properties) Save() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -91,11 +104,9 @@ func (p *Properties) Save() error {
 		return nil
 	}
 
-	keys := make([]string, size)
-	i := 0
-	for k, _ := range p.props {
-		keys[i] = k
-		i++
+	keys := make([]string, 0, size)
+	for k := range p.props {
+		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
@@ -113,6 +124,7 @@ func (p *Properties) Save() error {
 	return os.Rename(tmpFile, p.file)
 }
 
+// Get reads the property associated with key.
 func (p *Properties) Get(key string) (string, error) {
 	p.mu.RLock()
 	v, ok := p.props[key]
@@ -123,6 +135,7 @@ func (p *Properties) Get(key string) (string, error) {
 	return v, nil
 }
 
+// Put writes the property value associated with key.
 func (p *Properties) Put(key, value string) {
 	p.mu.Lock()
 	p.props[key] = value
@@ -133,12 +146,15 @@ func checkFile(file string) error {
 	if file == "" {
 		return errors.New("file path must be non-empty")
 	}
+
 	fileInfo, err := os.Stat(file)
 	if err != nil {
 		return err
 	}
+
 	if !fileInfo.Mode().IsRegular() {
 		return fmt.Errorf("%s is not a regular file", file)
 	}
+
 	return nil
 }
