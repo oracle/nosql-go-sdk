@@ -54,6 +54,9 @@
 //   # Run the basic example.
 //   # To run other examples, replace "basic" with the desired example binary.
 //   ./basic -config=iam -configFile=~/iam_config https://ndcs.us-ashburn-1.oraclecloud.com
+//      Note: you may also include -iamProfileID=<profile> to use a profile other
+//            than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
+//            use a compartment ID other than the "tenancy" OCID from the IAM config file.
 //
 // 3. Run examples against the Oracle NoSQL Cloud Service with IDCS configuration.
 //
@@ -129,7 +132,8 @@ var (
 		"\tkvstore  : connect to the Oracle NoSQL Database Server on-premise\n"+
 		"\tcloudsim : connect to the Oracle NoSQL Cloud Simulator\n")
 
-	compartmentID = flag.String("iamCompartmentId", "", "(optional) IAM `compartment id` to use for requests.")
+	compartmentID = flag.String("iamCompartmentID", "", "(optional) IAM `compartment ID` to use for requests (defaults to tenantID).")
+	profileID     = flag.String("iamProfileID", "", "(optional) `profile ID` to find in IAM config file (defaults to \"DEFAULT\").")
 
 	// configFile specifies the path to the configuration file.
 	//
@@ -168,7 +172,7 @@ var (
 	//   entitlement_id=abcd-efgh-ijkl-mnop
 	//
 	configFile = flag.String("configFile", "", "Specify the path to the `configuration file`.\n"+
-		"This is required when -config=iam or -config=idcs, or -config=kvstore where the NoSQL "+
+		"This is required with -config=iam or -config=idcs, or -config=kvstore when the NoSQL "+
 		"Database Server (on-premise) security configuration is enabled.")
 )
 
@@ -178,7 +182,8 @@ type Args struct {
 	Endpoint      string
 	config        string
 	configFile    string
-	compartmentID string
+	profileID     string // (optional) for IAM config files
+	compartmentID string // (optional) for IAM
 }
 
 // ParseArgs parses and validates command line arguments.
@@ -218,7 +223,7 @@ func ParseArgs() *Args {
 func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.AuthorizationProvider, err error) {
 	switch args.config {
 	case "iam":
-		return iam.NewSignatureProvider(args.configFile, "", args.compartmentID)
+		return iam.NewSignatureProvider(args.configFile, args.profileID, "", args.compartmentID)
 	case "idcs":
 		return idcs.NewAccessTokenProviderWithFile(args.configFile)
 	case "cloudsim":
@@ -234,9 +239,7 @@ func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.Authorization
 }
 
 func printExampleUsage() {
-	fmt.Fprintf(os.Stderr, "Usage:\n%s [-config <iam | idcs | kvstore | cloudsim>] "+
-		"[-configFile <config file path>] [-iamCompartmentId <compartment id>] "+
-		"<NoSQL service endpoint>\n\n",
+	fmt.Fprintf(os.Stderr, "Usage:\n%s [OPTIONS] <NoSQL service endpoint>\n\n  OPTIONS:\n\n",
 		os.Args[0])
 	flag.PrintDefaults()
 }

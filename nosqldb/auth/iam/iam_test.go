@@ -156,7 +156,7 @@ func (suite *iamTestSuite) TestNewSignatureProvider() {
 			compID = ""
 		}
 
-		p, err = NewSignatureProvider(f, "", compID)
+		p, err = NewSignatureProvider(f, "DEFAULT", "", compID)
 
 		if r == nil || r.expectErr {
 			suite.Errorf(err, msgPrefix+"NewSignatureProvider() should have failed, but succeeded")

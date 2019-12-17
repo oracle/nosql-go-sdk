@@ -56,12 +56,24 @@ type SignatureProvider struct {
 // NewSignatureProvider creates a signature provider based on the contents of
 // the OCI IAM credentials file passed in.
 //
+// ociProfile is optional; if empty, "DEFAULT" will be used.
+//
+// privateKeyPassword is only required if the private key uses a password and
+//   it is not specified in the "pass_phrase" field in the IAM config file.
+//
 // compartmentID is optional; if empty, the tenancyOCID is used in its place.
 //
-func NewSignatureProvider(configFilePath string, privateKeyPassword string, compartmentID string) (*SignatureProvider, error) {
+func NewSignatureProvider(configFilePath, ociProfile, privateKeyPassword, compartmentID string) (*SignatureProvider, error) {
+
+	// default to OCI "DEFAULT" if none given
+	if ociProfile == "" {
+		ociProfile = "DEFAULT"
+	}
 
 	// open/read creds config file
-	configProvider, err := ConfigurationProviderFromFile(configFilePath, privateKeyPassword)
+	// note: if privateKeyPassword=="", it will be read from "pass_phrase" in
+	//       the config file (if needed)
+	configProvider, err := ConfigurationProviderFromFileWithProfile(configFilePath, ociProfile, privateKeyPassword)
 	if configProvider == nil {
 		return nil, err
 	}
