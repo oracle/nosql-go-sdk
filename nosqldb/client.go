@@ -86,7 +86,7 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, err
 	}
 
-	cfg.HTTPConfig.UseHttps = cfg.protocol == "https"
+	cfg.HTTPConfig.UseHTTPS = cfg.protocol == "https"
 	httpClient, err := httputil.NewHTTPClient(cfg.HTTPConfig)
 	if err != nil {
 		return nil, err

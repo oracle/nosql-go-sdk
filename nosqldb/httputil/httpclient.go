@@ -11,6 +11,9 @@ package httputil
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -29,16 +32,6 @@ import (
 type HTTPClient struct {
 	// client represents the underlying http.client.
 	client *http.Client
-
-	// useHttps indicates if HTTPS is used.
-	useHttps bool
-
-	// useProxy indicates if HTTP transport goes through an HTTP proxy.
-	useProxy bool
-
-	// proxyAuthRequired indicates if HTTP proxy requires authentication.
-	// This is only valid when useProxy is true.
-	proxyAuthRequired bool
 }
 
 // NewHTTPClient creates an HTTPClient using the specified configurations.
@@ -57,19 +50,16 @@ func NewHTTPClient(cfg HTTPConfig) (*HTTPClient, error) {
 
 	if cfg.UseProxyFromEnv {
 		tr.Proxy = http.ProxyFromEnvironment
-		hc.useProxy = true
 	} else if cfg.ProxyURL != "" {
 		pu, err := url.Parse(cfg.ProxyURL)
 		if err != nil {
 			return nil, err
 		}
 		tr.Proxy = http.ProxyURL(pu)
-		hc.useProxy = true
 		if cfg.ProxyUsername != "" && cfg.ProxyPassword != "" {
 			auth := BasicAuth(cfg.ProxyUsername, []byte(cfg.ProxyPassword))
 			tr.ProxyConnectHeader = http.Header{}
 			tr.ProxyConnectHeader.Add("Proxy-Authorization", auth)
-			hc.proxyAuthRequired = true
 		}
 	}
 
@@ -85,13 +75,28 @@ func NewHTTPClient(cfg HTTPConfig) (*HTTPClient, error) {
 
 	sessionTimeout := 30 * time.Second
 
-	if cfg.UseHttps {
-		hc.useHttps = true
+	if cfg.UseHTTPS {
+		rootCAs, _ := x509.SystemCertPool()
+		if rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
+		if cfg.InsecureSkipVerify == false && cfg.CertPath != "" {
+			certs, err := ioutil.ReadFile(cfg.CertPath)
+			if err != nil {
+				return nil, err
+			}
+			ok := rootCAs.AppendCertsFromPEM(certs)
+			if !ok {
+				return nil, fmt.Errorf("no valid PEM certs found in %s", cfg.CertPath)
+			}
+		}
 		if cfg.SslSessionTimeout != 0 {
 			sessionTimeout = cfg.SslSessionTimeout
 		}
 		tr.TLSClientConfig = &tls.Config{
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			RootCAs:            rootCAs,
+			ServerName:         cfg.ServerName,
 		}
 	}
 
@@ -111,15 +116,15 @@ func (hc *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return hc.client.Do(req)
 }
 
-// A default HTTPClient instance that is ready to use.
+// DefaultHTTPClient is a default HTTPClient instance that is ready to use.
 var DefaultHTTPClient = &HTTPClient{
 	client: http.DefaultClient,
 }
 
 // HTTPConfig contains parameters used to configure HTTPClient.
 type HTTPConfig struct {
-	// UseHttps indicates if HTTPS is used.
-	UseHttps bool
+	// UseHTTPS indicates if HTTPS is used.
+	UseHTTPS bool
 
 	// ProxyURL specifies an HTTP proxy server URL.
 	// If specified, all transports go through the proxy server.
@@ -166,6 +171,18 @@ type HTTPConfig struct {
 	// In this mode, TLS is susceptible to man-in-the-middle attacks.
 	InsecureSkipVerify bool
 
+	// CertPath specifies the path to a pem-encoded certificate file.
+	// Certificates in this file will be used in addition to system certificates.
+	// This field is typically used for local self-signed certificates.
+	// If InsecureSkipVerify is true, this field is ignored.
+	CertPath string
+
+	// ServerName is used to verify the hostname for self-signed certificates.
+	// This field is only used if CertPath is nonempty, and is typically set
+	// to the "CN" subject value from the certificate specified by CertPath.
+	// If InsecureSkipVerify is true, this field is ignored.
+	ServerName string
+
 	// TODO:
-	// CipherSuites       []uint16
+	// CipherSuites	   []uint16
 }

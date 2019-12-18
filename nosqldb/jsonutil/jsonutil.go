@@ -124,7 +124,7 @@ func GetString(data []byte, field string) (string, error) {
 
 func GetStringValues(data []byte, fieldNames ...string) (map[string]string, error) {
 	var v map[string]interface{}
-	if err := json.Unmarshal(data, v); err != nil {
+	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, err
 	}
 
@@ -146,7 +146,7 @@ func GetStringValues(data []byte, fieldNames ...string) (map[string]string, erro
 
 func GetStringArrayValues(data []byte, name string) ([]string, error) {
 	var v map[string]interface{}
-	if err := json.Unmarshal(data, v); err != nil {
+	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, err
 	}
 

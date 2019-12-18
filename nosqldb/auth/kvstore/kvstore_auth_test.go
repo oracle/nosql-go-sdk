@@ -40,7 +40,7 @@ func TestAuth(t *testing.T) {
 var (
 	testLogger        = logger.New(os.Stderr, logger.Error, true)
 	testHTTPClient, _ = httputil.NewHTTPClient(httputil.HTTPConfig{
-		UseHttps:           true,
+		UseHTTPS:           true,
 		InsecureSkipVerify: true,
 	})
 )
