@@ -20,7 +20,7 @@ import (
 func ExampleNewClient_cloud() {
 	// Configurations for the client that connects to the NoSQL cloud service.
 	//
-	// This assumes the required properties have been specified in ~/.andc/idcs.props.
+	// This assumes the required OCI configurations have been specified in ~/.oci/config.
 	cfg := nosqldb.Config{
 		Endpoint: "https://nosql-example-region1.oraclecloud.com",
 	}

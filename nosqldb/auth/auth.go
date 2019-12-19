@@ -21,8 +21,8 @@ const (
 	// BearerToken represents the bearer token authorization scheme that the
 	// bearer who holds the access token can access authorized resources.
 	//
-	// This is used for cloud service that authorizes requests by IDCS, and also
-	// used for on-premise NoSQL server that authorizes requests by itself.
+	// This is used for the on-premise Oracle NoSQL server that authorizes
+	// requests by itself, and the Oracle NoSQL cloud simulator.
 	BearerToken string = "Bearer"
 
 	// Signature authorization scheme.
@@ -117,13 +117,8 @@ func (t Token) AuthString() string {
 	return t.Type + " " + t.AccessToken
 }
 
-// Request is an interface that wraps authorization scheme and the request
-// dependent value for an authorization request.
+// Request is an interface that wraps the request dependent value for an authorization request.
 type Request interface {
-	// Authorization scheme.
-	// An implementation may return "Bearer", "Signature", etc.
-	Scheme() string
-
 	// Request-dependent value.
 	// The authorization provider is supposed to be able to interpret the value.
 	Value() string

@@ -97,7 +97,7 @@ type Config struct {
 	// If not specified, use the default authorization provider depending on the
 	// configuration mode:
 	//
-	//   use idcs.AccessTokenProvider for NoSQL cloud service that authorizes requests by IDCS.
+	//   use iam.SignatureProvider for NoSQL cloud service that uses OCI IAM.
 	//   use kvstore.AccessTokenProvider for the secure NoSQL servers on-premise.
 	//
 	AuthorizationProvider

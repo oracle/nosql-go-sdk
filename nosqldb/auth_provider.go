@@ -11,22 +11,21 @@ package nosqldb
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs"
 )
 
-// AuthorizationProvider is an interface that provides request authorization for clients.
+// AuthorizationProvider is an interface used to provide authorization information
+// for client to access authorized resources on the server.
 //
-// A Client should call the AuthorizationString() method to obtain an authorization string
-// when it is required for the request.
+// A Client should call the AuthorizationString() method to obtain an authorization
+// string when it is required for the request, or call the SignHTTPRequest()
+// method depending on the authorization scheme.
 //
 // The default implementations for this interface:
 //
 //   iam.SignatureProvider        cloud IAM
-//   idcs.AccessTokenProvider     cloud IDCS
-//   kvstore.AccessTokenProvider  on-prem
+//   kvstore.AccessTokenProvider  on-premise
 //
 // Applications do not need to provide an implementation
 // for this interface unless there is a special requirement.
@@ -36,13 +35,15 @@ type AuthorizationProvider interface {
 	// AuthorizationScheme returns a string that represents the supported
 	// authorization scheme for this provider.
 	//
-	// The BearerToken scheme "Bearer" is supported for NoSQL cloud service that
-	// authorizes requests by IDCS, and on-premise NoSQL server that authorizes
-	// requests by itself.
+	// The available authorization schemes are:
+	//
+	//   Bearer    : supported for the on-premise Oracle NoSQL server and the Oracle NoSQL cloud simulator
+	//   Signature : supported for the Oracle NoSQL cloud service that uses OCI IAM for request authorization
+	//
 	AuthorizationScheme() string
 
 	// AuthorizationString returns an authorization string for the specified request.
-	// The string will be sent to the server in the request for authorization.
+	// The returned string will be sent to the server in the request for authorization.
 	// Authorization information can be request-dependent.
 	AuthorizationString(req auth.Request) (string, error)
 
@@ -55,73 +56,18 @@ type AuthorizationProvider interface {
 	Close() error
 }
 
-// bearerTokenRequest represents a request for access token from authorization server.
-//
-// This is used for NoSQL cloud service that authorizes requests by IDCS, and
-// on-premise NoSQL server that authorizes requests by itself.
+// accessTokenRequest represents a request for access token from authorization server.
 //
 // This implements the auth.Request interface.
-type bearerTokenRequest struct {
+type accessTokenRequest struct {
 	// opReq specifies a NoSQL operation request that needs to authorize.
 	opReq Request
 }
 
-// Scheme returns the authorization scheme for the bearerTokenRequest that is "Bearer".
-func (r bearerTokenRequest) Scheme() string {
-	return auth.BearerToken
-}
-
-// Value returns a string that represents the desired token kind depending on
-// the specified operation request opReq.
+// Value returns a request dependant value that represents what kind of access
+// token is desired for the request.
 //
-// The returned string is either "ACCOUNT" or "SERVICE" which represent
-// account access token and service access token respectively.
-//
-// This is only used for cloud service, is ignored for on-premise.
-func (r bearerTokenRequest) Value() string {
-	if needAccountAccessToken(r.opReq) {
-		return string(idcs.AccountToken)
-	}
-
-	return string(idcs.ServiceToken)
-}
-
-// needAccountAccessToken returns true if the specified request needs an account
-// access token, otherwise returns false.
-//
-// The TableRequest and ListTablesRequest for the following operations need an
-// account access token:
-//
-//   Create tables
-//   Drop tables
-//   Change table limits
-//   List tables
-//
-func needAccountAccessToken(req Request) bool {
-	switch req := req.(type) {
-	case *ListTablesRequest:
-		return true
-
-	case *TableRequest:
-		// A non-nil TableLimits indicates the request is intended to create a
-		// table or modify limits for an existing table.
-		if req.TableLimits != nil {
-			return true
-		}
-
-		return isDropTable(req)
-
-	default:
-		return false
-	}
-}
-
-// isDropTable checks if the specified TableRequest is a drop table operation.
-func isDropTable(req *TableRequest) bool {
-	s := strings.Fields(req.Statement)
-	if len(s) < 2 {
-		return false
-	}
-
-	return strings.EqualFold(s[0], "DROP") && strings.EqualFold(s[1], "TABLE")
+// This method is reserved for future use. It returns an empty string for now.
+func (r accessTokenRequest) Value() string {
+	return ""
 }

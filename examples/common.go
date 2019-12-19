@@ -58,25 +58,7 @@
 //            than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
 //            use a compartment ID other than the "tenancy" OCID from the IAM config file.
 //
-// 3. Run examples against the Oracle NoSQL Cloud Service with IDCS configuration.
-//
-// (1) Create an IDCS configuration file (e.g. ~/idcs_config).
-// See https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs#NewAccessTokenProviderWithFile
-// for the format and contents of an IDCS configuration file.
-//
-//   idcs_url=https://idcs-xxxxxx.identity.oraclecloud.com
-//   creds_file=~/.andc/credentials
-//   entitlement_id=abcd-efgh-ijkl-mnop
-//
-// (2) Assume the Oracle NoSQL Cloud Service endpoint is https://ndcs.us-ashburn-1.oraclecloud.com,
-// use the command:
-//
-//   cd nosql-go-sdk/bin/examples
-//   # Run the basic example.
-//   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=idcs -configFile=~/idcs_config https://ndcs.us-ashburn-1.oraclecloud.com
-//
-// 4. Run examples against the Oracle NoSQL Database on-premise.
+// 3. Run examples against the Oracle NoSQL Database on-premise.
 //
 // (1) Download the Oracle NoSQL Database Server and Oracle NoSQL Database
 // Proxy (aka HTTP Proxy) at https://www.oracle.com/database/technologies/nosql-database-server-downloads.html.
@@ -118,7 +100,6 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
@@ -128,7 +109,6 @@ var (
 	config = flag.String("config", "cloudsim", "Specify a configuration for the Oracle NoSQL Database "+
 		"that the examples are run against.\nThe available configurations are:\n"+
 		"\tiam      : connect to the Oracle NoSQL Cloud Service with IAM configuration\n"+
-		"\tidcs     : connect to the Oracle NoSQL Cloud Service with IDCS configuration\n"+
 		"\tkvstore  : connect to the Oracle NoSQL Database Server on-premise\n"+
 		"\tcloudsim : connect to the Oracle NoSQL Cloud Simulator\n")
 
@@ -138,8 +118,8 @@ var (
 	// configFile specifies the path to the configuration file.
 	//
 	// This flag is required if connect to the Oracle NoSQL Cloud Service with
-	// IAM configuration, the Oracle NoSQL Cloud Service with IDCS configuration,
-	// or the Oracle NoSQL Database Server on-premise with security enabled.
+	// IAM configuration, or the Oracle NoSQL Database Server on-premise with
+	// security enabled.
 	//
 	// The format and content of the configuration file is dependent on how you
 	// connect the Oracle NoSQL Database. The sample files for different
@@ -163,16 +143,8 @@ var (
 	//   username=user1
 	//   password=NoSql00__123456
 	//
-	// 3. Connect to the Oracle NoSQL Cloud Service with IDCS configuration.
-	// See https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs#NewAccessTokenProviderWithFile
-	// for the format and contents of an IDCS configuration file.
-	//
-	//   idcs_url=https://idcs-xxxxxx.identity.oraclecloud.com
-	//   creds_file=~/.andc/credentials
-	//   entitlement_id=abcd-efgh-ijkl-mnop
-	//
 	configFile = flag.String("configFile", "", "Specify the path to the `configuration file`.\n"+
-		"This is required with -config=iam or -config=idcs, or -config=kvstore when the NoSQL "+
+		"This is required with -config=iam, or -config=kvstore when the NoSQL "+
 		"Database Server (on-premise) security configuration is enabled.")
 )
 
@@ -199,7 +171,7 @@ func ParseArgs() *Args {
 
 	switch *config {
 	case "kvstore", "cloudsim":
-	case "iam", "idcs":
+	case "iam":
 		if len(*configFile) == 0 {
 			fmt.Fprintf(os.Stderr, "Please specify a configuration file for %s.\n\n", *config)
 			printExampleUsage()
@@ -224,8 +196,6 @@ func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.Authorization
 	switch args.config {
 	case "iam":
 		return iam.NewSignatureProvider(args.configFile, args.profileID, "", args.compartmentID)
-	case "idcs":
-		return idcs.NewAccessTokenProviderWithFile(args.configFile)
 	case "cloudsim":
 		return &ExampleAccessTokenProvider{TenantID: "ExampleTenantId"}, nil
 	case "kvstore":

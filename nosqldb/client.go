@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/idcs"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
@@ -118,7 +118,8 @@ func NewClient(cfg Config) (*Client, error) {
 		}
 
 		if cfg.IsCloudMode() {
-			c.AuthorizationProvider, err = idcs.NewAccessTokenProvider(options)
+			// Use the default OCI configuration file ~/.oci/config
+			c.AuthorizationProvider, err = iam.NewSignatureProvider("~/.oci/config", "", "", "")
 		} else if cfg.Username != "" && len(cfg.Password) > 0 {
 			c.AuthorizationProvider, err = kvstore.NewAccessTokenProvider(cfg.Username, cfg.Password, options)
 		}
@@ -1008,17 +1009,16 @@ func (c *Client) getAuthString(opReq Request) (string, error) {
 		return "", nil
 	}
 
-	var req auth.Request
-	switch c.AuthorizationProvider.AuthorizationScheme() {
+	switch scheme := c.AuthorizationProvider.AuthorizationScheme(); scheme {
 	case auth.BearerToken:
-		req = &bearerTokenRequest{opReq}
+		req := &accessTokenRequest{opReq}
+		return c.AuthorizationProvider.AuthorizationString(req)
 	case auth.Signature:
 		// signature method requires an http.Request - auth is added in the Sign() method later
 		return "", nil
 	default:
-		return "", nosqlerr.NewIllegalArgument("unsupported authorization scheme")
+		return "", nosqlerr.NewIllegalArgument("unsupported authorization scheme: %s", scheme)
 	}
-	return c.AuthorizationProvider.AuthorizationString(req)
 }
 
 func (c *Client) signHTTPRequest(httpReq *http.Request) error {
