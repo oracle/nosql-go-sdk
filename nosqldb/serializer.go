@@ -25,6 +25,7 @@ type serializer interface {
 	deserialize(r proto.Reader) (Result, error)
 }
 
+// Request is an interface that defines common functions for operation requests.
 type Request interface {
 	serializer
 	validate() error

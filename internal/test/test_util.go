@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// AssertWriteKB checks if writeKB is the same as expectWriteKB.
 func AssertWriteKB(assert *assert.Assertions, expectWriteKB, writeKB int) {
 	if IsOnPrem() {
 		expectWriteKB = 0
@@ -32,6 +33,7 @@ func AssertWriteKB(assert *assert.Assertions, expectWriteKB, writeKB int) {
 	assert.Equalf(expectWriteKB, writeKB, "wrong writeKB")
 }
 
+// AssertReadKB checks if readKB is the same as expectReadKB.
 func AssertReadKB(assert *assert.Assertions, expectReadKB, readKB, readUnits, prepCost int, isAbsolute bool) {
 	if IsOnPrem() {
 		assert.Equal(0, readKB, "wrong readKB")
@@ -43,6 +45,7 @@ func AssertReadKB(assert *assert.Assertions, expectReadKB, readKB, readUnits, pr
 	AssertReadUnits(assert, readKB, readUnits, prepCost, isAbsolute)
 }
 
+// AssertReadUnits checks if readUnits is as expected.
 func AssertReadUnits(assert *assert.Assertions, readKB, readUnits, prepCost int, isAbsolute bool) {
 	if IsOnPrem() {
 		assert.Equal(0, readUnits, "wrong readUnits")
@@ -145,7 +148,7 @@ func GenCreateTableStmt(table string, numCols int, colNamePrefix string) string 
 	return sb.String()
 }
 
-var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 // GenString randomly generates a string that contains the specified number of characters.
 func GenString(n int) string {
@@ -153,13 +156,14 @@ func GenString(n int) string {
 		return ""
 	}
 
-	b := make([]rune, n)
+	b := make([]byte, n)
 	for i := range b {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
 }
 
+// GenBytes generates n bytes.
 func GenBytes(n int) []byte {
 	buf := make([]byte, n)
 	rand.Read(buf)
@@ -234,15 +238,11 @@ func valueEqual(v1, v2 interface{}) bool {
 	}
 
 	if n1, ok := v1.(json.Number); ok {
-		res := jsonNumberEqual(n1, v2, &nosqldb.Decimal32)
-		// fmt.Printf("********* res: %v\n", res)
-		return res
+		return jsonNumberEqual(n1, v2, &nosqldb.Decimal32)
 	}
 
 	if n2, ok := v2.(json.Number); ok {
-		res := jsonNumberEqual(n2, v1, &nosqldb.Decimal32)
-		// fmt.Printf("********* res: %v\n", res)
-		return res
+		return jsonNumberEqual(n2, v1, &nosqldb.Decimal32)
 	}
 
 	if t1, ok := v1.(time.Time); ok {
@@ -281,7 +281,6 @@ func valueEqual(v1, v2 interface{}) bool {
 		return CompareMapValue(mv1, mv2, false)
 
 	case mv1 == nil && mv2 == nil:
-		// fmt.Printf("type of v1=%v/%[1]T, v2=%v/%[2]T\n", v1, v2)
 		value1 := reflect.ValueOf(v1)
 		value2 := reflect.ValueOf(v2)
 
@@ -335,6 +334,7 @@ func byteSliceEqual(b1 []byte, v2 interface{}) bool {
 	}
 }
 
+// binaryPrecision returns the closest binary precision for the specified decimal precision.
 func binaryPrecision(decimalPrec uint) (prec uint) {
 	switch decimalPrec {
 	case 7:
@@ -383,7 +383,6 @@ func jsonNumberEqual(n1 json.Number, v2 interface{}, fpArithSpec *nosqldb.FPArit
 		return uint64(i64) == reflect.ValueOf(v2).Uint()
 
 	case *big.Rat:
-
 		rat1, ok := new(big.Rat).SetString(n1.String())
 		if !ok {
 			return false
@@ -442,10 +441,7 @@ func ratValueEqual(rat1, rat2 *big.Rat, fpArithSpec *nosqldb.FPArithSpec) bool {
 		return true
 	}
 
-	// fmt.Printf("\n************** bf1 != bf2: bf1.toString()=%s, bf2.toString()=%s\nbf1.Text()=%s, bf2.Text()=%s\n",
-	// 	bf1.String(), bf2.String(), bf1.Text('G', 7), bf2.Text('G', 7))
 	return false
-
 }
 
 func timeValueEqual(t1 time.Time, v2 interface{}) bool {

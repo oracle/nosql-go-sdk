@@ -96,12 +96,12 @@ func _() {
 	_ = x[String-7]
 	_ = x[Timestamp-8]
 	_ = x[Number-9]
-	_ = x[JsonNull-10]
+	_ = x[JSONNull-10]
 	_ = x[Null-11]
 	_ = x[Empty-12]
 }
 
-const _DbType_name = "ArrayBinaryBooleanDoubleIntegerLongMapStringTimestampNumberJsonNullNullEmpty"
+const _DbType_name = "ArrayBinaryBooleanDoubleIntegerLongMapStringTimestampNumberJSONNullNullEmpty"
 
 var _DbType_index = [...]uint8{0, 5, 11, 18, 24, 31, 35, 38, 44, 53, 59, 67, 71, 76}
 

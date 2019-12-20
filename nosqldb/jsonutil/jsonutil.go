@@ -7,6 +7,7 @@
 // appropriate download for a copy of the license and additional information.
 //
 
+// Package jsonutil provides utility functions for manipulating JSON.
 package jsonutil
 
 import (
@@ -14,7 +15,7 @@ import (
 	"fmt"
 )
 
-const emptyJsonObject = "{}"
+const emptyJSONObject = "{}"
 
 // AsJSON encodes the specified value into a json string.
 func AsJSON(v interface{}) string {
@@ -36,16 +37,19 @@ func asJSONString(v interface{}, pretty bool) string {
 		b, err = json.Marshal(v)
 	}
 	if err != nil {
-		return emptyJsonObject
+		return emptyJSONObject
 	}
 	return string(b)
 }
 
+// ToObject decodes the jsonStr as a JSON object.
 func ToObject(jsonStr string) (v map[string]interface{}, err error) {
 	err = json.Unmarshal([]byte(jsonStr), &v)
 	return v, err
 }
 
+// GetStringFromObject retrieves the string value associated with the specified
+// top-level fields from a JSON object.
 func GetStringFromObject(m map[string]interface{}, field string) (s string, ok bool) {
 	if m == nil {
 		return
@@ -58,6 +62,8 @@ func GetStringFromObject(m map[string]interface{}, field string) (s string, ok b
 	return
 }
 
+// GetNumberFromObject retrieves the float64 value associated with the specified
+// top-level fields from a JSON object.
 func GetNumberFromObject(m map[string]interface{}, field string) (f float64, ok bool) {
 	if m == nil {
 		return
@@ -70,6 +76,8 @@ func GetNumberFromObject(m map[string]interface{}, field string) (f float64, ok 
 	return
 }
 
+// GetArrayFromObject retrieves an array value associated with the specified
+// top-level fields from a JSON object.
 func GetArrayFromObject(m map[string]interface{}, field string) (a []interface{}, ok bool) {
 	if m == nil {
 		return
@@ -82,6 +90,7 @@ func GetArrayFromObject(m map[string]interface{}, field string) (a []interface{}
 	return
 }
 
+// ExpectObject checks if the specified data represents a JSON object.
 func ExpectObject(data interface{}) (map[string]interface{}, error) {
 	v, ok := data.(map[string]interface{})
 	if !ok {
@@ -90,6 +99,7 @@ func ExpectObject(data interface{}) (map[string]interface{}, error) {
 	return v, nil
 }
 
+// ExpectString checks if the specified data represents a JSON string value.
 func ExpectString(data interface{}) (string, error) {
 	v, ok := data.(string)
 	if !ok {

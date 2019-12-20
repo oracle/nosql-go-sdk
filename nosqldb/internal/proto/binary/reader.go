@@ -320,7 +320,7 @@ func (r *Reader) ReadFieldValue() (types.FieldValue, error) {
 		// Return as a string.
 		return *s, nil
 
-	case types.JsonNull:
+	case types.JSONNull:
 		return types.JSONNullValueInstance, nil
 
 	case types.Null:

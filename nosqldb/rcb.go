@@ -269,7 +269,7 @@ type queryDriver struct {
 
 // newQueryDriver creates a query driver for the specified query request.
 func newQueryDriver(req *QueryRequest) *queryDriver {
-	batchSize := proto.BatchQuerySizeLimit
+	batchSize := proto.DefaultBatchQueryNumberLimit
 	if req.Limit > 0 {
 		batchSize = int(req.Limit)
 	}

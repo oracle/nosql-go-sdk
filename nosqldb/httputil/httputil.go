@@ -26,10 +26,6 @@ import (
 )
 
 const (
-	// Content types
-	AppScimJson       = "application/scim+json"
-	AppURLEncodedForm = "application/x-www-form-urlencoded; charset=UTF-8"
-
 	retryInterval = time.Second
 )
 
@@ -59,9 +55,9 @@ type Response struct {
 	Code int    // HTTP response status code.
 }
 
-// newHttpRequest creates an http request using the specified method, url and
+// newHTTPRequest creates an http request using the specified method, url and
 // data. The http request header is populated with specified headers.
-func newHttpRequest(method string, url string, data []byte, headers map[string]string) (*http.Request, error) {
+func newHTTPRequest(method string, url string, data []byte, headers map[string]string) (*http.Request, error) {
 	var rd io.Reader
 	if len(data) > 0 {
 		rd = bytes.NewReader(data)
@@ -90,7 +86,7 @@ func executeRequest(ctx context.Context, executor RequestExecutor, timeout time.
 	method string, url string, data []byte, headers map[string]string,
 	logger *logger.Logger) (*Response, error) {
 
-	httpReq, err := newHttpRequest(method, url, data, headers)
+	httpReq, err := newHTTPRequest(method, url, data, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -189,8 +185,8 @@ DoRetry:
 //
 //   Basic base64(clientId:clientSecret)
 //
-func BasicAuth(clientId string, clientSecret []byte) string {
-	s := fmt.Sprintf("%s:%s", clientId, string(clientSecret))
+func BasicAuth(clientID string, clientSecret []byte) string {
+	s := fmt.Sprintf("%s:%s", clientID, string(clientSecret))
 	buf := UTF8Encode(s)
 	return "Basic " + base64.StdEncoding.EncodeToString(buf)
 }

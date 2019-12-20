@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
-	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 )
 
 const (
@@ -51,9 +50,6 @@ type Config struct {
 	// server.
 	Endpoint string `json:"endpoint"`
 
-	// Oracle IDCS URL
-	IDCSUrl string `json:"idcsUrl"`
-
 	// TablePrefix specifies a prefix for table names created in the tests.
 	TablePrefix string `json:"tablePrefix"`
 
@@ -65,7 +61,7 @@ type Config struct {
 
 	// Username and password are used to authenticate with the secure NoSQL server on-premise.
 	//
-	// This is only used for on-premise test.
+	// These are only used for on-premise test.
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
 }
@@ -90,20 +86,20 @@ func newConfig(configFile string) (*Config, error) {
 	return &cfg, nil
 }
 
-// IsCloud returns true if the tests are configured to run against a NoSQL cloud
-// service, returns false otherwise.
+// IsCloud returns true if tests are configured to run against the NoSQL cloud
+// service or cloud simulator, returns false otherwise.
 func (cfg *Config) IsCloud() bool {
-	return cfg != nil && len(cfg.Mode) > 0 && cfg.Mode != onprem
+	return cfg != nil && (cfg.Mode == cloud || cfg.Mode == cloudsim)
 }
 
-// IsOnPrem returns true if the tests are configured to run against on-premise
+// IsOnPrem returns true if tests are configured to run against the on-premise
 // NoSQL database servers, returns false otherwise.
 func (cfg *Config) IsOnPrem() bool {
 	return cfg != nil && cfg.Mode == onprem
 }
 
-// IsOnPremSecureStore returns true if the tests are configured to run against
-// on-premise NoSQL database servers that have security enabled, returns false otherwise.
+// IsOnPremSecureStore returns true if tests are configured to run against
+// the on-premise NoSQL database server that has security enabled, returns false otherwise.
 func (cfg *Config) IsOnPremSecureStore() bool {
 	if cfg == nil {
 		return false
@@ -123,7 +119,7 @@ func createConfig() (cfg *Config, err error) {
 	}
 
 	var configFile string
-	key := "testConfig="
+	const key = "testConfig="
 	for _, arg := range flag.Args() {
 		if strings.HasPrefix(arg, key) {
 			configFile = arg[len(key):]
@@ -162,7 +158,7 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 	switch cfg.Mode {
 	case cloudsim:
 		clientConfig.AuthorizationProvider = DummyAccessTokenProvider{
-			TenantId: "TestTenantId",
+			TenantID: "TestTenantId",
 		}
 
 	case onprem:
@@ -177,7 +173,8 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 		clientConfig.InsecureSkipVerify = true
 	}
 
-	client, err := nosqldb.NewClient(clientConfig)
+	var err error
+	client, err = nosqldb.NewClient(clientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -221,80 +218,76 @@ type Interceptor interface {
 	OnTearDownTestSuite() error
 }
 
+// SetInterceptor set the specified interceptor.
 func SetInterceptor(i Interceptor) {
 	interceptor = i
 }
 
+// IsCloud returns true if tests are configured to run against the NoSQL cloud
+// service or clous simulator, returns false otherwise.
 func IsCloud() bool {
 	return config.IsCloud()
 }
 
+// IsOnPrem returns true if tests are configured to run against the on-premise
+// NoSQL database servers, returns false otherwise.
 func IsOnPrem() bool {
 	return config.IsOnPrem()
 }
 
+// IsOnPremSecureStore returns true if tests are configured to run against
+// the on-premise NoSQL database server that has security enabled, returns false otherwise.
 func IsOnPremSecureStore() bool {
 	return config.IsOnPremSecureStore()
 }
 
 const (
-	// A template of valid create table statement.
-	// Tests should provide table name in the template.
+	// OkCreateTableTmpl is a template for generating table creation statement.
+	// The table name should be provided when using the template.
 	OkCreateTableTmpl = "create table %s (id integer, c1 string, c2 long, primary key(id))"
 
-	// A valid operation request timeout value.
+	// OkTimeout represents a valid value for operation request timeout.
 	OkTimeout = 6 * time.Second
 
-	// An invalid timeout value which is less than 1 millisecond.
+	// BadTimeout represents an invalid value for operation request timeout
+	// that is less than 1 millisecond.
 	BadTimeout = time.Millisecond - 1
 
-	// The maximum number of characters allowed for table name.
-	maxTableNameChars = 30
-
-	// The maximum number of characters allowed for index name.
-	maxIndexNameChars = 64
-
-	// Wait timeout value, which is usually used in the WaitForState API.
+	// WaitTimeout represents the timeout value that usually used in the
+	// WaitForXXX operation.
 	WaitTimeout = 15 * time.Second
 
-	// The limit on the max read KB during an operation.
+	// MaxReadKBLimit represents the limit on the maximum read KB during an operation.
 	MaxReadKBLimit = 2 * 1024
 
-	// The limit on the max write KB during an operation.
+	// MaxWriteKBLimit represents the limit on the maximum write KB during an operation.
 	MaxWriteKBLimit = 2 * 1024
 
-	// The limit on a query string.
+	// MaxQuerySizeLimit represents the limit on a query string length.
 	MaxQuerySizeLimit = 10 * 1024
 
+	// MinQueryCost represents the minimum cost for a query operation.
 	MinQueryCost = 2
-	MinReadKB    = 1
 
-	// The default interval between two tests. This is used to avoid throttling
-	// errors.
-	// TODO: should be configurable
+	// MinReadKB represents the minimum read KB for a query operation
+	MinReadKB = 1
+
+	// The default interval between two tests.
+	// This is used to avoid throttling errors during testing.
 	defaultTestInterval = 500 * time.Millisecond
 
-	// Key size limit, 64 bytes
-	defaultKeySizeLimit = 64
-
-	// Data size limit, 512 KB
+	// MaxDataSizeLimit represents the limit on data size for a row.
+	// It is 512 KB.
 	MaxDataSizeLimit = 512 * 1024
 
-	// Maximum number of batch operations
+	// MaxBatchOpNumberLimit represents the limit on number of operations for a batch operation.
 	MaxBatchOpNumberLimit = 50
 )
 
 var (
-	// A valid TableLimits value.
+	// OkTableLimits represents a valid value for TableLimits.
 	OkTableLimits = &nosqldb.TableLimits{ReadUnits: 2, WriteUnits: 2, StorageGB: 1}
 
-	// An invalid TableLimits value.
+	// BadTableLimits represents an invalid value for TableLimits.
 	BadTableLimits = &nosqldb.TableLimits{}
-
-	// The tests do not verify error messages, only verify if error code is as expected.
-	ErrIllegalArgument = nosqlerr.New(nosqlerr.IllegalArgument, "")
-	ErrTableNotFound   = nosqlerr.New(nosqlerr.TableNotFound, "")
-	ErrIndexNotFound   = nosqlerr.New(nosqlerr.IndexNotFound, "")
-	ErrTableExists     = nosqlerr.New(nosqlerr.TableExists, "")
-	ErrIndexExists     = nosqlerr.New(nosqlerr.IndexExists, "")
 )

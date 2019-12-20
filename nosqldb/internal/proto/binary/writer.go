@@ -511,10 +511,10 @@ func (w *Writer) WriteFieldValue(value types.FieldValue) (int, error) {
 		return w.writeOneByte(byte(types.Null))
 
 	case *types.JSONNullValue:
-		return w.writeOneByte(byte(types.JsonNull))
+		return w.writeOneByte(byte(types.JSONNull))
 
 	case nil:
-		return w.writeOneByte(byte(types.JsonNull))
+		return w.writeOneByte(byte(types.JSONNull))
 
 	default:
 		return 0, fmt.Errorf("binary.Writer: unsupported field value %v of type %[1]T", v)

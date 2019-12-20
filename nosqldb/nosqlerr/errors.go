@@ -40,7 +40,7 @@ func New(code ErrorCode, msgFmt string, msgArgs ...interface{}) *Error {
 	}
 }
 
-// New creates an error with the specified error code, message and the cause of error.
+// NewWithCause creates an error with the specified error code, message and the cause of error.
 func NewWithCause(code ErrorCode, cause error, msgFmt string, msgArgs ...interface{}) *Error {
 	return &Error{
 		Code:    code,

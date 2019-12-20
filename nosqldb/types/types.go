@@ -259,17 +259,51 @@ type FieldRange struct {
 type DbType int
 
 const (
-	Array     DbType = iota // 0
-	Binary                  // 1
-	Boolean                 // 2
-	Double                  // 3
-	Integer                 // 4
-	Long                    // 5
-	Map                     // 6
-	String                  // 7
-	Timestamp               // 8
-	Number                  // 9
-	JsonNull                // 10
-	Null                    // 11
-	Empty                   // 12
+	// Array represents the Array data type.
+	// An array is an ordered collection of zero or more elements,
+	// all elements of an array have the same type.
+	Array DbType = iota // 0
+
+	// Binary represents the Binary data type.
+	// A binary is an uninterpreted sequence of zero or more bytes.
+	Binary // 1
+
+	// Boolean data type has only two possible values: true and false.
+	Boolean // 2
+
+	// Double data type represents the set of all IEEE-754 64-bit floating-point numbers.
+	Double // 3
+
+	// Integer data type represents the set of all signed 32-bit integers (-2147483648 to 2147483647).
+	Integer // 4
+
+	// Long data type represents the set of all signed 64-bit
+	// integers (-9223372036854775808 to 9223372036854775807).
+	Long // 5
+
+	// Map represents the Map data type.
+	// A map is an unordered collection of zero or more key-value pairs,
+	// where all keys are strings and all the values have the same type.
+	Map // 6
+
+	// String represents the set of string values.
+	String // 7
+
+	// Timestamp represents a point in time as a date or a time.
+	Timestamp // 8
+
+	// Number represents arbitrary precision numbers.
+	Number // 9
+
+	// JSONNull represents a special value that indicates the absence of
+	// an actual value within a JSON data type.
+	JSONNull // 10
+
+	// Null represents a special value that indicates the absence of
+	// an actual value, or the fact that a value is unknown or inapplicable.
+	Null // 11
+
+	// Empty represents the Empty data type.
+	// It is used to describe the result of a query expression is empty.
+	Empty // 12
 )

@@ -30,13 +30,14 @@ type NoSQLTestSuite struct {
 	allTables []string
 }
 
+// NewNoSQLTestSuite creates a NoSQLTestSuite instance.
 func NewNoSQLTestSuite() *NoSQLTestSuite {
 	cfg, err := getConfig()
 	if err != nil {
 		panic(err)
 	}
 
-	client, err := getClient(cfg)
+	client, err := createClient(cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -47,7 +48,9 @@ func NewNoSQLTestSuite() *NoSQLTestSuite {
 	}
 }
 
-// This implements the suite.SetupAllSuite interface defined in testify package.
+// SetupSuite is used to setup test resources before test.
+//
+// This implements the suite.SetupAllSuite interface defined in the testify package.
 func (suite *NoSQLTestSuite) SetupSuite() {
 	if interceptor != nil {
 		err := interceptor.OnSetupTestSuite()
@@ -55,7 +58,9 @@ func (suite *NoSQLTestSuite) SetupSuite() {
 	}
 }
 
-// This implements the suite.TearDownAllSuite interface defined in testify package.
+// TearDownSuite is used to clean up test resources after test.
+//
+// This implements the suite.TearDownAllSuite interface defined in the testify package.
 func (suite *NoSQLTestSuite) TearDownSuite() {
 	if suite.DropTablesOnTearDown {
 		for _, table := range suite.allTables {
@@ -75,6 +80,8 @@ func (suite *NoSQLTestSuite) TearDownSuite() {
 	suite.Client.Close()
 }
 
+// CreateTable creates a table using the specified statement and table limit.
+// The table limit is ignored when test against the on-premise NoSQL server.
 func (suite *NoSQLTestSuite) CreateTable(createStmt string, limits *nosqldb.TableLimits) {
 	req := &nosqldb.TableRequest{
 		Statement: createStmt,
@@ -91,6 +98,7 @@ func (suite *NoSQLTestSuite) CreateTable(createStmt string, limits *nosqldb.Tabl
 	}
 }
 
+// ReCreateTable drops and re-creates a table.
 func (suite *NoSQLTestSuite) ReCreateTable(table, createStmt string, limits *nosqldb.TableLimits) {
 	suite.DropTable(table, true)
 	suite.CreateTable(createStmt, limits)
@@ -114,7 +122,6 @@ func (suite *NoSQLTestSuite) CreateTables(numTables int, nsName string) (tables 
 		}
 
 		stmt := fmt.Sprintf(OkCreateTableTmpl, tableName)
-		// suite.CreateTable(tableName, stmt, limits)
 		suite.ReCreateTable(tableName, stmt, limits)
 		tables = append(tables, tableName)
 		tableLimits = append(tableLimits, limits)
@@ -123,10 +130,14 @@ func (suite *NoSQLTestSuite) CreateTables(numTables int, nsName string) (tables 
 	return
 }
 
+// GetTableName returns a table name that may have a prefix if the tablePrefix
+// is specified in test configuration.
 func (suite *NoSQLTestSuite) GetTableName(table string) string {
 	return suite.TablePrefix + table
 }
 
+// GetNsTableName returns a namespace qualified table name.
+// The table name may have a prefix if the tablePrefix is specified in test configuration.
 func (suite *NoSQLTestSuite) GetNsTableName(ns, table string) string {
 	if len(ns) == 0 {
 		return suite.GetTableName(table)
@@ -135,6 +146,7 @@ func (suite *NoSQLTestSuite) GetNsTableName(ns, table string) string {
 	return ns + ":" + suite.GetTableName(table)
 }
 
+// DropTable drops the table.
 func (suite *NoSQLTestSuite) DropTable(table string, dropIfExists bool) {
 	var stmt string
 	if dropIfExists {
@@ -160,27 +172,31 @@ func (suite *NoSQLTestSuite) DropTable(table string, dropIfExists bool) {
 	}
 }
 
+// ExecuteDDL executes the specified DDL statement using a SystemRequest.
 func (suite *NoSQLTestSuite) ExecuteDDL(stmt string) {
 	_, err := suite.Client.DoSystemRequestAndWait(stmt, 30*time.Second, time.Second)
 	suite.Require().NoErrorf(err, "failed to execute %q, got error %v.", stmt, err)
 }
 
+// ExecuteTableDDL executes the specified DDL statement using a TableRequest.
 func (suite *NoSQLTestSuite) ExecuteTableDDL(stmt string) {
 	req := &nosqldb.TableRequest{Statement: stmt}
 	_, err := suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
 	suite.Require().NoErrorf(err, "failed to execute %q, got error %v.", stmt, err)
 }
 
+// ExecuteQueryStmt executes the query statement.
 func (suite *NoSQLTestSuite) ExecuteQueryStmt(stmt string) ([]*types.MapValue, error) {
 	return suite.ExecuteQueryRequest(&nosqldb.QueryRequest{Statement: stmt})
 }
 
+// ExecuteQueryRequest executes the query request.
 func (suite *NoSQLTestSuite) ExecuteQueryRequest(queryReq *nosqldb.QueryRequest) ([]*types.MapValue, error) {
 	return ExecuteQueryRequest(suite.Client, queryReq)
 }
 
 // AddToTables adds the specified table into a table list, in which all tables
-// would be dropped on TearDownSuite if TestConfig.dropTablesOnTearDown is set.
+// would be dropped on TearDownSuite if DropTablesOnTearDown is specified in test configuration.
 func (suite *NoSQLTestSuite) AddToTables(table string) {
 	if suite.allTables == nil {
 		suite.allTables = make([]string, 0, 5)
@@ -189,6 +205,7 @@ func (suite *NoSQLTestSuite) AddToTables(table string) {
 	suite.allTables = append(suite.allTables, table)
 }
 
+// AssertZeroReadWriteKB asserts the operation consumed zero readKB/writeKB.
 func (suite *NoSQLTestSuite) AssertZeroReadWriteKB(res nosqldb.Result) {
 	cap, err := res.ConsumedCapacity()
 	suite.NoErrorf(err, "Result.ConsumedCapacity() got error %v", err)
@@ -196,6 +213,7 @@ func (suite *NoSQLTestSuite) AssertZeroReadWriteKB(res nosqldb.Result) {
 	AssertWriteKB(suite.Assert(), 0, cap.WriteKB)
 }
 
+// AssertReadWriteKB checks if the readKB/writeKB are as expected.
 func (suite *NoSQLTestSuite) AssertReadWriteKB(res nosqldb.Result, expReadKB, expWriteKB, prepCost int, isAbsolute bool) {
 	cap, err := res.ConsumedCapacity()
 	suite.NoErrorf(err, "Result.ConsumedCapacity() got error %v", err)
@@ -203,24 +221,29 @@ func (suite *NoSQLTestSuite) AssertReadWriteKB(res nosqldb.Result, expReadKB, ex
 	AssertWriteKB(suite.Assert(), expWriteKB, cap.WriteKB)
 }
 
-// DummyAccessTokenProvider represents a dummy access token provider, which is used by tests.
-// It implements the AccessTokenProvider interface.
+// DummyAccessTokenProvider represents an authorzation provider that issues dummy access tokens.
+//
+// It implements the AuthorizationProvider interface.
 type DummyAccessTokenProvider struct {
-	TenantId string
+	TenantID string
 }
 
+// AuthorizationScheme returns "Bearer" for this provider.
 func (p DummyAccessTokenProvider) AuthorizationScheme() string {
 	return auth.BearerToken
 }
 
+// AuthorizationString returns "Bearer <tenantID>" for this provider.
 func (p DummyAccessTokenProvider) AuthorizationString(req auth.Request) (string, error) {
-	return auth.BearerToken + " " + p.TenantId, nil
+	return auth.BearerToken + " " + p.TenantID, nil
 }
 
+// SignHTTPRequest is no-op for this provider.
 func (p DummyAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }
 
+// Close is no-op for this provider.
 func (p DummyAccessTokenProvider) Close() error {
 	return nil
 }
