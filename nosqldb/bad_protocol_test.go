@@ -7,7 +7,7 @@
 // appropriate download for a copy of the license and additional information.
 //
 
-// +build cloudsim cloud
+// +build cloud onprem
 
 package nosqldb_test
 
@@ -19,6 +19,7 @@ import (
 	"math"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/oracle/nosql-go-sdk/internal/test"
 	"github.com/oracle/nosql-go-sdk/nosqldb"
@@ -29,32 +30,35 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// BadProtocolTestSuite builds and sends invalid request content to the server,
+// checks whether the server could handle the bad request.
 type BadProtocolTestSuite struct {
 	*test.NoSQLTestSuite
+
+	// A client designated for the bad protocol test.
 	bpTestClient *nosqldb.Client
 	wr           proto.Writer
-	table        string
-	index        string
-	tableNameLen int
-}
 
-const (
-	testErrCodeBadProtoMsg     = nosqlerr.BadProtocolMessage
-	testErrCodeIllegalArgument = nosqlerr.IllegalArgument
-)
+	// Sample table name, index name, key, value.
+	table, index string
+	key, value   *types.MapValue
+
+	// The number of bytes required for the encoding of table/index name, key and value.
+	tableLen, indexLen, keyLen, valueLen int
+}
 
 func (suite *BadProtocolTestSuite) SetupSuite() {
 	suite.NoSQLTestSuite.SetupSuite()
 
 	var err error
-	// Create a customized client for bad protocol test.
+	// Create a specific client for bad protocol test.
 	suite.bpTestClient, err = nosqldb.NewClient(suite.Client.Config)
-	suite.Require().NoErrorf(err, "failed to create a client, got error %v.", err)
+	suite.Require().NoErrorf(err, "failed to create a client, got error %v", err)
 
 	// Disable retry handling.
 	suite.bpTestClient.RetryHandler = nil
 	suite.bpTestClient.AuthorizationProvider = suite.Client.AuthorizationProvider
-	// Set a customized response handler.
+	// Specify a custom response handler.
 	suite.bpTestClient.SetResponseHandler(processTestResponse)
 
 	suite.table = suite.GetTableName("Users")
@@ -62,8 +66,17 @@ func (suite *BadProtocolTestSuite) SetupSuite() {
 	suite.createTableAndIndex()
 
 	suite.wr = binary.NewWriter()
-	// Calculate the number of bytes that would be written for table name.
-	suite.tableNameLen, _ = suite.wr.WriteString(&suite.table)
+	// Calculate the number of bytes that would be written for table/index name.
+	suite.tableLen, _ = suite.wr.WriteString(&suite.table)
+	suite.indexLen, _ = suite.wr.WriteString(&suite.index)
+
+	suite.key = &types.MapValue{}
+	suite.key.Put("id", 1)
+	suite.keyLen, _ = suite.wr.WriteFieldValue(suite.key)
+
+	suite.value = &types.MapValue{}
+	suite.value.Put("id", 1).Put("name", "string value").Put("count", math.MaxInt64)
+	suite.valueLen, _ = suite.wr.WriteFieldValue(suite.value)
 }
 
 // Create tables and indexes for bad protocol test.
@@ -95,21 +108,8 @@ func (suite *BadProtocolTestSuite) createTableAndIndex() {
 	suite.ExecuteTableDDL(stmt)
 }
 
-func createTestKey(id int) *types.MapValue {
-	var m types.MapValue
-	m.Put("id", id)
-	return &m
-}
-
-func createTestValue() *types.MapValue {
-	var m types.MapValue
-	m.Put("id", 1).Put("name", "string value").Put("count", math.MaxInt64)
-	return &m
-}
-
-// A custom postExecute function of the Client. This function checks returned
-// error code from the response of request execution. It does not deserialize
-// the response content to a result object.
+// processTestResponse is a custom handleResponse function for the Client.
+// It checks error code from the response, does not parse the response content.
 func processTestResponse(httpResp *http.Response, req nosqldb.Request) (nosqldb.Result, error) {
 	data, err := ioutil.ReadAll(httpResp.Body)
 	httpResp.Body.Close()
@@ -129,11 +129,13 @@ func processTestResponse(httpResp *http.Response, req nosqldb.Request) (nosqldb.
 			return nil, nil
 		}
 
+		var errMsg string
 		s, _ := rd.ReadString()
-
-		// Tests care about the error code only, the error message is ignored.
+		if s != nil {
+			errMsg = *s
+		}
 		errCode := nosqlerr.ErrorCode(int(code))
-		err = nosqlerr.New(errCode, *s)
+		err = nosqlerr.New(errCode, errMsg)
 		return nil, err
 	}
 
@@ -143,13 +145,13 @@ func processTestResponse(httpResp *http.Response, req nosqldb.Request) (nosqldb.
 	return nil, fmt.Errorf("error response status code: %d", httpResp.StatusCode)
 }
 
-func writeByte(wr proto.Writer, b byte) {
-	wr.Write([]byte{b})
+func stringPtr(s string) *string {
+	return &s
 }
 
 func seekPos(lengths []int, fieldOff int) (off int) {
 	if n := len(lengths); fieldOff >= n {
-		panic(fmt.Errorf("the specified field offset %d is greater than the length of slice %d",
+		panic(fmt.Errorf("invalid field offset: index %d out of bounds for length %d",
 			fieldOff, n))
 	}
 	for i := 0; i < fieldOff; i++ {
@@ -162,7 +164,7 @@ func (suite *BadProtocolTestSuite) doBadProtoTest(req nosqldb.Request, data []by
 	_, err := suite.bpTestClient.DoExecute(context.Background(), req, data)
 	switch expectErrCode {
 	case nosqlerr.NoError:
-		suite.NoErrorf(err, "%q should have succeeded, got error %v.", desc, err)
+		suite.NoErrorf(err, "%q should have succeeded, got error %v", desc, err)
 	default:
 		suite.Truef(nosqlerr.Is(err, expectErrCode),
 			"%q failed, got error %v, want error %s", desc, err, expectErrCode)
@@ -173,61 +175,74 @@ func (suite *BadProtocolTestSuite) TestBadGetRequest() {
 	req := &nosqldb.GetRequest{
 		TableName:   suite.table,
 		Consistency: types.Absolute,
-		Key:         createTestKey(1),
+		Key:         suite.key,
 	}
 
 	data, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
-
-	// Positive test.
-	desc := "OK test"
-	suite.doBadProtoTest(req, data, desc, 0)
-
 	origData := make([]byte, len(data))
 	copy(origData, data)
 
-	pos := []int{
-		2,                  // SerialVersion: short
-		1,                  // OpCode: byte
-		3,                  // RequestTimeout: packed int
-		suite.tableNameLen, // TableName: string
-		1,                  // Consistency: boolean
-		14,                 // Key: 1(TYPE_MAP) + 4(length) + 4(size) + 3("id") + 1(TYPE_INT) + 1(1-value)
+	var desc string
+	var off int
+	lengths := []int{
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: string
+		1,              // Consistency: boolean
+		suite.keyLen,   // Key: map
 	}
 
-	testCases := []struct {
-		value   types.Consistency
-		wantErr nosqlerr.ErrorCode
-	}{
-		// Valid consistency value.
-		{types.Eventual, nosqlerr.ErrorCode(0)},
-		// Invalid consistency values.
-		{-1, testErrCodeBadProtoMsg},
-		{3, testErrCodeBadProtoMsg},
-	}
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, nosqlerr.NoError)
 
-	off := seekPos(pos, 4)
-	for i, r := range testCases {
-		desc = fmt.Sprintf("invalid consistency value: %d", r.value)
-		if i > 0 {
-			copy(data, origData)
-		}
+	// Invalid serial version.
+	desc = "Invalid serial version"
+	off = seekPos(lengths, 0)
+	suite.wr.Reset()
+	suite.wr.WriteSerialVersion(proto.SerialVersion + 1)
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+
+	// Invalid table name.
+	off = seekPos(lengths, 3)
+	tests := map[string]*string{
+		"nil table name":   nil,
+		"empty table name": stringPtr(""),
+	}
+	for k, v := range tests {
+		copy(data, origData)
+		desc = k
 		suite.wr.Reset()
-		suite.wr.WriteConsistency(r.value)
+		suite.wr.WriteString(v)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, r.wantErr)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 
-	off = seekPos(pos, 5)
+	// Invalid consistency value.
+	copy(data, origData)
+	off = seekPos(lengths, 4)
+	invalidConsistencies := []types.Consistency{-1, 3}
+	for _, r := range invalidConsistencies {
+		desc = fmt.Sprintf("invalid consistency value: %d", r)
+		suite.wr.Reset()
+		suite.wr.WriteConsistency(r)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+
 	// Invalid primary key type.
+	copy(data, origData)
+	off = seekPos(lengths, 5)
 	invalidPKTypes := []int{-1, int(types.Array)}
 	for _, r := range invalidPKTypes {
-		desc = fmt.Sprintf("invalid value type of PrimaryKey: %d", r)
-		copy(data, origData)
+		desc = fmt.Sprintf("invalid type of PrimaryKey: %d", r)
 		suite.wr.Reset()
-		writeByte(suite.wr, byte(r))
+		suite.wr.WriteByte(byte(r))
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 }
 
@@ -239,47 +254,37 @@ func (suite *BadProtocolTestSuite) TestBadGetIndexesRequest() {
 
 	data, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
-
 	origData := make([]byte, len(data))
 	copy(origData, data)
 
-	desc := "OK test"
-	suite.doBadProtoTest(req, data, desc, 0)
-
+	var desc string
+	var off int
 	lengths := []int{
-		2,                  // SerialVersion: short
-		1,                  // OpCode: byte
-		3,                  // RequestTimeout: packed int
-		suite.tableNameLen, // TableName: string
-		1,                  // HasIndex: boolean
-		5,                  // IndexName: string
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: string
+		1,              // HasIndex: boolean
+		suite.indexLen, // IndexName: string
 	}
 
-	emptyString := ""
-	testCases := []struct {
-		value   *string
-		wantErr nosqlerr.ErrorCode
-	}{
-		// index name is nil
-		{nil, testErrCodeBadProtoMsg},
-		// index name is an empty string, but HasIndex is set to true
-		{&emptyString, testErrCodeBadProtoMsg},
-	}
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, nosqlerr.NoError)
 
-	off := seekPos(lengths, 5)
-	for i, r := range testCases {
-		if r.value == nil {
-			desc = fmt.Sprintf("invalid index name: %v", r.value)
-		} else {
-			desc = fmt.Sprintf("invalid index name: %q", *r.value)
-		}
-		if i > 0 {
-			copy(data, origData)
-		}
+	// HasIndex = true but IndexName is nil or empty
+	off = seekPos(lengths, 5)
+	tests := map[string]*string{
+		"nil index name":   nil,
+		"empty index name": stringPtr(""),
+	}
+	for k, v := range tests {
+		copy(data, origData)
+		desc = k
 		suite.wr.Reset()
-		suite.wr.WriteString(r.value)
+		suite.wr.WriteString(v)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, r.wantErr)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 }
 
@@ -290,68 +295,86 @@ func (suite *BadProtocolTestSuite) TestBadGetTableRequest() {
 
 	data, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
-
 	origData := make([]byte, len(data))
 	copy(origData, data)
 
-	desc := "OK test"
-	suite.doBadProtoTest(req, data, desc, 0)
-
+	var desc string
+	var off int
 	lengths := []int{
-		2,                  // SerialVersion: short
-		1,                  // OpCode: byte
-		3,                  // RequestTimeout: packed int
-		suite.tableNameLen, // TableName: string
-		6,                  // OperationId: string
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: string
+		6,              // OperationID: string
 	}
 
-	off := seekPos(lengths, 4)
-	opId := 5678
-	desc = fmt.Sprintf("invalid operation id: %d", opId)
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, nosqlerr.NoError)
 
+	// Invalid type of operation id
+	off = seekPos(lengths, 4)
+	var opID int = 5678
+	desc = fmt.Sprintf("invalid type of operation id: %T, want string", opID)
 	suite.wr.Reset()
 	// Write operation id as an Integer, rather than a string.
-	suite.wr.WriteInt(opId)
+	suite.wr.WriteInt(opID)
 	copy(data[off:], suite.wr.Bytes())
-	suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 }
 
 func (suite *BadProtocolTestSuite) TestBadListTablesRequest() {
-	req := &nosqldb.ListTablesRequest{}
+	ns := "Namespace001"
+	req := &nosqldb.ListTablesRequest{
+		Namespace: ns,
+	}
+
 	data, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
-
 	origData := make([]byte, len(data))
 	copy(origData, data)
 
-	desc := "OK test"
-	suite.doBadProtoTest(req, data, desc, 0)
-
+	nsLen, _ := suite.wr.WriteString(&ns)
+	var desc string
+	var off int
 	lengths := []int{
-		2, // SerialVersion: short
-		1, // OpCode: byte
-		3, // RequestTimeout: packed int
-		4, // StartIndex: int
-		4, // Limit: int
+		2,     // SerialVersion: short
+		1,     // OpCode: byte
+		3,     // RequestTimeout: packed int
+		4,     // StartIndex: int
+		4,     // Limit: int
+		nsLen, // Namespace: string
 	}
 
-	// invalid start index
-	off := seekPos(lengths, 3)
-	value := -1
-	desc = fmt.Sprintf("invalid start index : %d", value)
-	suite.wr.Reset()
-	suite.wr.WriteInt(value)
-	copy(data[off:], suite.wr.Bytes())
-	suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
 
-	// invalid limit
+	// invalid start index: -1
+	off = seekPos(lengths, 3)
+	desc = "invalid start index : -1"
+	suite.wr.Reset()
+	suite.wr.WriteInt(-1)
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+
+	// invalid limit: -1
 	off = seekPos(lengths, 4)
-	desc = fmt.Sprintf("invalid limit : %d", value)
+	desc = "invalid limit : -1"
 	copy(data, origData)
 	suite.wr.Reset()
-	suite.wr.WriteInt(value)
+	suite.wr.WriteInt(-1)
 	copy(data[off:], suite.wr.Bytes())
-	suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+
+	// Specify an invalid length for the namespace string.
+	off = seekPos(lengths, 5)
+	desc = "invalid namespace string length"
+	copy(data, origData)
+	suite.wr.Reset()
+	suite.wr.WritePackedInt(len(ns) + 1)
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 }
 
 func (suite *BadProtocolTestSuite) TestBadPrepareRequest() {
@@ -359,49 +382,46 @@ func (suite *BadProtocolTestSuite) TestBadPrepareRequest() {
 	req := &nosqldb.PrepareRequest{Statement: stmt}
 	data, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
-
 	origData := make([]byte, len(data))
 	copy(origData, data)
 
-	desc := "OK test"
-	suite.doBadProtoTest(req, data, desc, 0)
-
 	stmtLen, _ := suite.wr.WriteString(&stmt)
+	var desc string
+	var off int
 	lengths := []int{
 		2,       // SerialVersion: short
 		1,       // OpCode: byte
 		3,       // RequestTimeout: packed int
 		stmtLen, // Statement: string
+		2,       // QueryVersion: short
+		1,       // GetQueryPlan: boolean
 	}
 
-	off := seekPos(lengths, 3)
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
 
-	emptyStr := ""
-	testStmts := []*string{
-		nil,
-		&emptyStr,
+	// Invalid query statements.
+	off = seekPos(lengths, 3)
+	tests := map[string]*string{
+		"nil query statement":   nil,
+		"empty query statement": stringPtr(""),
 	}
-	for i, s := range testStmts {
-		if s == nil {
-			desc = "nil statement"
-		} else {
-			desc = *s + " statement"
-		}
-
-		if i > 0 {
-			copy(data, origData)
-		}
+	for k, v := range tests {
+		copy(data, origData)
+		desc = k
 		suite.wr.Reset()
-		suite.wr.WriteString(s)
+		suite.wr.WriteString(v)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 
-	// invalid length of statement
+	// Specify an invalid length for the query statement.
 	testStmtLengths := []int{
 		len(stmt) + 1,
 		-2,
 		test.MaxQuerySizeLimit,
+		test.MaxQuerySizeLimit + 1,
 	}
 	for _, value := range testStmtLengths {
 		desc = fmt.Sprintf("invalid statement, its length is %d", value)
@@ -409,8 +429,19 @@ func (suite *BadProtocolTestSuite) TestBadPrepareRequest() {
 		suite.wr.Reset()
 		suite.wr.WritePackedInt(value)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
+
+	// TODO(zehliu): validate query version in the database proxy.
+	// Invalid query version.
+	//
+	// off = seekPos(lengths, 4)
+	// copy(data, origData)
+	// desc = "invalid query version"
+	// suite.wr.Reset()
+	// suite.wr.WriteInt16(proto.QueryVersion + 1)
+	// copy(data[off:], suite.wr.Bytes())
+	// suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 }
 
 func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
@@ -432,10 +463,9 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 		Limit:             100,
 	}
 
-	//TODO:
-	prepStmtLen := 100
-	// prepStmtLen := 4 /* int, length of PreparedStatement */ +
-	// len(req.PreparedStatement.statement)
+	prepStmtLen := 4 + len(prepRes.PreparedStatement.GetStatement())
+	var desc string
+	var off int
 	lengths := []int{
 		2,           // SerialVersion: short
 		1,           // OpCode: byte
@@ -446,6 +476,12 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 		1,           // ContinuationKey: byte array
 		1,           // IsPreparedStatement: boolean
 		2,           // QueryVersion: short
+		1,           // traceLevel: packed int
+		1,           // MaxWriteKB: packed int
+		1,           // MathContext: byte
+		1,           // ToplogySeqNum: packed int
+		1,           // ShardID: packed int
+		1,           // isSimpleQuery: boolean
 		prepStmtLen, // PreparedStatement: byte array
 		1,           // VariablesNumber: packed int
 		4,           // VariableName: string
@@ -454,81 +490,470 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 
 	data, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
-
 	origData := make([]byte, len(data))
 	copy(origData, data)
 
-	desc := "OK test"
+	// Good request.
+	desc = "OK test"
 	suite.doBadProtoTest(req, data, desc, 0)
 
-	// invalid length of statements.
-	off := seekPos(lengths, 9)
-	testStmtLengths := []int{
-		0,
-		-1,
-	}
+	// invalid length of prepared statement.
+	off = seekPos(lengths, 15)
+	testStmtLengths := []int{0, -1}
 	for _, value := range testStmtLengths {
 		desc = fmt.Sprintf("invalid statement, its length is %d", value)
 		copy(data, origData)
 		suite.wr.Reset()
 		suite.wr.WriteInt(value)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 
 	// invalid number of variables
-	off = seekPos(lengths, 10)
-	testVarNumLengths := []int{
-		-1,
-		0,
-		2,
-	}
+	off = seekPos(lengths, 16)
+	testVarNumLengths := []int{-1, 0, 2}
 	for _, value := range testVarNumLengths {
 		desc = fmt.Sprintf("invalid number of variables: %d", value)
 		copy(data, origData)
 		suite.wr.Reset()
 		suite.wr.WriteInt(value)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 
 	// invalid variable names
-	emptyStr := ""
-	off = seekPos(lengths, 11)
-	testVarNames := []*string{
-		nil,
-		&emptyStr,
+	off = seekPos(lengths, 17)
+	testVarNames := map[string]*string{
+		"nil variable name":   nil,
+		"empty variable name": stringPtr(""),
 	}
-	for _, value := range testVarNames {
-		if value == nil {
-			desc = "nil variable name"
-		} else {
-			desc = fmt.Sprintf("invalid variable name: %q", *value)
-		}
+	for k, v := range testVarNames {
 		copy(data, origData)
+		desc = k
 		suite.wr.Reset()
-		suite.wr.WriteString(value)
+		suite.wr.WriteString(v)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, testErrCodeBadProtoMsg)
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 	}
 
 	// invalid variable values
-	off = seekPos(lengths, 12)
+	off = seekPos(lengths, 18)
 	testVarTypes := []struct {
 		valueType types.DbType
 		wantErr   nosqlerr.ErrorCode
 	}{
-		{-1, testErrCodeBadProtoMsg},
-		{types.Array, testErrCodeIllegalArgument},
+		{-1, nosqlerr.BadProtocolMessage},
+		{types.Array, nosqlerr.IllegalArgument},
 	}
 	for _, r := range testVarTypes {
 		desc = fmt.Sprintf("invalid variable value type: %s", r.valueType)
 		copy(data, origData)
 		suite.wr.Reset()
-		writeByte(suite.wr, byte(r.valueType))
+		suite.wr.WriteByte(byte(r.valueType))
 		copy(data[off:], suite.wr.Bytes())
 		suite.doBadProtoTest(req, data, desc, r.wantErr)
 	}
+}
+
+func (suite *BadProtocolTestSuite) TestBadPutRequest() {
+	ttlValue := &types.TimeToLive{
+		Value: 1,
+		Unit:  types.Days,
+	}
+	ttlLen, _ := suite.wr.WriteTTL(ttlValue)
+
+	req := &nosqldb.PutRequest{
+		TableName: suite.table,
+		Value:     suite.value,
+		TTL:       ttlValue,
+	}
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: String
+		1,              // ReturnRow: boolean
+		1,              // ExactMatch: boolean
+		1,              // IdentityCacheSize: packed int
+		suite.valueLen, // Record: MapValue
+		1,              // UseTableTTL: boolean
+		ttlLen,         // TTL: value(packed long) + unit(byte)
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
+
+	// Invalid opcode.
+	off = seekPos(lengths, 1)
+	desc = "invalid put option"
+	suite.wr.Reset()
+	suite.wr.WriteOpCode(proto.OpCode(-1))
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+
+	// Invalid request timeout.
+	off = seekPos(lengths, 2)
+	desc = "invalid request timeout"
+	copy(data, origData)
+	suite.wr.Reset()
+	suite.wr.WriteTimeout(time.Duration(-1))
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+
+	// Invalid table name.
+	off = seekPos(lengths, 3)
+	tests := map[string]*string{
+		"nil table name":   nil,
+		"empty table name": stringPtr(""),
+	}
+	for k, v := range tests {
+		desc = k
+		copy(data, origData)
+		suite.wr.Reset()
+		suite.wr.WriteString(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+
+	// Invalid TTL value/unit.
+	off = seekPos(lengths, 9)
+	desc = "invalid TTL value"
+	copy(data, origData)
+	suite.wr.Reset()
+	// Use a negative value other than -1, because -1 is a valid value
+	// that represents the TTL is not specified.
+	suite.wr.WritePackedLong(-2)
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+
+	off += 1
+	desc = "invalid TTL unit"
+	copy(data, origData)
+	suite.wr.Reset()
+	suite.wr.WriteByte(byte(types.Hours - 1))
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+}
+
+func (suite *BadProtocolTestSuite) TestBadDeleteRequest() {
+	req := &nosqldb.DeleteRequest{
+		TableName: suite.table,
+		Key:       suite.key,
+	}
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: string
+		1,              // ReturnRow: boolean
+		suite.keyLen,   // Key: map
+		0,              // MatchVersion: bytes
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
+
+	// Invalid table name.
+	off = seekPos(lengths, 3)
+	tests := map[string]*string{
+		"nil table name":   nil,
+		"empty table name": stringPtr(""),
+	}
+	for k, v := range tests {
+		copy(data, origData)
+		desc = k
+		suite.wr.Reset()
+		suite.wr.WriteString(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+
+	// OpCode=DeleteIfVersion but MatchVersion is not specified.
+	off = seekPos(lengths, 1)
+	copy(data, origData)
+	desc = "DeleteIfVersion without specifying a MatchVersion"
+	suite.wr.Reset()
+	suite.wr.WriteOpCode(proto.DeleteIfVersion)
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+}
+
+func (suite *BadProtocolTestSuite) TestBadWriteMultipleRequest() {
+	putReq := &nosqldb.PutRequest{
+		TableName: suite.table,
+		Value:     suite.value,
+	}
+	req := &nosqldb.WriteMultipleRequest{
+		TableName: suite.table,
+	}
+	req.AddPutRequest(putReq, true)
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: string
+		1,              // OperationNum: packed int
+		1,              // abortOnFail: boolean
+		0,              // Sub requests: the size does not matter for this test.
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
+
+	// Wrong number of operations.
+	off = seekPos(lengths, 4)
+	tests := []int{-1, 2}
+	for _, v := range tests {
+		desc = fmt.Sprintf("wrong number of operations %d", v)
+		copy(data, origData)
+		suite.wr.Reset()
+		suite.wr.WritePackedInt(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+
+	// Invalid opcode for sub requests.
+	off = seekPos(lengths, 6)
+	testOpCodes := []proto.OpCode{proto.OpCode(-1), proto.Get}
+	for _, v := range testOpCodes {
+		desc = fmt.Sprintf("invalid opcode %v", v)
+		copy(data, origData)
+		suite.wr.Reset()
+		suite.wr.WriteOpCode(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+
+}
+
+func (suite *BadProtocolTestSuite) TestBadMultiDeleteRequest() {
+	req := &nosqldb.MultiDeleteRequest{
+		TableName:       suite.table,
+		Key:             suite.key,
+		MaxWriteKB:      1024,
+		ContinuationKey: test.GenBytes(20),
+	}
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,              // SerialVersion: short
+		1,              // OpCode: byte
+		3,              // RequestTimeout: packed int
+		suite.tableLen, // TableName: string
+		suite.keyLen,   // Key: MapValue
+		1,              // HasFieldRange: boolean
+		3,              // MaxWriteKB: packed int
+		21,             // ContinuationKey: byte array
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
+
+	// Invalid MaxWriteKB.
+	off = seekPos(lengths, 6)
+	var tests []int
+	if test.IsOnPrem() {
+		// There is no limit on MaxWriteKB for the on-premise server.
+		tests = []int{-1}
+	} else {
+		tests = []int{-1, test.MaxWriteKBLimit + 1}
+	}
+
+	for _, v := range tests {
+		desc = fmt.Sprintf("invalid MaxWriteKB %v", v)
+		copy(data, origData)
+		suite.wr.Reset()
+		suite.wr.WritePackedInt(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+
+	// Invalid length of ContinuationKey.
+	off = seekPos(lengths, 7)
+	tests = []int{-2, 100}
+	for _, v := range tests {
+		desc = fmt.Sprintf("invalid length of ContinuationKey %v", v)
+		copy(data, origData)
+		suite.wr.Reset()
+		suite.wr.WritePackedInt(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+}
+
+func (suite *BadProtocolTestSuite) TestBadTableRequest() {
+	newTable := "ABCD"
+	stmt := "create table if not exists " + newTable + " (id integer, primary key(id))"
+	stmtLen, _ := suite.wr.WriteString(&stmt)
+	req := &nosqldb.TableRequest{
+		Statement:   stmt,
+		TableLimits: &nosqldb.TableLimits{50, 50, 5},
+	}
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,       // SerialVersion: short
+		1,       // OpCode: byte
+		3,       // RequestTimeout: packed int
+		stmtLen, // Statement: string
+		1,       // HasLimit: boolean
+		4,       // ReadKB: int
+		4,       // WriteKB: int
+		4,       // StorageGB: int
+		1,       // HasTableName: boolean
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	suite.AddToTables(newTable)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Good request.
+	desc = "OK test"
+	suite.doBadProtoTest(req, data, desc, 0)
+
+	// invalid readKB/writeKB/storageGB
+	tests := []struct {
+		desc  string
+		index int
+		value int
+	}{
+		{"invalid readKB", 5, 0},
+		{"invalid readKB", 5, -1},
+		{"invalid writeKB", 6, 0},
+		{"invalid writeKB", 6, -1},
+		{"invalid storageGB", 7, 0},
+		{"invalid storageGB", 7, -1},
+	}
+
+	for _, r := range tests {
+		desc = r.desc
+		off = seekPos(lengths, r.index)
+		copy(data, origData)
+		suite.wr.Reset()
+		suite.wr.WriteInt(r.value)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+}
+
+func (suite *BadProtocolTestSuite) TestBadSystemRequest() {
+	if !test.IsOnPrem() {
+		suite.T().Skip("TestBadSystemRequest() can only run with an on-premise server")
+	}
+
+	ns := "namespace1"
+	stmt := "create namespace if not exists " + ns
+	stmtLen, _ := suite.wr.WriteString(&stmt)
+	req := &nosqldb.SystemRequest{
+		Statement: stmt,
+	}
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,       // SerialVersion: short
+		1,       // OpCode: byte
+		3,       // RequestTimeout: packed int
+		stmtLen, // Statement: string
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Invalid statement.
+	off = seekPos(lengths, 3)
+	tests := map[string]*string{
+		"nil statement":   nil,
+		"empty statement": stringPtr(""),
+	}
+	for k, v := range tests {
+		copy(data, origData)
+		desc = k
+		suite.wr.Reset()
+		suite.wr.WriteString(v)
+		copy(data[off:], suite.wr.Bytes())
+		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+	}
+}
+
+func (suite *BadProtocolTestSuite) TestBadSystemStatusRequest() {
+	if !test.IsOnPrem() {
+		suite.T().Skip("TestBadSystemStatusRequest() can only run with an on-premise server")
+	}
+
+	ns := "namespace1"
+	stmt := "create namespace if not exists " + ns
+	stmtLen, _ := suite.wr.WriteString(&stmt)
+	opID := "1234"
+	opIDLen, _ := suite.wr.WriteString(&opID)
+	req := &nosqldb.SystemStatusRequest{
+		Statement:   stmt,
+		OperationID: opID,
+	}
+
+	var desc string
+	var off int
+	lengths := []int{
+		2,       // SerialVersion: short
+		1,       // OpCode: byte
+		3,       // RequestTimeout: packed int
+		opIDLen, // OperationID: string
+		stmtLen, // Statement: string
+	}
+
+	data, err := suite.bpTestClient.ProcessRequest(req)
+	suite.Require().NoError(err)
+	origData := make([]byte, len(data))
+	copy(origData, data)
+
+	// Invalid type of operation id
+	off = seekPos(lengths, 3)
+	var id int = 1234
+	desc = fmt.Sprintf("invalid type of operation id: %T, want string", id)
+	suite.wr.Reset()
+	// Write operation id as an Integer, rather than a string.
+	suite.wr.WritePackedInt(id)
+	copy(data[off:], suite.wr.Bytes())
+	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 }
 
 func TestBadProtocol(t *testing.T) {

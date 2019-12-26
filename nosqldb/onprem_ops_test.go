@@ -36,7 +36,7 @@ func (suite *OnPremTestSuite) TestNamespacesOp() {
 		stmt       string
 		expErrCode nosqlerr.ErrorCode // Expected error code.
 	}{
-		{"drop namespace if exists %s", nosqlerr.NoError},
+		{"drop namespace if exists %s cascade", nosqlerr.NoError},
 		{"create namespace %s", nosqlerr.NoError},
 		{"create namespace %s", nosqlerr.ResourceExists},
 		{"create namespace if not exists %s", nosqlerr.NoError},

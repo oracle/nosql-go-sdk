@@ -80,6 +80,10 @@ func ExecuteQueryRequest(client *nosqldb.Client, queryReq *nosqldb.QueryRequest)
 		}
 
 		res, err = queryRes.GetResults()
+		if err != nil {
+			return nil, err
+		}
+
 		if len(res) > 0 {
 			if results == nil {
 				results = make([]*types.MapValue, 0, 16)

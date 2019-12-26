@@ -7,8 +7,6 @@
 // appropriate download for a copy of the license and additional information.
 //
 
-// +build cloudsim cloud
-
 package nosqldb
 
 import (
@@ -30,4 +28,8 @@ func (c *Client) ProcessRequest(req Request) (data []byte, err error) {
 
 func (c *Client) DoExecute(ctx context.Context, req Request, data []byte) (Result, error) {
 	return c.doExecute(ctx, req, data)
+}
+
+func (p *PreparedStatement) GetStatement() []byte {
+	return p.statement
 }
