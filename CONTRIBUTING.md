@@ -1,6 +1,6 @@
 # Contributing to the Oracle NoSQL Database Cloud Service Go SDK
 
-*Copyright (c) 2019,  Oracle and/or its affiliates. All rights reserved.*
+*Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.*
 
 Pull requests can be made under
 [The Oracle Contributor Agreement](https://www.oracle.com/technetwork/community/oca-486395.html)
