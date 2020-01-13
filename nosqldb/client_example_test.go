@@ -741,7 +741,7 @@ func ExampleClient_GetTable() {
 	defer client.Close()
 
 	req := &nosqldb.GetTableRequest{
-		TableName: "emloyees",
+		TableName: "employees",
 		Timeout:   3 * time.Second,
 	}
 
@@ -767,7 +767,7 @@ func ExampleClient_GetIndexes() {
 	defer client.Close()
 
 	req := &nosqldb.GetIndexesRequest{
-		TableName: "emloyees",
+		TableName: "employees",
 		Timeout:   3 * time.Second,
 	}
 
