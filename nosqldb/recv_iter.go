@@ -130,6 +130,9 @@ func newReceiveIterState(rcb *runtimeControlBlock, iter *receiveIter) *receiveIt
 
 	if iter.doesDupElim() {
 		state.primKeys = make(map[chksum]struct{}, 100)
+		// Account for the memory allocated for the map used for duplicate elimination.
+		state.dupElimMemory = int64(sizeOf(state.primKeys))
+		state.memoryConsumption = state.dupElimMemory
 	}
 
 	switch {
@@ -252,7 +255,7 @@ func (iter *receiveIter) doesDupElim() bool {
 
 func (iter *receiveIter) open(rcb *runtimeControlBlock) (err error) {
 	state := newReceiveIterState(rcb, iter)
-	rcb.setState(iter.statePos, newReceiveIterState(rcb, iter))
+	rcb.setState(iter.statePos, state)
 	err = rcb.incMemoryConsumption(state.memoryConsumption)
 	return
 }
@@ -314,7 +317,7 @@ func (iter *receiveIter) simpleNext(rcb *runtimeControlBlock, state *receiveIter
 		return true, nil
 	}
 
-	rcb.trace(1, "receiveIter.simleNext() : no result. Reached limit = %t", rcb.reachedLimit)
+	rcb.trace(1, "receiveIter.simpleNext() : no result. Reached limit = %t", rcb.reachedLimit)
 
 	if rcb.reachedLimit {
 		return false, nil
@@ -345,7 +348,7 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 			return false, err
 		}
 
-		// Get the min scanner.
+		// Process results from the first (highest priority) scanner.
 		scanner = state.sortedScanners[0]
 		if scanner == nil {
 			err = state.done()
@@ -361,11 +364,12 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 
 			if scanner.isDone() {
 				// Remove the scanner if it has done.
+				// This is equivalent to heap.Remove(&state.sortedScanners, 0).
 				heap.Pop(&state.sortedScanners)
 				rcb.trace(1, "receiveIter.sortingNext() : done with partition/shard %d", scanner.shardOrPartID)
 			} else {
 				// Keep the scanner in the heap, but need to re-establish the
-				// heap ordering because the scanner has changed.
+				// heap ordering because the state of sorted scanner has changed.
 				heap.Fix(&state.sortedScanners, 0)
 			}
 
@@ -387,12 +391,12 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 			continue
 		}
 
-		// The scanner has no cached results but it has remote results,
-		// send a request to fetch more results.
+		// The scanner has no cached results but it is not done, indicating it
+		// has remote results, so send a request to fetch more results.
 		err = scanner.fetch()
 		if err != nil {
-			// If this is a retryable error, keep the scanner in the heap,
-			// otherwise remove it.
+			// If this is a retryable error, keep the scanner in the heap so as
+			// to process results from this scanner later, otherwise remove it.
 			e, ok := err.(*nosqlerr.Error)
 			if !ok || !e.Retryable() {
 				heap.Pop(&state.sortedScanners)
@@ -453,11 +457,9 @@ func (iter *receiveIter) checkDuplicate(rcb *runtimeControlBlock, state *receive
 
 	state.primKeys[checksum] = struct{}{}
 	// Calculate the memory consumed for duplicate elimination.
-	// This is a rough estimation that only counts for the size of key,
-	// the value is not counted as it is an empty struct that takes 0 byte.
-	// Go's map occupies extra spaces for its internal data structure, that part
-	// is not counted.
-	memory := int64(md5.Size)
+	// Only count the map's key, that is the MD5 checksum,
+	// the map's value is not counted as it is an empty struct that takes 0 byte.
+	memory := int64(sizeOf(checksum))
 	state.memoryConsumption += memory
 	state.dupElimMemory += memory
 	err = rcb.incMemoryConsumption(memory)
@@ -473,7 +475,7 @@ func (iter *receiveIter) createBinaryPrimKey(res *types.MapValue) ([]byte, error
 	for i, fieldName := range iter.primKeyFields {
 		v, ok := res.Get(fieldName)
 		if !ok {
-			return nil, fmt.Errorf("cannot find primary key field %s", fieldName)
+			return nil, fmt.Errorf("receiveIter.createBinaryPrimKey(): cannot find primary key field %s", fieldName)
 		}
 
 		switch v := v.(type) {
@@ -492,7 +494,7 @@ func (iter *receiveIter) createBinaryPrimKey(res *types.MapValue) ([]byte, error
 			s := v.UTC().Format(time.RFC3339Nano)
 			_, err = w.WriteString(&s)
 		default:
-			return nil, fmt.Errorf("unexpected type for primary key column %s at result column %d: %T"+
+			return nil, fmt.Errorf("unexpected type for primary key column %s, at result column %d: %T"+
 				fieldName, i+1, v)
 		}
 
@@ -573,7 +575,8 @@ func (iter *receiveIter) handleTopologyChange(rcb *runtimeControlBlock, state *r
 		return
 	}
 
-	// The slice of shard IDs has been sorted in the above invocation of the equals method.
+	// As a side effect of the "newTopoInfo.equals(state.topologyInfo)" invocation,
+	// the shard IDs have been sorted.
 	newShards := newTopoInfo.shardIDs
 	currShards := state.topologyInfo.shardIDs
 
@@ -651,12 +654,12 @@ func (iter *receiveIter) displayContent(sb *strings.Builder, f *planFormatter) {
 //
 // For all-shard, ordering queries, there is one remoteScanner per shard.
 // In this case, each remoteScanner will fetch results only from the shard
-// specified by shardOrPartId.
+// specified by shardOrPartID.
 //
 // For all-partition, ordering queries, there is one remoteScanner for each
 // partition that has at least one query result.
 // In this case, each remoteScanner will fetch results only from the partition
-// specified by shardOrPartId.
+// specified by shardOrPartID.
 //
 // For non-ordering queries, there is a single remoteScanner.
 // It will fetch as many results as possible starting from the shard or
@@ -672,8 +675,7 @@ type remoteScanner struct {
 	nextResultPos     int
 	continuationKey   []byte
 	moreRemoteResults bool
-	// doesSort          bool
-	compRes *compareResult
+	compRes           *compareResult
 
 	*receiveIter
 }
@@ -753,6 +755,9 @@ func (s *remoteScanner) next() (mv *types.MapValue, err error) {
 	return mv, nil
 }
 
+// The maximum number of results allowed for each fetch operation.
+const maxNumResults int64 = 2048
+
 // fetch fetches results remotely from the NoSQL database servers.
 func (s *remoteScanner) fetch() (err error) {
 	req := s.rcb.getRequest().copyInternal()
@@ -768,9 +773,8 @@ func (s *remoteScanner) fetch() (err error) {
 		s.rcb.decMemoryConsumption(s.resultSize)
 		numResults := (req.MaxMemoryConsumption - s.state.dupElimMemory) /
 			(int64((len(s.state.sortedScanners) + 1)) * (s.state.totalResultSize / s.state.totalNumResults))
-		// TODO: MAGIC NUMBER --> CONST
-		if numResults > 2048 {
-			numResults = 2028
+		if numResults > maxNumResults {
+			numResults = maxNumResults
 		}
 
 		req.Limit = uint(numResults)
@@ -783,12 +787,6 @@ func (s *remoteScanner) fetch() (err error) {
 		return
 	}
 
-	// results := res.results
-	// nnn := len(res.results)
-	// fmt.Printf("number of results fetched: %d\n", nnn)
-	// for _, vv := range res.results {
-	// 	fmt.Printf("recv_iter.go: res: %#v\n", vv.Map())
-	// }
 	s.results = res.results
 	s.continuationKey, err = res.getContinuationKey()
 	if err != nil {
@@ -832,7 +830,6 @@ func (s *remoteScanner) addMemoryConsumption() (err error) {
 		s.resultSize += int64(sizeOf(s.results[i]))
 	}
 
-	s.resultSize += int64(n * objRefOverhead)
 	s.state.totalNumResults += int64(n)
 	s.state.totalResultSize += s.resultSize
 	s.state.memoryConsumption += s.resultSize

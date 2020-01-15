@@ -167,27 +167,78 @@ func (rcb *runtimeControlBlock) resetConsumedCapacity() {
 	rcb.WriteKB = 0
 }
 
-var objRefOverhead int
+const (
+	// The pointer size.
+	ptrSize = 4 << (^uintptr(0) >> 63)
 
-func init() {
-	objRefOverhead = 4
+	// Size of the map header, that is the hmap struct, see runtime/map.go.
+	hmapSize = 8 + 5*ptrSize
+)
+
+// sizeOf reports the memory in bytes that is consumed by the specified value.
+//
+// The returned size may be inaccurate, especially when the underlying data
+// structure is a map. This is used to estimate how much memory is consumed by
+// queries that involve sorting and/or duplicate elimination.
+func sizeOf(v interface{}) int {
+	return dataSize(reflect.ValueOf(v))
 }
 
-// TODO:
-func sizeOf(v interface{}) int {
-	switch v := v.(type) {
-	case int32:
-		return 4
-	case int64:
-		return 8
-	case int:
-		return 4
-	case []byte:
-		return len(v)
-	case string:
-		return len(v)
+func dataSize(v reflect.Value, ignoreTypeSize ...bool) int {
+	sz := int(v.Type().Size())
+	if len(ignoreTypeSize) > 0 && ignoreTypeSize[0] {
+		sz = 0
+	}
+
+	switch v.Kind() {
+	case reflect.Ptr:
+		if !v.IsNil() {
+			sz += dataSize(v.Elem())
+		}
+		return sz
+
+	case reflect.String:
+		return sz + v.Len()
+
+	case reflect.Slice:
+		n := v.Len()
+		for i := 0; i < n; i++ {
+			sz += dataSize(v.Index(i))
+		}
+
+		// Account for the memory allocated for the backing array but are
+		// not referenced by the slice.
+		if c := v.Cap(); c > n {
+			sz += int(v.Type().Elem().Size()) * (c - n)
+		}
+		return sz
+
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			f := v.Field(i)
+			switch f.Kind() {
+			case reflect.Ptr, reflect.Map, reflect.Slice, reflect.String:
+				// Ignore the the pointer/slice header/string header size as
+				// it is already counted as part of the struct size.
+				sz += dataSize(f, true)
+			}
+		}
+		return sz
+
+	case reflect.Map:
+		sz += int(hmapSize)
+		for _, key := range v.MapKeys() {
+			sz += dataSize(key)
+			sz += dataSize(v.MapIndex(key))
+		}
+
+		// There is memory overhead for the buckets, possibly overflow buckets
+		// and other internal meta data maintained for the hashtable, which is
+		// not easy to calculate accurately. For simplicity, do not account for them.
+		return sz
+
 	default:
-		return 0
+		return sz
 	}
 }
 
@@ -212,6 +263,10 @@ func (ti *topologyInfo) equals(otherTopo *topologyInfo) bool {
 	}
 
 	if ti.seqNum != otherTopo.seqNum {
+		return false
+	}
+
+	if ti.getNumShards() != otherTopo.getNumShards() {
 		return false
 	}
 

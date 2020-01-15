@@ -51,9 +51,6 @@ func newSortSpec(r proto.Reader) (sp *sortSpec, err error) {
 	return
 }
 
-//TODO:
-var fixedMemoryConsumption int64 = 12
-
 // sortIterState represents the dynamic state for a sort iterator.
 type sortIterState struct {
 	*iterState
@@ -63,11 +60,13 @@ type sortIterState struct {
 }
 
 func newSortIterState() *sortIterState {
-	return &sortIterState{
-		iterState:         newIterState(),
-		results:           make([]*types.MapValue, 0, 100),
-		memoryConsumption: fixedMemoryConsumption,
+	state := &sortIterState{
+		iterState: newIterState(),
+		results:   make([]*types.MapValue, 0, 100),
 	}
+	// The memory overhead for sortIterState object is counted.
+	state.memoryConsumption = int64(sizeOf(state))
+	return state
 }
 
 func (st *sortIterState) close() (err error) {
@@ -95,9 +94,9 @@ func (st *sortIterState) reset() (err error) {
 		return
 	}
 
-	st.results = nil
+	st.results = st.results[:0]
 	st.nextResultPos = 0
-	st.memoryConsumption = fixedMemoryConsumption
+	st.memoryConsumption = int64(sizeOf(st))
 	return nil
 }
 
@@ -171,8 +170,13 @@ func (iter *sortIter) reset(rcb *runtimeControlBlock) (err error) {
 		return fmt.Errorf("wrong iterator state type, expect *sortIterState, got %T", st)
 	}
 
-	rcb.decMemoryConsumption(state.memoryConsumption - fixedMemoryConsumption)
-	return state.reset()
+	m1 := state.memoryConsumption
+	err = state.reset()
+	m2 := state.memoryConsumption
+	// (m1 - m2) represents the memory consumed for the sorting query without
+	// the sortIterState overhead itself.
+	rcb.decMemoryConsumption(m1 - m2)
+	return
 }
 
 func (iter *sortIter) close(rcb *runtimeControlBlock) (err error) {
@@ -223,8 +227,7 @@ func (iter *sortIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 
 			state.results = append(state.results, v)
 
-			//TODO:
-			sz = int64(sizeOf(v) + objRefOverhead)
+			sz = int64(sizeOf(v))
 			state.memoryConsumption += sz
 			err = rcb.incMemoryConsumption(sz)
 			if err != nil {
