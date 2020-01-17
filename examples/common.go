@@ -47,13 +47,19 @@
 //   tenancy=ocid1.tenancy.oc1..aaaaaaaaba3pv6wuzr4h25vqstifsfdsq
 //   region=us-ashburn-1
 //
-// (2) Assume the Oracle NoSQL Cloud Service is running at https://ndcs.us-ashburn-1.oraclecloud.com,
-// use the command:
+// (2) Assume the Oracle NoSQL Cloud Service is running at the US East (Ashburn)
+// region, the corresponding region key, region identifier and service endpoint
+// is "iad", "us-ashburn-1", https://nosql.us-ashburn-1.oci.oraclecloud.com,
+// respectively, use the command:
 //
 //   cd nosql-go-sdk/bin/examples
 //   # Run the basic example.
 //   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=iam -configFile=~/iam_config https://ndcs.us-ashburn-1.oraclecloud.com
+//   ./basic -config=iam -configFile=~/iam_config iad
+//   or
+//   ./basic -config=iam -configFile=~/iam_config us-ashburn-1
+//   or
+//   ./basic -config=iam -configFile=~/iam_config https://nosql.us-ashburn-1.oci.oraclecloud.com
 //      Note: you may also include -iamProfileID=<profile> to use a profile other
 //            than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
 //            use a compartment ID other than the "tenancy" OCID from the IAM config file.
@@ -169,6 +175,7 @@ func ParseArgs() *Args {
 		os.Exit(1)
 	}
 
+	arg0 := flag.Args()[0]
 	switch *config {
 	case "kvstore", "cloudsim":
 	case "iam":
@@ -177,13 +184,21 @@ func ParseArgs() *Args {
 			printExampleUsage()
 			os.Exit(1)
 		}
+
+		// Try to parse arg0 as a region key or region id, if succeeds,
+		// get service endpoint for the region.
+		region, err := nosqldb.StringToRegion(arg0)
+		if err == nil {
+			arg0, _ = region.Endpoint()
+		}
+
 	default:
 		printExampleUsage()
 		os.Exit(1)
 	}
 
 	return &Args{
-		Endpoint:      flag.Args()[0],
+		Endpoint:      arg0,
 		config:        *config,
 		configFile:    *configFile,
 		compartmentID: *compartmentID,
@@ -209,7 +224,7 @@ func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.Authorization
 }
 
 func printExampleUsage() {
-	fmt.Fprintf(os.Stderr, "Usage:\n%s [OPTIONS] <NoSQL service endpoint>\n\n  OPTIONS:\n\n",
+	fmt.Fprintf(os.Stderr, "Usage:\n%s [OPTIONS] <NoSQL service endpoint or OCI region key/id>\n\n  OPTIONS:\n\n",
 		os.Args[0])
 	flag.PrintDefaults()
 }

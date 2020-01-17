@@ -61,14 +61,20 @@ type Config struct {
 	//
 	// For example, these are valid endpoints:
 	//
-	//   ndcs.uscom-east-1.oraclecloud.com
-	//   https://ndcs.eucom-central-1.oraclecloud.com:443
+	//   nosql.us-ashburn-1.oci.oraclecloud.com
+	//   https://nosql.us-ashburn-1.oci.oraclecloud.com
 	//   localhost:8080
 	//
 	// If port is omitted, the endpoint defaults to 443.
 	// If protocol is omitted, the endpoint uses https if the port is 443, and
 	// http in all other cases.
 	Endpoint string
+
+	// Region specifies the region for NoSQL service that client would connect to.
+	// Region takes precedence over Endpoint if both are specified.
+	//
+	// This is used for cloud service only.
+	Region Region
 
 	// Mode specifies the configuration mode for client, which is either "cloud"
 	// or "onprem" representing the client is configured for connecting to a
@@ -110,8 +116,9 @@ type Config struct {
 	protocol string
 }
 
-// parseEndpoint tries to parse the specified Endpoint, returns an error if
-// Endpoint does not conform to the syntax:
+// parseEndpoint returns endpoint for the Region if specified, or tries to parse
+// the specified Endpoint. It returns an error if the specified region is not
+// recognized or the specified Endpoint does not conform to the syntax:
 //
 //   [http[s]://]host[:port]
 //
@@ -124,6 +131,18 @@ type Config struct {
 // 3. If protocol is omitted, the Endpoint uses https if the port is 443, and
 // http in all other cases.
 func (c *Config) parseEndpoint() (err error) {
+	if len(string(c.Region)) > 0 {
+		c.host, err = c.Region.Endpoint()
+		if err != nil {
+			return err
+		}
+
+		c.protocol = "https"
+		c.port = "443"
+		c.Endpoint = c.protocol + "://" + c.host + ":" + c.port
+		return nil
+	}
+
 	c.protocol, c.host, c.port, err = parseEndpoint(c.Endpoint)
 	if err != nil {
 		return

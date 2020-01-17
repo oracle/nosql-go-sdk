@@ -14,9 +14,10 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestEndpoint(t *testing.T) {
+func TestParseEndpoint(t *testing.T) {
 	tests := []struct {
 		input string
 		valid bool
@@ -54,25 +55,34 @@ func TestEndpoint(t *testing.T) {
 		{"https://[fe80::1]/", true, "https://[fe80::1]:443"},
 	}
 
+	// Validate and parse the specified endpoint.
 	for _, r := range tests {
 		cfg := Config{
 			Endpoint: r.input,
 		}
 		err := cfg.parseEndpoint()
-		if err != nil && r.valid {
-			t.Errorf("endpoint %q is valid, but got error %q", r.input, err.Error())
-			continue
-		}
-
 		if !r.valid {
-			if err == nil {
-				t.Errorf("endpoint %q is invalid, but got nil error", r.input)
-			}
+			assert.Errorf(t, err, "parseEndpoint(ep=%q) should have failed")
 			continue
 		}
 
-		if cfg.Endpoint != r.want {
-			t.Errorf("parseEndpoint(%q) got %s; want %s", r.input, cfg.Endpoint, r.want)
+		if assert.NoErrorf(t, err, "parseEndpoint(ep=%q) got error %v", r.input, err) {
+			assert.Equalf(t, r.want, cfg.Endpoint, "parseEndpoint(ep=%q) got unexpected result", r.input)
+		}
+	}
+
+	// Validate specified Region and parse endpoint from Region.
+	for _, r := range regionTests {
+		cfg := Config{
+			Region: r.region,
+		}
+
+		err := cfg.parseEndpoint()
+		if r.wantEndpoint == "" {
+			assert.Errorf(t, err, "parseEndpoint() should have failed for region %q", string(r.region))
+		} else {
+			want := "https://" + r.wantEndpoint + ":443"
+			assert.Equalf(t, want, cfg.Endpoint, "got unexpected endpoint")
 		}
 	}
 }
