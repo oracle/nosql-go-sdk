@@ -22,7 +22,7 @@ const (
 	patch = 0
 
 	// NoSQL service version.
-	serviceVersion = "V0"
+	serviceVersion = "V2"
 
 	// DataServiceURI represents the URI for data service.
 	DataServiceURI = "/" + serviceVersion + "/nosql/data"
