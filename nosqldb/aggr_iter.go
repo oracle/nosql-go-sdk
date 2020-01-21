@@ -432,7 +432,7 @@ func (iter *funcMinMaxIter) computeMinMax(rcb *runtimeControlBlock, state *aggrI
 		return nil
 	}
 
-	compareRes, err := compareAtomicValues(rcb, state.minMax, value)
+	compareRes, err := compareAtomicValues(rcb, false, state.minMax, value)
 	if err != nil {
 		return
 	}
@@ -482,27 +482,6 @@ func (iter *funcMinMaxIter) displayContent(sb *strings.Builder, f *planFormatter
 	iter.displayPlan(iter.input, sb, f)
 }
 
-// fieldValueSlice represents a slice of field values.
-//
-// It implements the sort.Interface.
-type fieldValueSlice []types.FieldValue
-
-// Len returns the number of field values.
-func (p fieldValueSlice) Len() int {
-	return len(p)
-}
-
-// Swap swaps the field value with index i and j.
-func (p fieldValueSlice) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-// Less reports whether the field value with index i should sort before the one with index j.
-func (p fieldValueSlice) Less(i, j int) bool {
-	res, _ := compareAtomicValues(nil, p[i], p[j])
-	return res.comp < 0
-}
-
 type compareResult struct {
 	incompatible bool
 	hasNull      bool
@@ -516,7 +495,7 @@ func (r *compareResult) reset() {
 }
 
 // compareAtomicValues compares 2 atomic values and returns the result of comparison.
-func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res *compareResult, err error) {
+func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.FieldValue) (res *compareResult, err error) {
 	if rcb != nil {
 		rcb.trace(4, "compareAtomicValues() : comparing values %v and %v", v1, v2)
 	}
@@ -560,9 +539,16 @@ func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res
 		case *big.Rat:
 			rat1 := new(big.Rat).SetInt64(int64(v1))
 			res.comp = rat1.Cmp(v2)
+		case *string, string, bool:
+			if forSort {
+				res.comp = -1
+			} else {
+				res.incompatible = true
+			}
 		default:
 			res.incompatible = true
 		}
+		return
 
 	case int64:
 		switch v2 := v2.(type) {
@@ -575,9 +561,16 @@ func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res
 		case *big.Rat:
 			rat1 := new(big.Rat).SetInt64(v1)
 			res.comp = rat1.Cmp(v2)
+		case *string, string, bool:
+			if forSort {
+				res.comp = -1
+			} else {
+				res.incompatible = true
+			}
 		default:
 			res.incompatible = true
 		}
+		return
 
 	case float64:
 		switch v2 := v2.(type) {
@@ -590,9 +583,16 @@ func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res
 		case *big.Rat:
 			rat1 := new(big.Rat).SetFloat64(v1)
 			res.comp = rat1.Cmp(v2)
+		case *string, string, bool:
+			if forSort {
+				res.comp = -1
+			} else {
+				res.incompatible = true
+			}
 		default:
 			res.incompatible = true
 		}
+		return
 
 	case *big.Rat:
 		rat2 := new(big.Rat)
@@ -608,27 +608,69 @@ func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res
 			res.comp = v1.Cmp(rat2)
 		case *big.Rat:
 			res.comp = v1.Cmp(v2)
+		case *string, string, bool:
+			if forSort {
+				res.comp = -1
+			} else {
+				res.incompatible = true
+			}
 		default:
 			res.incompatible = true
 		}
+		return
 
-	case string:
-		if v2, ok := v2.(string); ok {
-			res.comp = compareStrings(v1, v2)
-		} else {
+	case *string, string:
+		str1, ok1 := stringValue(v1)
+		switch v2 := v2.(type) {
+		case *string, string:
+			str2, ok2 := stringValue(v2)
+			switch {
+			case ok1 && ok2:
+				res.comp = compareStrings(str1, str2)
+			case !ok1 && ok2:
+				res.comp = -1
+			case ok1 && !ok2:
+				res.comp = 1
+			default:
+				res.comp = 0
+			}
+		case int, int64, float64, *big.Rat:
+			if forSort {
+				res.comp = 1
+			} else {
+				res.incompatible = true
+			}
+		case bool:
+			if forSort {
+				res.comp = -1
+			} else {
+				res.incompatible = true
+			}
+		default:
 			res.incompatible = true
 		}
+		return
 
 	case bool:
-		if v2, ok := v2.(bool); ok {
+		switch v2 := v2.(type) {
+		case bool:
 			if v1 == v2 {
 				res.comp = 0
-			} else {
+			} else if v1 == false {
 				res.comp = -1
+			} else {
+				res.comp = 1
 			}
-		} else {
+		case int, int64, float64, *big.Rat, string, *string:
+			if forSort {
+				res.comp = 1
+			} else {
+				res.incompatible = true
+			}
+		default:
 			res.incompatible = true
 		}
+		return
 
 	case time.Time:
 		if v2, ok := v2.(time.Time); ok {
@@ -640,15 +682,41 @@ func compareAtomicValues(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res
 			default:
 				res.comp = 1
 			}
-		} else {
+			return
+		}
+
+		res.incompatible = true
+		return
+
+	case *types.JSONNullValue, types.JSONNullValue:
+		switch v2.(type) {
+		case *types.JSONNullValue, types.JSONNullValue:
+			res.comp = 0
+		default:
 			res.incompatible = true
 		}
+		return
 
 	default:
 		err = nosqlerr.NewIllegalState("unexpected operand type in comparison operator: %T", v1)
 	}
 
 	return
+}
+
+// stringValue returns the string that v represents or v points to when v is a
+// pointer to string. If v is a string or a non-nil string pointer, the returned
+// ok flag is true, otherwise it is false.
+func stringValue(v interface{}) (value string, ok bool) {
+	switch s := v.(type) {
+	case string:
+		return s, true
+	case *string:
+		if s != nil {
+			return *s, true
+		}
+	}
+	return "", false
 }
 
 func compareInts(x, y int) int {

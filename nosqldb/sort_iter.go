@@ -321,50 +321,83 @@ func (r *resultsBySortSpec) Less(i, j int) bool {
 
 		sortSpec := r.sortSpecs[k]
 
+		// The ordering of special values: EmptyValue, JSONNullValue, NullValue:
+		//
+		// If nullsFirst is specified and the direction is ASC/DESC, the special
+		// values are considered less/greater than all non-special values.
+		//
+		// The relative ordering among the 3 special values themselves is fixed:
+		// if the direction is ASC, the ordering is EmptyValue < JSONNullValue < NullValue
+		// otherwise the ordering is reversed.
 		if v1 == types.NullValueInstance {
 			if v2 == types.NullValueInstance {
 				continue
 			}
 
-			isLess = sortSpec.nullsFirst
+			if v2 == types.EmptyValueInstance || v2 == types.JSONNullValueInstance {
+				if sortSpec.isDesc {
+					return true
+				}
+				return false
+			}
 
-		} else if v2 == types.NullValueInstance {
-			isLess = !sortSpec.nullsFirst
+			return sortSpec.nullsFirst
+		}
 
-		} else if v1 == types.EmptyValueInstance {
+		if v2 == types.NullValueInstance {
+			if v1 == types.EmptyValueInstance || v1 == types.JSONNullValueInstance {
+				if sortSpec.isDesc {
+					return false
+				}
+				return true
+			}
+
+			return !sortSpec.nullsFirst
+		}
+
+		if v1 == types.EmptyValueInstance {
 			if v2 == types.EmptyValueInstance {
 				continue
-			} else if v2 == types.JSONNullValueInstance {
-				isLess = !sortSpec.nullsFirst
-			} else {
-				isLess = sortSpec.nullsFirst
+			}
+			if v2 == types.JSONNullValueInstance {
+				if sortSpec.isDesc {
+					return false
+				}
+				return true
 			}
 
-		} else if v2 == types.EmptyValueInstance {
+			return sortSpec.nullsFirst
+		}
+
+		if v2 == types.EmptyValueInstance {
 			if v1 == types.JSONNullValueInstance {
-				isLess = sortSpec.nullsFirst
-			} else {
-				isLess = !sortSpec.nullsFirst
+				if sortSpec.isDesc {
+					return true
+				}
+				return false
 			}
 
-		} else if v1 == types.JSONNullValueInstance {
+			return !sortSpec.nullsFirst
+		}
+
+		if v1 == types.JSONNullValueInstance {
 			if v2 == types.JSONNullValueInstance {
 				continue
-			} else {
-				isLess = sortSpec.nullsFirst
 			}
 
-		} else if v2 == types.JSONNullValueInstance {
-			isLess = !sortSpec.nullsFirst
-
-		} else {
-			compareRes, _ := compareAtomicValues(nil, v1, v2)
-			if compareRes.comp == 0 {
-				continue
-			}
-
-			isLess = compareRes.comp == -1
+			return sortSpec.nullsFirst
 		}
+
+		if v2 == types.JSONNullValueInstance {
+			return !sortSpec.nullsFirst
+		}
+
+		compareRes, _ := compareAtomicValues(nil, true, v1, v2)
+		if compareRes.comp == 0 {
+			continue
+		}
+
+		isLess = compareRes.comp == -1
 
 		if sortSpec.isDesc {
 			return !isLess
