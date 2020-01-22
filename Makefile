@@ -12,9 +12,10 @@ $(error cannot find `go` in PATH)
 endif
 
 GO=go
-HG=hg
+GIT=git
 ZIP=zip
-version ?= 5.0.0
+# The version should be consistent with that specified in nosqldb/internal/sdkutil/version.go
+version ?= 1.1.0
 
 ROOT := $(shell pwd)
 BIN := $(ROOT)/bin
@@ -28,7 +29,7 @@ examples := basic delete index
 
 GOTEST := $(GO) test -v -run "$(testcases)" $(options)
 
-.PHONY: all build test cloudsim-test clean build-examples release $(examples) help
+.PHONY: all build test cloudsim-test onprem-test clean build-examples release $(examples) help
 
 all: build
 
@@ -63,7 +64,7 @@ $(EXAMPLE_BIN):
 
 # package sources into a zip file
 release:
-	$(HG) status -c -n | grep -v "^\." | $(ZIP) -r nosql-go-sdk-$(version).zip -@
+	$(GIT) ls-tree --full-tree -r --name-only HEAD | $(ZIP) -r nosql-go-sdk-$(version).zip -@
 
 help:
 	@echo "Usages: make <target>"
