@@ -100,13 +100,12 @@ package examples
 import (
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
@@ -212,7 +211,7 @@ func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.Authorization
 	case "iam":
 		return iam.NewSignatureProvider(args.configFile, args.profileID, "", args.compartmentID)
 	case "cloudsim":
-		return &ExampleAccessTokenProvider{TenantID: "ExampleTenantId"}, nil
+		return &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}, nil
 	case "kvstore":
 		if len(args.configFile) == 0 {
 			return &kvstore.AccessTokenProvider{}, nil
@@ -289,36 +288,4 @@ func RunQuery(client *nosqldb.Client, query string) (results []*types.MapValue, 
 	}
 
 	return
-}
-
-// ExampleAccessTokenProvider implements the nosqldb.AuthorizationProvider interface.
-// It provides a dummy access token for the examples that run against the Oracle
-// NoSQL Cloud Simulator.
-//
-// This should only be used when running with the Cloud Simulator, it is not
-// recommended for use in production.
-type ExampleAccessTokenProvider struct {
-	TenantID string
-}
-
-// AuthorizationScheme returns a string representation of the supported authorization scheme.
-func (p *ExampleAccessTokenProvider) AuthorizationScheme() string {
-	return auth.BearerToken
-}
-
-// AuthorizationString returns an authorization string for the specified request.
-func (p *ExampleAccessTokenProvider) AuthorizationString(req auth.Request) (string, error) {
-	return auth.BearerToken + " " + p.TenantID, nil
-}
-
-// Close releases resources allocated by the provider.
-// It is no-op for this provider.
-func (p *ExampleAccessTokenProvider) Close() error {
-	return nil
-}
-
-// SignHTTPRequest signs the specified HTTP request.
-// It is no-op for this provider.
-func (p *ExampleAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
-	return nil
 }
