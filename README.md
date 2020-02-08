@@ -39,9 +39,9 @@ commands will automatically download the necessary dependencies.
 ## Configuring the SDK
 
 This section describes configuring the SDK for the 3 environments supported:
-- NoSQL DB Cloud Service
-- Cloud Simulator
-- NoSQL DB On-Premise
+- **NoSQL DB Cloud Service**
+- **Cloud Simulator**
+- **NoSQL DB On-Premise**
 
 The areas where the environments and use differ are:
 
