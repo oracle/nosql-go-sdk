@@ -59,7 +59,7 @@ type SignatureProvider struct {
 // ociProfile is optional; if empty, "DEFAULT" will be used.
 //
 // privateKeyPassword is only required if the private key uses a password and
-//   it is not specified in the "pass_phrase" field in the IAM config file.
+// it is not specified in the "pass_phrase" field in the IAM config file.
 //
 // compartmentID is optional; if empty, the tenancyOCID is used in its place.
 //
@@ -109,6 +109,49 @@ func NewSignatureProvider(configFilePath, ociProfile, privateKeyPassword, compar
 	return p, nil
 }
 
+
+// NewRawSignatureProvider creates a signature provider based on the raw
+// credentials given (no files necessary).
+//
+// privateKeyPassword is only required if the private key uses a password.
+//
+// compartmentID is optional; if empty, the tenancyOCID is used in its place.
+//
+func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, privateKey string, privateKeyPassphrase *string) (*SignatureProvider, error) {
+
+	configProvider := NewRawConfigurationProvider(tenancy, user, region, fingerprint, privateKey, privateKeyPassphrase);
+
+	// validate all fields in the file
+	ok, err := IsConfigurationProviderValid(configProvider)
+	if ok == false {
+		return nil, err
+	}
+
+	// the default compartmentID is the tenancyID
+	if compartmentID == "" {
+		compartmentID, _ = configProvider.TenancyOCID()
+	}
+
+	// we currently don't sign the -body- of the requests
+	signer := RequestSignerExcludeBody(configProvider)
+	if signer == nil {
+		return nil, fmt.Errorf("can't create request signer")
+	}
+
+	// create a new signature every 5 minutes
+	expiryInterval, _ := time.ParseDuration("5m")
+
+	p := &SignatureProvider{
+		signature:              "",
+		signatureExpiresAt:     time.Now(),
+		signatureFormattedDate: "",
+		expiryInterval:         expiryInterval,
+		compartmentID:          compartmentID,
+		signer:                 signer,
+	}
+
+	return p, nil
+}
 // AuthorizationScheme returns "Signature" for this provider which means the requests
 // must be signed before sending out
 func (p *SignatureProvider) AuthorizationScheme() string {
@@ -122,7 +165,7 @@ func (p *SignatureProvider) AuthorizationString(req auth.Request) (auth string, 
 }
 
 // SignHTTPRequest signs the request, add the signature to the Authentication: header, add
-// the Date: header, and add the "x-nosql-compartment-id" header
+// the Date: header, and add the "X-Nosql-Compartment-Id" header
 //
 // The Authorization header looks like:
 //

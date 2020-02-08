@@ -42,6 +42,70 @@ func IsConfigurationProviderValid(conf ConfigurationProvider) (ok bool, err erro
 	return true, nil
 }
 
+// rawConfigurationProvider allows a user to simply construct a configuration provider from raw values.
+type rawConfigurationProvider struct {
+	tenancy              string
+	user                 string
+	region               string
+	fingerprint          string
+	privateKey           string
+	privateKeyPassphrase *string
+}
+
+// NewRawConfigurationProvider will create a ConfigurationProvider with the arguments of the function
+func NewRawConfigurationProvider(tenancy, user, region, fingerprint, privateKey string, privateKeyPassphrase *string) ConfigurationProvider {
+	return rawConfigurationProvider{tenancy, user, region, fingerprint, privateKey, privateKeyPassphrase}
+}
+
+func (p rawConfigurationProvider) PrivateRSAKey() (key *rsa.PrivateKey, err error) {
+	return PrivateKeyFromBytes([]byte(p.privateKey), p.privateKeyPassphrase)
+}
+
+func (p rawConfigurationProvider) KeyID() (keyID string, err error) {
+	tenancy, err := p.TenancyOCID()
+	if err != nil {
+		return
+	}
+
+	user, err := p.UserOCID()
+	if err != nil {
+		return
+	}
+
+	fingerprint, err := p.KeyFingerprint()
+	if err != nil {
+		return
+	}
+
+	return fmt.Sprintf("%s/%s/%s", tenancy, user, fingerprint), nil
+}
+
+func (p rawConfigurationProvider) TenancyOCID() (string, error) {
+	if p.tenancy == "" {
+		return "", fmt.Errorf("tenancy OCID can not be empty")
+	}
+	return p.tenancy, nil
+}
+
+func (p rawConfigurationProvider) UserOCID() (string, error) {
+	if p.user == "" {
+		return "", fmt.Errorf("user OCID can not be empty")
+	}
+	return p.user, nil
+}
+
+func (p rawConfigurationProvider) KeyFingerprint() (string, error) {
+	if p.fingerprint == "" {
+		return "", fmt.Errorf("fingerprint can not be empty")
+	}
+	return p.fingerprint, nil
+}
+
+func (p rawConfigurationProvider) Region() (string, error) {
+	return canStringBeRegion(p.region)
+}
+
+
 // fileConfigurationProvider. reads configuration information from a file
 type fileConfigurationProvider struct {
 	//The path to the configuration file

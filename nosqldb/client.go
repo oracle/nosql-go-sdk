@@ -25,6 +25,7 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
@@ -120,6 +121,8 @@ func NewClient(cfg Config) (*Client, error) {
 		if cfg.IsCloudMode() {
 			// Use the default OCI configuration file ~/.oci/config
 			c.AuthorizationProvider, err = iam.NewSignatureProvider("~/.oci/config", "", "", "")
+		} else if cfg.IsCloudSim() {
+			c.AuthorizationProvider = &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"};
 		} else if cfg.Username != "" && len(cfg.Password) > 0 {
 			c.AuthorizationProvider, err = kvstore.NewAccessTokenProvider(cfg.Username, cfg.Password, options)
 		}

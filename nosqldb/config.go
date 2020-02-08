@@ -76,9 +76,10 @@ type Config struct {
 	// This is used for cloud service only.
 	Region Region
 
-	// Mode specifies the configuration mode for client, which is either "cloud"
-	// or "onprem" representing the client is configured for connecting to a
-	// NoSQL cloud service or on-premise NoSQL server respectively.
+	// Mode specifies the configuration mode for client, which is one of:
+	//   "cloud": for connecting to a NoSQL cloud service
+	//   "cloudsim": for connecting to a local cloud simulator
+	//   "onprem": for connecting to an on-premise NoSQL server
 	// If not set, the "cloud" mode is used by default.
 	Mode string
 
@@ -155,6 +156,11 @@ func (c *Config) parseEndpoint() (err error) {
 // IsCloudMode returns whether the configuration is used for cloud service.
 func (c *Config) IsCloudMode() bool {
 	return c.Mode == "" || strings.EqualFold(c.Mode, "cloud")
+}
+
+// IsCloudSim returns whether the configuration is used for cloud simulator.
+func (c *Config) IsCloudSim() bool {
+	return c.Mode == "" || strings.EqualFold(c.Mode, "cloudsim")
 }
 
 func parseEndpoint(endpoint string) (protocol, host, port string, err error) {
