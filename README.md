@@ -54,7 +54,7 @@ Before using the Cloud Service it is recommended that users start with the Cloud
 
 The SDK requires an Oracle Cloud account and a subscription to the Oracle NoSQL Database Cloud Service. If you do not already have an Oracle Cloud account you can start [here](https://cloud.oracle.com/home).
 
-Acquire Credentials for the Oracle NoSQL Database Cloud Service
+### Acquire Credentials for the Oracle NoSQL Database Cloud Service
 
 Several pieces of information comprise your credentials used by the Oracle NoSQL Database Cloud Service:
 
@@ -160,6 +160,7 @@ if err != nil {
 defer client.Close()
 // Perform database operations using client APIs.
 // ...
+```
 
 
 ## Configure for the On-Premise Oracle NoSQL Database
