@@ -23,9 +23,9 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
@@ -122,7 +122,7 @@ func NewClient(cfg Config) (*Client, error) {
 			// Use the default OCI configuration file ~/.oci/config
 			c.AuthorizationProvider, err = iam.NewSignatureProvider("~/.oci/config", "", "", "")
 		} else if cfg.IsCloudSim() {
-			c.AuthorizationProvider = &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"};
+			c.AuthorizationProvider = &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}
 		} else if cfg.Username != "" && len(cfg.Password) > 0 {
 			c.AuthorizationProvider, err = kvstore.NewAccessTokenProvider(cfg.Username, cfg.Password, options)
 		}
@@ -259,10 +259,8 @@ func (c *Client) GetIndexes(req *GetIndexesRequest) (*GetIndexesResult, error) {
 //
 // These operations are implicitly asynchronous. DoTableRequest does not wait
 // for completion of the operation, it returns a TableResult that contains an
-// operation id representing the operation being performed. The caller must poll
-// using methods such as TableResult.WaitForState() or
-// TableResult.WaitForCompletion() to determine when it has reached the desired
-// state or has completed.
+// operation id representing the operation being performed. The caller should
+// use the TableResult.WaitForCompletion() method to determine when it has completed.
 func (c *Client) DoTableRequest(req *TableRequest) (*TableResult, error) {
 	if req == nil {
 		return nil, errNilRequest

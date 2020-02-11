@@ -166,65 +166,79 @@ func (suite *TableOpsTestSuite) TestTableLimits() {
 	suite.doTableRequestTest(testCases)
 }
 
-// TestWaitForState performs negative tests for WaitForState API.
-// Positive tests are covered in other tests of this test suite.
-func (suite *TableOpsTestSuite) TestWaitForState() {
+// TestWaitForCompletion performs tests for the WaitForCompletion API.
+func (suite *TableOpsTestSuite) TestWaitForCompletion() {
 	tableName := suite.table
 	testCases := []*struct {
+		desc     string
 		tableRes *nosqldb.TableResult
-		state    types.TableState
+		client   *nosqldb.Client
 		timeout  time.Duration
 		delay    time.Duration
 		expErr   nosqlerr.ErrorCode
 	}{
-		// Invalid TableResult
+		// nil TableResult
 		{
+			"nil TableResult",
 			nil,
-			types.Active,
+			suite.Client,
+			test.OkTimeout,
+			time.Second,
+			nosqlerr.IllegalArgument,
+		},
+		// nil client
+		{
+			"nil Client",
+			&nosqldb.TableResult{TableName: tableName, OperationID: "1234", State: types.Creating},
+			nil,
 			test.OkTimeout,
 			time.Second,
 			nosqlerr.IllegalArgument,
 		},
 		{
-			&nosqldb.TableResult{TableName: "NotExistsTable"},
-			types.Active,
-			test.WaitTimeout,
-			time.Second,
-			nosqlerr.TableNotFound,
-		},
-		{
-			&nosqldb.TableResult{TableName: tableName, OperationID: "not_exists_op_id"},
-			types.Active,
+			"empty OperationID",
+			&nosqldb.TableResult{TableName: tableName, OperationID: "", State: types.Creating},
+			suite.Client,
 			test.WaitTimeout,
 			time.Second,
 			nosqlerr.IllegalArgument,
 		},
-		// Invalid delay: the specified delay is less than the minimum of 1ms
 		{
-			&nosqldb.TableResult{TableName: tableName},
-			types.Active,
+			"pollInterval is less than 1ms",
+			&nosqldb.TableResult{TableName: tableName, OperationID: "1234", State: types.Creating},
+			suite.Client,
 			time.Second,
 			time.Millisecond - 1,
 			nosqlerr.IllegalArgument,
 		},
-		// Wait timeout is less then the specified delay
 		{
-			&nosqldb.TableResult{TableName: tableName},
-			types.Active,
+			"waitTimeout is less than pollInterval",
+			&nosqldb.TableResult{TableName: tableName, OperationID: "1234", State: types.Creating},
+			suite.Client,
 			500*time.Millisecond - 1, // wait timeout
 			500 * time.Millisecond,   // delay
 			nosqlerr.IllegalArgument,
 		},
-		// Invalid desired state
 		{
-			&nosqldb.TableResult{TableName: tableName},
-			-1,
-			10 * time.Second,
+			"table is in Active state",
+			&nosqldb.TableResult{TableName: tableName, OperationID: "1234", State: types.Active},
+			suite.Client,
+			test.OkTimeout,
 			time.Second,
-			nosqlerr.IllegalArgument,
+			nosqlerr.NoError,
+		},
+		{
+			"table is in Dropped state",
+			&nosqldb.TableResult{TableName: tableName, OperationID: "1234", State: types.Dropped},
+			suite.Client,
+			test.OkTimeout,
+			time.Second,
+			nosqlerr.NoError,
 		},
 	}
 
+	var err error
+	var msg string
 	var reqTableName string
 	for i, r := range testCases {
 		if r.tableRes != nil {
@@ -233,16 +247,16 @@ func (suite *TableOpsTestSuite) TestWaitForState() {
 			reqTableName = "<nil TableResult>"
 		}
 
-		_, err := r.tableRes.WaitForState(suite.Client, r.state, r.timeout, r.delay)
+		msg = fmt.Sprintf("Testcase %d(%s): WaitForCompletion(tableName=%q) ",
+			i+1, r.desc, reqTableName)
+		_, err = r.tableRes.WaitForCompletion(r.client, r.timeout, r.delay)
 		switch r.expErr {
 		case nosqlerr.NoError:
-			suite.NoErrorf(err, "Testcase %d: WaitForState(tableName=%q, state=%v), got error %v",
-				i+1, reqTableName, r.state, err)
+			suite.NoErrorf(err, msg+"got error %v", err)
 
 		default:
 			suite.Truef(nosqlerr.Is(err, r.expErr),
-				"Testcase %d: WaitForState(tableName=%q, state=%v) expect error: %v, got error: %v",
-				i+1, reqTableName, r.state, r.expErr, err)
+				msg+"expect error: %v, got error: %v", r.expErr, err)
 		}
 	}
 }

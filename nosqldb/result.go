@@ -221,8 +221,8 @@ func (r *SystemResult) WaitForCompletion(client *Client, timeout, pollInterval t
 // modification and drop are asynchronous operations. When such an operation has
 // been performend, it is necessary to call Client.GetTable() until the status
 // of the table is Active or there is an error condition. TableResult provides
-// two convenience methods WaitForState() and WaitForCompletion() to perform
-// these tasks and should be used whenever possible.
+// a convenience method WaitForCompletion() to perform such tasks and should be
+// used whenever possible.
 //
 // Client.GetTable() is synchronous, it returns static information about the
 // table as well as its current state.
@@ -255,99 +255,6 @@ type TableResult struct {
 // String returns a JSON string representation of the TableResult.
 func (r TableResult) String() string {
 	return jsonutil.AsJSON(r)
-}
-
-// WaitForState waits for target table to reach the desired state.
-//
-// The method blocks checking for the table state until the specified timeout
-// elapses or the desired state reaches. It is a polling style wait that pauses
-// the current goroutine for a specified duration between each polling attempts.
-//
-// The state parameter specifies the desired state to wait for. It must be a
-// valid types.TableState value. The state of types.Dropped is treated specially
-// in that it will be returned as success, even if the table does not exist.
-// Other states will return an error if the table is not found.
-//
-// The timeout parameter specifies the total amount of time to wait. It must be
-// greater than the specified pollInterval.
-//
-// The pollInterval parameter specifies the amount of time to wait between
-// polling attempts. It must be greater than or equal to 1 millisecond. If it
-// is set to zero, the default of 500 milliseconds will be used.
-//
-// If the table has reached the desired state before specified timeout elapses,
-// the method returns a TableResult that contains the current table state, and a
-// nil error. Otherwise, it returns a nil TableResult and the error ocurred.
-func (r *TableResult) WaitForState(client *Client, state types.TableState,
-	timeout, pollInterval time.Duration) (*TableResult, error) {
-
-	if r == nil {
-		return nil, nosqlerr.NewIllegalArgument("TableResult must be non-nil")
-	}
-
-	if client == nil {
-		return nil, errNilClient
-	}
-
-	if state < types.Active || state > types.Updating {
-		return nil, nosqlerr.NewIllegalArgument("the specified state %v is invalid.", state)
-	}
-
-	if pollInterval == 0 {
-		pollInterval = 500 * time.Millisecond
-	}
-
-	var err error
-	if err = validateWaitTimeout(timeout, pollInterval); err != nil {
-		return nil, err
-	}
-
-	var req *GetTableRequest
-	var res *TableResult
-	// Creates a GetTableRequest with the table name and operation id.
-	req = &GetTableRequest{
-		TableName:   r.TableName,
-		OperationID: r.OperationID,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	for {
-		res, err = client.getTableWithContext(ctx, req)
-		if err != nil {
-			if nosqlerr.IsTableNotFound(err) && state == types.Dropped {
-				res = &TableResult{
-					TableName: r.TableName,
-					State:     types.Dropped,
-				}
-				return res, nil
-			}
-
-			return nil, err
-		}
-
-		if res != nil && res.State == state {
-			return res, nil
-		}
-
-		// Operation id may change, so re-acquire it from the current result
-		// if operation id was used.
-		if r.OperationID != "" {
-			req.OperationID = res.OperationID
-		}
-
-		// Target table has not reached the desired state, continue to check
-		// its status after the specified duration if specified timeout has not elapsed.
-		if shouldRetryAfter(ctx, pollInterval) {
-			continue
-		}
-
-		// The specified timeout elapses before the target table reaches desired
-		// state, return a RequestTimeout error.
-		return nil, nosqlerr.NewRequestTimeout("table %q does not reach the desired state %v "+
-			"within specified time %v", r.TableName, state, timeout)
-	}
 }
 
 // WaitForCompletion waits for a table operation to complete.

@@ -68,10 +68,9 @@ func (suite SmokeTestSuite) TestSmoke() {
 	}
 	tableRes, err = suite.Client.DoTableRequest(tableReq)
 	suite.Require().NoErrorf(err, "\"%s\": %v", stmt, err)
-	desiredState := types.Active
-	tableRes, err = tableRes.WaitForState(suite.Client, desiredState, 10*time.Second, 2*time.Second)
-	suite.Require().NoErrorf(err, "WaitForState(table=%s, desiredState=%v): %v", tableName, desiredState, err)
-	suite.Require().Equalf(desiredState, tableRes.State, "unexpected state for table \"%s\"", tableName)
+	tableRes, err = tableRes.WaitForCompletion(suite.Client, 10*time.Second, 2*time.Second)
+	suite.Require().NoErrorf(err, "WaitForCompletion(table=%s): %v", tableName, err)
+	suite.Require().Equalf(types.Active, tableRes.State, "unexpected state for table \"%s\"", tableName)
 
 	// Try to get a non-exist row.
 	id := 1

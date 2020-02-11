@@ -159,17 +159,9 @@ func (suite *NoSQLTestSuite) DropTable(table string, dropIfExists bool) {
 		Statement: stmt,
 	}
 
-	// BUG(zehliu): A workaround for MiniCloud bug temporarily.
-	if suite.Mode == "minicloud" {
-		res, err := suite.Client.DoTableRequest(req)
-		suite.Require().NoErrorf(err, "%q: got error %v.", stmt, err)
-		_, err = res.WaitForState(suite.Client, types.Dropped, 30*time.Second, time.Second)
-		suite.Require().NoErrorf(err, "%q: got error %v.", stmt, err)
-
-	} else {
-		_, err := suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
-		suite.Require().NoErrorf(err, "%q: got error %v.", stmt, err)
-	}
+	// BUG(zehliu): DoTableRequestAndWait does not seem to work for MiniCloud.
+	_, err := suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
+	suite.Require().NoErrorf(err, "%q: got error %v.", stmt, err)
 }
 
 // ExecuteDDL executes the specified DDL statement using a SystemRequest.
