@@ -46,7 +46,7 @@ This section describes configuring the SDK for the 3 environments supported:
 The areas where the environments and use differ are:
 
 1. **Authentication and authorization.** This is encapsulated in the AuthorizationProvider interface. The Cloud Service is secure and requires a Cloud Service identity as well as authorization for desired operations. The Cloud Simulator is not secure at all and requires no identity. The on-premise configuration can be either secure or not and it also requires an instance of the proxy service to access the database.
-2. **API differences.** Some classes and methods are specific to an environment. For example, the on-premise configuration includes methods to create namespaces and users and these concepts don’t exist in the cloud service. Similarly, the cloud service includes interfaces to specify and acquire throughput information on tables that is not relevant on-premise.
+2. **API differences.** Some types and methods are specific to an environment. For example, the on-premise configuration includes methods to create namespaces and users and these concepts don’t exist in the cloud service. Similarly, the cloud service includes interfaces to specify and acquire throughput information on tables that is not relevant on-premise.
 
 Before using the Cloud Service it is recommended that users start with the Cloud Simulator to become familiar with the interfaces supported by the SDK.
 
@@ -86,7 +86,7 @@ key_file=<path-to-your-private-key-file>
 region=<region-identifier>
 ```
 
-Details of the configuration file can be found on the [SDK and Configuration File](https://docs.cloud.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm) page. Note that multiple profiles can exist (using the `[PROFILENAME]` properties file convention) and can be selected using the api (see example below).
+Details of the configuration file can be found on the [SDK and Configuration File](https://docs.cloud.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm) page. Note that multiple profiles can exist (using the `[PROFILENAME]` properties file convention) and can be selected using the API (see example below).
 
 The **Tenancy ID**, **User ID** and **fingerprint** should be acquired using the instructions above. The path to your private key file is the absolute path of the RSA private key. The order of the properties does not matter.
 
@@ -104,6 +104,8 @@ The following code example shows how to connect to the cloud service:
 
 ```
 import (
+    "fmt"
+
     "github.com/oracle/nosql-go-sdk/nosqldb"
     "github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 )
@@ -113,7 +115,7 @@ import (
 provider, err := iam.NewSignatureProvider(cfgfile, profile, passphrase, compartment)
 if err != nil {
     fmt.Printf("failed to create new SignatureProvider: %v\n", err)
-	return
+    return
 }
 cfg := nosqldb.Config{
     Region:                "us-phoenix-1",
@@ -122,7 +124,7 @@ cfg := nosqldb.Config{
 client, err := nosqldb.NewClient(cfg)
 if err != nil {
     fmt.Printf("failed to create a NoSQL client: %v\n", err)
-	return
+    return
 }
 defer client.close()
 
@@ -143,6 +145,8 @@ The Cloud Simulator does not require the credentials and authentication informat
 
 ```
 import (
+    "fmt"
+
     "github.com/oracle/nosql-go-sdk/nosqldb"
 )
 
@@ -173,6 +177,8 @@ If running a secure store, a user identity must be created in the store (separat
 
 ```
 import (
+    "fmt"
+
     "github.com/oracle/nosql-go-sdk/nosqldb"
 )
 
@@ -205,6 +211,7 @@ import (
     "fmt"
     "os"
     "time"
+
     "github.com/oracle/nosql-go-sdk/nosqldb"
     "github.com/oracle/nosql-go-sdk/nosqldb/types"
     "github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
@@ -247,12 +254,12 @@ func main() {
     ExitOnError(err, "Can't initiate CREATE TABLE request")
 
     // The create table request is asynchronous, wait for table creation to complete.
-    _, err = tableRes.WaitForState(client, types.Active, 60*time.Second, time.Second)
+    _, err = tableRes.WaitForCompletion(client, 60*time.Second, time.Second)
     ExitOnError(err, "Error finishing CREATE TABLE request")
     fmt.Println("Created table ", tableName)
 
     // put a simple set of string data
-    mapVals := types.ToMapValue("id", "12345")
+    mapVals := types.ToMapValue("id", 12345)
     mapVals.Put("test_data", "This is a sample string of test data")
     putReq := &nosqldb.PutRequest{
         TableName: tableName,
@@ -264,14 +271,14 @@ func main() {
 
     // get data back
     key := &types.MapValue{}
-    key.Put("id", "12345");
+    key.Put("id", 12345);
     getReq := &nosqldb.GetRequest{
         TableName: tableName,
         Key:       key,
     }
     getRes, err := client.Get(getReq)
     ExitOnError(err, "Can't get single row")
-    fmt.Printf("Got row: %v\n", getRes.Value)
+    fmt.Printf("Got row: %v\n", getRes.ValueAsJSON())
 
     // Delete the row
     delReq := &nosqldb.DeleteRequest{

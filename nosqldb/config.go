@@ -50,10 +50,10 @@ const (
 // instance have no effect on the existing Client which is immutable.
 //
 // Most of the configuration parameters are optional and have default values if
-// not specified. The only required parameter is the Endpoint.
+// not specified.
 type Config struct {
 	// Endpoint specifies the NoSQL service endpoint that client connects to.
-	// It is required.
+	// It is required when connect to the cloud simulator or on-premise NoSQL server.
 	// It must include the target address, and may include protocol and port.
 	// The syntax is:
 	//
@@ -77,9 +77,11 @@ type Config struct {
 	Region Region
 
 	// Mode specifies the configuration mode for client, which is one of:
+	//
 	//   "cloud": for connecting to a NoSQL cloud service
 	//   "cloudsim": for connecting to a local cloud simulator
 	//   "onprem": for connecting to an on-premise NoSQL server
+	//
 	// If not set, the "cloud" mode is used by default.
 	Mode string
 
@@ -160,7 +162,7 @@ func (c *Config) IsCloudMode() bool {
 
 // IsCloudSim returns whether the configuration is used for cloud simulator.
 func (c *Config) IsCloudSim() bool {
-	return c.Mode == "" || strings.EqualFold(c.Mode, "cloudsim")
+	return strings.EqualFold(c.Mode, "cloudsim")
 }
 
 func parseEndpoint(endpoint string) (protocol, host, port string, err error) {

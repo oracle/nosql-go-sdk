@@ -8,11 +8,12 @@
 //
 
 // Package cloudsim provides authorization provider implementations for clients
-// that connect to cloud simulator
+// that connect to cloud simulator.
 package cloudsim
 
 import (
 	"net/http"
+
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 )
 
