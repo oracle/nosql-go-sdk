@@ -11,11 +11,9 @@ package test
 
 import (
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/suite"
 )
@@ -87,7 +85,7 @@ func (suite *NoSQLTestSuite) CreateTable(createStmt string, limits *nosqldb.Tabl
 		Statement: createStmt,
 	}
 
-	if IsCloud() {
+	if suite.IsCloud() {
 		req.TableLimits = limits
 	}
 
@@ -115,7 +113,7 @@ func (suite *NoSQLTestSuite) CreateTables(numTables int, nsName string) (tables 
 
 	for i := 1; i <= numTables; i++ {
 		tableName := suite.GetNsTableName(nsName, fmt.Sprintf("Test%d", i))
-		if IsCloud() {
+		if suite.IsCloud() {
 			limits = OkTableLimits
 		} else {
 			limits = nil
@@ -211,31 +209,4 @@ func (suite *NoSQLTestSuite) AssertReadWriteKB(res nosqldb.Result, expReadKB, ex
 	suite.NoErrorf(err, "Result.ConsumedCapacity() got error %v", err)
 	AssertReadKB(suite.Assert(), expReadKB, cap.ReadKB, cap.ReadUnits, prepCost, isAbsolute)
 	AssertWriteKB(suite.Assert(), expWriteKB, cap.WriteKB)
-}
-
-// DummyAccessTokenProvider represents an authorzation provider that issues dummy access tokens.
-//
-// It implements the AuthorizationProvider interface.
-type DummyAccessTokenProvider struct {
-	TenantID string
-}
-
-// AuthorizationScheme returns "Bearer" for this provider.
-func (p DummyAccessTokenProvider) AuthorizationScheme() string {
-	return auth.BearerToken
-}
-
-// AuthorizationString returns "Bearer <tenantID>" for this provider.
-func (p DummyAccessTokenProvider) AuthorizationString(req auth.Request) (string, error) {
-	return auth.BearerToken + " " + p.TenantID, nil
-}
-
-// SignHTTPRequest is no-op for this provider.
-func (p DummyAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
-	return nil
-}
-
-// Close is no-op for this provider.
-func (p DummyAccessTokenProvider) Close() error {
-	return nil
 }

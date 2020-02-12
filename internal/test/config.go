@@ -20,12 +20,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
-)
-
-const (
-	cloud    = "cloud"
-	cloudsim = "cloudsim"
-	onprem   = "onprem"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 )
 
 var (
@@ -89,13 +84,13 @@ func newConfig(configFile string) (*Config, error) {
 // IsCloud returns true if tests are configured to run against the NoSQL cloud
 // service or cloud simulator, returns false otherwise.
 func (cfg *Config) IsCloud() bool {
-	return cfg != nil && (cfg.Mode == cloud || cfg.Mode == cloudsim)
+	return cfg != nil && (cfg.Mode == "cloud" || cfg.Mode == "cloudsim")
 }
 
 // IsOnPrem returns true if tests are configured to run against the on-premise
 // NoSQL database servers, returns false otherwise.
 func (cfg *Config) IsOnPrem() bool {
-	return cfg != nil && cfg.Mode == onprem
+	return cfg != nil && cfg.Mode == "onprem"
 }
 
 // IsOnPremSecureStore returns true if tests are configured to run against
@@ -156,12 +151,12 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 	}
 
 	switch cfg.Mode {
-	case cloudsim:
-		clientConfig.AuthorizationProvider = DummyAccessTokenProvider{
+	case "cloudsim":
+		clientConfig.AuthorizationProvider = &cloudsim.AccessTokenProvider{
 			TenantID: "TestTenantId",
 		}
 
-	case onprem:
+	case "onprem":
 		if cfg.Username != "" && cfg.Password != "" {
 			clientConfig.Username = cfg.Username
 			clientConfig.Password = []byte(cfg.Password)
