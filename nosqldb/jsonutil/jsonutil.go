@@ -17,12 +17,12 @@ import (
 
 const emptyJSONObject = "{}"
 
-// AsJSON encodes the specified value into a json string.
+// AsJSON encodes the specified value into a JSON string.
 func AsJSON(v interface{}) string {
 	return asJSONString(v, false)
 }
 
-// AsPrettyJSON encodes the specified value into a json string, adding
+// AsPrettyJSON encodes the specified value into a JSON string, adding
 // appropriate indents in the returned string.
 func AsPrettyJSON(v interface{}) string {
 	return asJSONString(v, true)
@@ -49,11 +49,8 @@ func ToObject(jsonStr string) (v map[string]interface{}, err error) {
 }
 
 // GetStringFromObject retrieves the string value associated with the specified
-// top-level fields from a JSON object.
+// top-level field from a JSON object.
 func GetStringFromObject(m map[string]interface{}, field string) (s string, ok bool) {
-	if m == nil {
-		return
-	}
 	var v interface{}
 	if v, ok = m[field]; !ok {
 		return
@@ -63,11 +60,8 @@ func GetStringFromObject(m map[string]interface{}, field string) (s string, ok b
 }
 
 // GetNumberFromObject retrieves the float64 value associated with the specified
-// top-level fields from a JSON object.
+// top-level field from a JSON object.
 func GetNumberFromObject(m map[string]interface{}, field string) (f float64, ok bool) {
-	if m == nil {
-		return
-	}
 	var v interface{}
 	if v, ok = m[field]; !ok {
 		return
@@ -77,11 +71,8 @@ func GetNumberFromObject(m map[string]interface{}, field string) (f float64, ok 
 }
 
 // GetArrayFromObject retrieves an array value associated with the specified
-// top-level fields from a JSON object.
+// top-level field from a JSON object.
 func GetArrayFromObject(m map[string]interface{}, field string) (a []interface{}, ok bool) {
-	if m == nil {
-		return
-	}
 	var v interface{}
 	if v, ok = m[field]; !ok {
 		return
@@ -90,20 +81,22 @@ func GetArrayFromObject(m map[string]interface{}, field string) (a []interface{}
 	return
 }
 
-// ExpectObject checks if the specified data represents a JSON object.
+// ExpectObject checks if the specified data represents a JSON object,
+// that is a Go value of type map[string]interface{}.
 func ExpectObject(data interface{}) (map[string]interface{}, error) {
 	v, ok := data.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("expects a JSON (Go's map[string]interface{} type), got %T", data)
+		return nil, fmt.Errorf("expect a JSON Object (Go value of type map[string]interface{}), got %T", data)
 	}
 	return v, nil
 }
 
-// ExpectString checks if the specified data represents a JSON string value.
+// ExpectString checks if the specified data represents a JSON string,
+// that is a Go value of type string.
 func ExpectString(data interface{}) (string, error) {
 	v, ok := data.(string)
 	if !ok {
-		return "", fmt.Errorf("expects a JSON String (Go's string type), got %T", data)
+		return "", fmt.Errorf("expect a JSON String (Go value of type string), got %T", data)
 	}
 	return v, nil
 }
