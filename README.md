@@ -45,7 +45,7 @@ This section describes configuring the SDK for the 3 environments supported:
 
 The areas where the environments and use differ are:
 
-1. **Authentication and authorization.** This is encapsulated in the AuthorizationProvider interface. The Cloud Service is secure and requires a Cloud Service identity as well as authorization for desired operations. The Cloud Simulator is not secure at all and requires no identity. The on-premise configuration can be either secure or not and it also requires an instance of the proxy service to access the database.
+1. **Authentication and authorization.** This is encapsulated in the AuthorizationProvider interface. The **Cloud Service** is secure and requires a Cloud Service identity as well as authorization for desired operations. The **Cloud Simulator** is not secure at all and requires no identity. The **On-Premise** configuration can be either secure or not, and also requires an instance of the NoSQL DB Proxy service to access the on-premise database.
 2. **API differences.** Some types and methods are specific to an environment. For example, the on-premise configuration includes methods to create namespaces and users and these concepts don’t exist in the cloud service. Similarly, the cloud service includes interfaces to specify and acquire throughput information on tables that is not relevant on-premise.
 
 Before using the Cloud Service it is recommended that users start with the Cloud Simulator to become familiar with the interfaces supported by the SDK.
@@ -63,6 +63,7 @@ Several pieces of information comprise your credentials used by the Oracle NoSQL
 - Fingerprint
 - Private Key File
 - Region
+- Passphrase (optional)
 
 Information about how to acquire this information is found in the [Required Keys and OCIDs](https://docs.cloud.oracle.com/iaas/Content/API/Concepts/apisigningkey.htm) page. Specifically, these topics can be found on that page:
 
@@ -84,6 +85,7 @@ user=<your-user-id>
 fingerprint=<fingerprint-of-your-public-key>
 key_file=<path-to-your-private-key-file>
 region=<region-identifier>
+passphrase=<optional-passphrase>
 ```
 
 Details of the configuration file can be found on the [SDK and Configuration File](https://docs.cloud.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm) page. Note that multiple profiles can exist (using the `[PROFILENAME]` properties file convention) and can be selected using the API (see example below).
@@ -91,6 +93,8 @@ Details of the configuration file can be found on the [SDK and Configuration Fil
 The **Tenancy ID**, **User ID** and **fingerprint** should be acquired using the instructions above. The path to your private key file is the absolute path of the RSA private key. The order of the properties does not matter.
 
 The **region** should specify the region of the NoSQL cloud service you are connecting to (for example: `us-phoenix-1`). Defined regions are listed in [Region godocs](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#Region). For more information on regions, see [Regions and Availability Domains](https://docs.cloud.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm).
+
+The **passphrase** is only required if the RSA key file itself requires a passphrase. If not supplied in the file, it may also be supplied in the API calls directly (see below).
 
 ### Connecting an Application to the Cloud Service
 
