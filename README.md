@@ -1,7 +1,7 @@
 # Oracle NoSQL Database Go SDK
 
 This is the Go SDK for Oracle NoSQL Database. The SDK provides APIs,
-[documentation](https://godoc.org/github.com/oracle/nosql-go-sdk/) and
+[documentation](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb) and
 [examples](https://github.com/oracle/nosql-go-sdk/tree/master/examples) to help
 developers write Go applications that connect to
 [the Oracle NoSQL Database Cloud Service](https://www.oracle.com/database/nosql-cloud.html),
@@ -309,7 +309,7 @@ func main() {
 
 ## API Reference
 
-The online [godoc](https://godoc.org/github.com/oracle/nosql-go-sdk/) has
+The online [godoc](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb) has
 information on using the Go SDK as well as an API reference describing the
 packages, types and methods.
 
