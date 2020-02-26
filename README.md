@@ -337,11 +337,6 @@ There are a few ways to get help or report issues:
 
 See the [Changelog](https://github.com/oracle/nosql-go-sdk/blob/master/CHANGELOG.md).
 
-## Development
-
-The [development readme](https://github.com/oracle/nosql-go-sdk/blob/master/README-DEV.md)
-has information about running tests and other development activities.
-
 ## Contributing
 
 The nosql-go-sdk is an open source project. See
