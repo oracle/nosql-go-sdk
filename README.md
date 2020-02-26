@@ -45,10 +45,13 @@ This section describes configuring the SDK for the 3 environments supported:
 
 The areas where the environments and use differ are:
 
-1. **Authentication and authorization.** This is encapsulated in the AuthorizationProvider interface. The **Cloud Service** is secure and requires a Cloud Service identity as well as authorization for desired operations. The **Cloud Simulator** is not secure at all and requires no identity. The **On-Premise** configuration can be either secure or not, and also requires an instance of the NoSQL DB Proxy service to access the on-premise database.
-2. **API differences.** Some types and methods are specific to an environment. For example, the on-premise configuration includes methods to create namespaces and users and these concepts don’t exist in the cloud service. Similarly, the cloud service includes interfaces to specify and acquire throughput information on tables that is not relevant on-premise.
+- **Authentication and authorization.** This is encapsulated in the AuthorizationProvider interface.
+  - The **Cloud Service** is secure and requires a Cloud Service identity as well as authorization for desired operations.
+  - The **Cloud Simulator** is not secure at all and requires no identity.
+  - The **On-Premise** configuration can be either secure or not, and also requires an instance of the NoSQL DB Proxy service to access the on-premise database.
+- **API differences.** Some types and methods are specific to an environment. For example, the on-premise configuration includes methods to create namespaces and users and these concepts don’t exist in the cloud service. Similarly, the cloud service includes interfaces to specify and acquire throughput information on tables that is not relevant on-premise.
 
-Before using the Cloud Service it is recommended that users start with the Cloud Simulator to become familiar with the interfaces supported by the SDK.
+Before using the Cloud Service, it is recommended that users start with the Cloud Simulator to become familiar with the interfaces supported by the SDK.
 
 ### Configure for the Cloud Service
 
