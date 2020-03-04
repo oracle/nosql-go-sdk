@@ -332,7 +332,10 @@ for details on how to build and run the examples.
 There are a few ways to get help or report issues:
 - Open an issue in the [Issues](https://github.com/oracle/nosql-go-sdk/issues) page.
 - Post your question on the [Oracle NoSQL Database Community](https://community.oracle.com/community/groundbreakers/database/nosql_database).
-- Open a ticket on [My Oracle Support](https://support.oracle.com/).
+- [Email to nosql\_sdk\_help\_grp@oracle.com](mailto:nosql_sdk_help_grp@oracle.com)
+
+When requesting help please be sure to include as much detail as possible,
+including version of the SDK and **simple**, standalone example code as needed.
 
 ## Changes
 
