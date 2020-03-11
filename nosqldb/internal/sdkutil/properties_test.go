@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -51,6 +52,37 @@ func (suite *PropTestSuite) TestNewProperties() {
 			suite.Errorf(err, msg+"should have failed")
 		} else {
 			suite.NoErrorf(err, msg+"got error %v", err)
+		}
+	}
+}
+
+func (suite *PropTestSuite) TestExpandPath() {
+	home, _ := os.UserHomeDir()
+	tests := []struct {
+		name, inPath, expectedPath string
+	}{
+		{
+			name:         "should expand tilde and return appended home dir",
+			inPath:       "~/somepath",
+			expectedPath: path.Join(home, "somepath"),
+		},
+		{
+			name:         "should not do anything",
+			inPath:       "/somepath/some/dir/~/file",
+			expectedPath: "/somepath/some/dir/~/file",
+		},
+		{
+			name:         "should replace one tilde only",
+			inPath:       "~/~/some/path",
+			expectedPath: path.Join(home, "~/some/path"),
+		},
+	}
+
+	for i, r := range tests {
+		p, err := ExpandPath(r.inPath)
+		msg := fmt.Sprintf("Test-%d (%s): ExpandPath(%s) ", i+1, r.name, r.inPath)
+		if suite.NoErrorf(err, msg+"got error %v", err) {
+			suite.Equalf(r.expectedPath, p, msg+"got unexpected result")
 		}
 	}
 }

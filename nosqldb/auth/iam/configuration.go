@@ -7,11 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"os/user"
-	"path"
 	"regexp"
 	"strings"
+
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
 )
 
 // ConfigurationProvider wraps information about the account owner
@@ -104,7 +103,6 @@ func (p rawConfigurationProvider) KeyFingerprint() (string, error) {
 func (p rawConfigurationProvider) Region() (string, error) {
 	return canStringBeRegion(p.region)
 }
-
 
 // fileConfigurationProvider. reads configuration information from a file
 type fileConfigurationProvider struct {
@@ -224,33 +222,13 @@ func parseConfigAtLine(start int, content []string) (info *configFileInfo, err e
 
 }
 
-func getHomeFolder() string {
-	current, e := user.Current()
-	if e != nil {
-		//Give up and try to return something sensible
-		home := os.Getenv("HOME")
-		if home == "" {
-			home = os.Getenv("USERPROFILE")
-		}
-		return home
-	}
-	return current.HomeDir
-}
-
-// cleans and expands the path if it contains a tilde , returns the expanded path or the input path as is if not expansion
-// was performed
-func expandPath(filepath string) (expandedPath string) {
-	cleanedPath := path.Clean(filepath)
-	expandedPath = cleanedPath
-	if strings.HasPrefix(cleanedPath, "~") {
-		rest := cleanedPath[2:]
-		expandedPath = path.Join(getHomeFolder(), rest)
-	}
-	return
-}
-
 func openConfigFile(configFilePath string) (data []byte, err error) {
-	expandedPath := expandPath(configFilePath)
+	expandedPath, err := sdkutil.ExpandPath(configFilePath)
+	if err != nil {
+		err = fmt.Errorf("can not read config file: %s due to: %s", configFilePath, err.Error())
+		return
+	}
+
 	data, err = ioutil.ReadFile(expandedPath)
 	if err != nil {
 		err = fmt.Errorf("can not read config file: %s due to: %s", configFilePath, err.Error())
@@ -347,10 +325,15 @@ func (p fileConfigurationProvider) PrivateRSAKey() (key *rsa.PrivateKey, err err
 		return
 	}
 
-	expandedPath := expandPath(filePath)
+	expandedPath, err := sdkutil.ExpandPath(filePath)
+	if err != nil {
+		err = fmt.Errorf("can not read PrivateKey %s from configuration file due to: %s", filePath, err.Error())
+		return
+	}
+
 	pemFileContent, err := ioutil.ReadFile(expandedPath)
 	if err != nil {
-		err = fmt.Errorf("can not read PrivateKey  from configuration file due to: %s", err.Error())
+		err = fmt.Errorf("can not read PrivateKey %s from configuration file due to: %s", filePath, err.Error())
 		return
 	}
 

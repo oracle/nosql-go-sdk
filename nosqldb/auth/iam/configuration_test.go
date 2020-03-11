@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"path"
-	"strings"
 )
 
 var (
@@ -410,13 +410,14 @@ compartment = somecompartment
 region=someregion
 `
 
-	tmpKeyLocation := path.Join(getHomeFolder(), "testKey")
+	homeDir, _ := os.UserHomeDir()
+	tmpKeyLocation := path.Join(homeDir, "testKey")
 	e := ioutil.WriteFile(tmpKeyLocation, []byte(testEncryptedPrivateKeyConf), 777)
 	if e != nil {
 		assert.FailNow(t, e.Error())
 	}
 
-	newlocation := strings.Replace(tmpKeyLocation, getHomeFolder(), "~/", 1)
+	newlocation := strings.Replace(tmpKeyLocation, homeDir, "~/", 1)
 	data := fmt.Sprintf(dataTpl, newlocation)
 	tmpConfFile := writeTempFile(data)
 
@@ -440,35 +441,6 @@ region=someregion
 	key, err := provider.PrivateRSAKey()
 	assert.NoError(t, err)
 	assert.NotNil(t, key)
-}
-
-func TestExpandPath(t *testing.T) {
-	home := getHomeFolder()
-	testIO := []struct {
-		name, inPath, expectedPath string
-	}{
-		{
-			name:         "should expand tilde and return appended home dir",
-			inPath:       "~/somepath",
-			expectedPath: path.Join(home, "somepath"),
-		},
-		{
-			name:         "should not do anything",
-			inPath:       "/somepath/some/dir/~/file",
-			expectedPath: "/somepath/some/dir/~/file",
-		},
-		{
-			name:         "should replace one tilde only",
-			inPath:       "~/~/some/path",
-			expectedPath: path.Join(home, "~/some/path"),
-		},
-	}
-	for _, tio := range testIO {
-		t.Run(tio.name, func(t *testing.T) {
-			p := expandPath(tio.inPath)
-			assert.Equal(t, tio.expectedPath, p)
-		})
-	}
 }
 
 func TestIsRegionValid(t *testing.T) {

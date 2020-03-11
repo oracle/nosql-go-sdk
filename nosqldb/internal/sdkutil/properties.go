@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -35,6 +36,11 @@ type Properties struct {
 
 // NewProperties creates a Properties with the specified properties file.
 func NewProperties(file string) (p *Properties, err error) {
+	file, err = ExpandPath(file)
+	if err != nil {
+		return
+	}
+
 	if err = checkFile(file); err != nil {
 		return
 	}
@@ -155,4 +161,19 @@ func checkFile(file string) error {
 	}
 
 	return nil
+}
+
+// ExpandPath cleans and expands the path if it contains a tilde, returns the
+// expanded path or the input path as is if no expansion was performed.
+func ExpandPath(filePath string) (string, error) {
+	cleanedPath := path.Clean(filePath)
+	expandedPath := cleanedPath
+	if strings.HasPrefix(cleanedPath, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		expandedPath = path.Join(home, cleanedPath[1:])
+	}
+	return expandedPath, nil
 }
