@@ -146,7 +146,7 @@ func (suite *AuthTestSuite) TestNewAccessTokenProvider() {
 	}
 }
 
-func (suite *AuthTestSuite) TestNewAccessTokenProviderWithFile() {
+func (suite *AuthTestSuite) TestNewAccessTokenProviderFromFile() {
 	tests := []struct {
 		desc     string
 		username *string
@@ -192,11 +192,11 @@ func (suite *AuthTestSuite) TestNewAccessTokenProviderWithFile() {
 
 	// Specify a non-exist configuration file.
 	configFile = "config_file_not_exist__"
-	_, err = NewAccessTokenProviderWithFile(configFile)
-	suite.Errorf(err, "NewAccessTokenProviderWithFile(file=%s) should have failed")
+	_, err = NewAccessTokenProviderFromFile(configFile)
+	suite.Errorf(err, "NewAccessTokenProviderFromFile(file=%s) should have failed")
 
 	for i, r := range tests {
-		msg = fmt.Sprintf("Test-%d (%s): NewAccessTokenProviderWithFile() ", i+1, r.desc)
+		msg = fmt.Sprintf("Test-%d (%s): NewAccessTokenProviderFromFile() ", i+1, r.desc)
 		configFile, err = createConfigFile(r.username, r.password)
 		if len(configFile) > 0 {
 			defer os.Remove(configFile)
@@ -206,7 +206,7 @@ func (suite *AuthTestSuite) TestNewAccessTokenProviderWithFile() {
 			continue
 		}
 
-		_, err = NewAccessTokenProviderWithFile(configFile)
+		_, err = NewAccessTokenProviderFromFile(configFile)
 		if r.wantErr {
 			suite.Errorf(err, msg+"should have failed")
 			continue
@@ -218,8 +218,8 @@ func (suite *AuthTestSuite) TestNewAccessTokenProviderWithFile() {
 
 		// Test the cases where provider options are specified.
 		for j, k := range testProviderOptions {
-			msg = fmt.Sprintf("Test-%d-%d (%s): NewAccessTokenProviderWithFile() ", i+1, j+1, k.desc)
-			p, err = NewAccessTokenProviderWithFile(configFile, k.input)
+			msg = fmt.Sprintf("Test-%d-%d (%s): NewAccessTokenProviderFromFile() ", i+1, j+1, k.desc)
+			p, err = NewAccessTokenProviderFromFile(configFile, k.input)
 			if suite.NoErrorf(err, msg+"got error %v", err) {
 				suite.Equalf(k.want.Timeout, p.timeout, msg+"got unexpected Timeout")
 				suite.Equalf(k.want.ExpiryWindow, p.expiryWindow, msg+"got unexpected ExpiryWindow")
@@ -563,7 +563,7 @@ func (m *mockAuthServer) generateAccessToken() string {
 
 // createConfigFile creates a temporary configuration file with the specified
 // username and password.
-// The file could be used for the NewAccessTokenProviderWithFile function.
+// The file could be used for the NewAccessTokenProviderFromFile function.
 func createConfigFile(username *string, password []byte) (string, error) {
 	var buf bytes.Buffer
 	if username != nil {

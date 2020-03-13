@@ -24,7 +24,7 @@ type ConfigurationProvider interface {
 
 // IsConfigurationProviderValid Tests all parts of the configuration provider do not return an error
 func IsConfigurationProviderValid(conf ConfigurationProvider) (ok bool, err error) {
-	baseFn := []func() (string, error){conf.TenancyOCID, conf.UserOCID, conf.KeyFingerprint, conf.Region, conf.KeyID}
+	baseFn := []func() (string, error){conf.TenancyOCID, conf.UserOCID, conf.KeyFingerprint, conf.KeyID}
 	for _, fn := range baseFn {
 		_, err = fn()
 		ok = err == nil

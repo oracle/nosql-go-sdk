@@ -103,9 +103,9 @@ import (
 	"os"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
@@ -209,14 +209,14 @@ func ParseArgs() *Args {
 func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.AuthorizationProvider, err error) {
 	switch args.config {
 	case "iam":
-		return iam.NewSignatureProvider(args.configFile, args.profileID, "", args.compartmentID)
+		return iam.NewSignatureProviderFromFile(args.configFile, args.profileID, "", args.compartmentID)
 	case "cloudsim":
 		return &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}, nil
 	case "kvstore":
 		if len(args.configFile) == 0 {
 			return &kvstore.AccessTokenProvider{}, nil
 		}
-		return kvstore.NewAccessTokenProviderWithFile(args.configFile)
+		return kvstore.NewAccessTokenProviderFromFile(args.configFile)
 	default:
 		return nil, fmt.Errorf("invalid configuration %s", args.config)
 	}

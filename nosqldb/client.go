@@ -120,7 +120,7 @@ func NewClient(cfg Config) (*Client, error) {
 
 		if cfg.IsCloudMode() {
 			// Use the default OCI configuration file ~/.oci/config
-			c.AuthorizationProvider, err = iam.NewSignatureProvider("~/.oci/config", "", "", "")
+			c.AuthorizationProvider, err = iam.NewSignatureProvider()
 		} else if cfg.IsCloudSim() {
 			c.AuthorizationProvider = &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}
 		} else if cfg.Username != "" && len(cfg.Password) > 0 {

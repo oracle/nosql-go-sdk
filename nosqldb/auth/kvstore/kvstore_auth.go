@@ -93,7 +93,7 @@ type AccessTokenProvider struct {
 	wg    sync.WaitGroup
 }
 
-// NewAccessTokenProviderWithFile creates an access token provider with the
+// NewAccessTokenProviderFromFile creates an access token provider using the
 // specified configuration file and options. The configuration file must specify
 // the username and password that used to authenticate with the Oracle NoSQL
 // Server in the form of:
@@ -106,7 +106,7 @@ type AccessTokenProvider struct {
 // parameter, if specified, is used, others are ignored.
 //
 // This is used for the NoSQL server that is enabled with security configurations.
-func NewAccessTokenProviderWithFile(configFile string, options ...auth.ProviderOptions) (*AccessTokenProvider, error) {
+func NewAccessTokenProviderFromFile(configFile string, options ...auth.ProviderOptions) (*AccessTokenProvider, error) {
 	prop, err := sdkutil.NewProperties(configFile)
 	if err != nil {
 		return nil, err
