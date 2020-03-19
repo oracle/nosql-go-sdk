@@ -14,15 +14,42 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
+	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
 func ExampleNewClient_cloud() {
-	// Configurations for the client that connects to the NoSQL cloud service.
+	// Specify configurations for the client that connects to the NoSQL cloud service.
 	//
-	// This assumes the required OCI configurations have been specified in ~/.oci/config.
+	// This assumes the required user credentials are specified in the
+	// default OCI configuration file ~/.oci/config.
+	//
+	// [DEFAULT]
+	// tenancy=<your-tenancy-id>
+	// user=<your-user-id>
+	// fingerprint=<fingerprint-of-your-public-key>
+	// key_file=<path-to-your-private-key-file>
+	// pass_phrase=<optional-passphrase>
+	//
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Region: nosqldb.RegionPHX,
+	}
+
+	client, err := nosqldb.NewClient(cfg)
+	if err != nil {
+		fmt.Printf("failed to create a NoSQL client: %v\n", err)
+		return
+	}
+	defer client.Close()
+	// Perform database operations using client APIs.
+	// ...
+}
+
+func ExampleNewClient_cloudSim() {
+	// Specify configurations for the client that connects to the NoSQL cloud simulator.
+	cfg := nosqldb.Config{
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -36,12 +63,17 @@ func ExampleNewClient_cloud() {
 }
 
 func ExampleNewClient_onPremise() {
-	// Configurations for the client that connects to on-premise NoSQL servers.
+	// Specify configurations for the client that connects to on-premise NoSQL servers.
 	cfg := nosqldb.Config{
 		Endpoint: "https://localhost:8080",
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -56,7 +88,8 @@ func ExampleNewClient_onPremise() {
 
 func ExampleClient_Get() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -71,10 +104,10 @@ func ExampleClient_Get() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 100
-	deptId := 90
+	empID := 100
+	deptID := 90
 	pk := &types.MapValue{}
-	pk.Put("employee_id", empId).Put("department_id", deptId)
+	pk.Put("employee_id", empID).Put("department_id", deptID)
 
 	req := &nosqldb.GetRequest{
 		TableName: "employees",
@@ -91,13 +124,14 @@ func ExampleClient_Get() {
 	if res.RowExists() {
 		fmt.Printf("got the row: %s\n", res.ValueAsJSON())
 	} else {
-		fmt.Printf("the requested row(employee_id=%d, department_id=%d) does not exist.\n", empId, deptId)
+		fmt.Printf("the requested row(employee_id=%d, department_id=%d) does not exist.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Put() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -112,10 +146,10 @@ func ExampleClient_Put() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 170
-	deptId := 80
+	empID := 170
+	deptID := 80
 	value := &types.MapValue{}
-	value.Put("employee_id", empId).Put("department_id", deptId)
+	value.Put("employee_id", empID).Put("department_id", deptID)
 	value.Put("first_name", "Tayler").Put("last_name", "Fox")
 	value.Put("email", "TFOX@example.com").Put("phone_number", "011.44.1343.729268")
 	value.Put("hire_date", "2006-01-24").Put("salary", 17000)
@@ -133,15 +167,16 @@ func ExampleClient_Put() {
 	}
 
 	if res.Success() {
-		fmt.Printf("put row(employee_id=%d, department_id=%d) succeeded.\n", empId, deptId)
+		fmt.Printf("put row(employee_id=%d, department_id=%d) succeeded.\n", empID, deptID)
 	} else {
-		fmt.Printf("put row(employee_id=%d, department_id=%d) failed.\n", empId, deptId)
+		fmt.Printf("put row(employee_id=%d, department_id=%d) failed.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Put_putIfPresent() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -156,10 +191,10 @@ func ExampleClient_Put_putIfPresent() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 170
-	deptId := 80
+	empID := 170
+	deptID := 80
 	value := &types.MapValue{}
-	value.Put("employee_id", empId).Put("department_id", deptId)
+	value.Put("employee_id", empID).Put("department_id", deptID)
 	value.Put("first_name", "Tayler").Put("last_name", "Fox")
 	value.Put("email", "TFOX@example.com").Put("phone_number", "011.44.1343.729268")
 	value.Put("hire_date", "2006-01-24").Put("salary", 19000)
@@ -178,15 +213,16 @@ func ExampleClient_Put_putIfPresent() {
 	}
 
 	if res.Success() {
-		fmt.Printf("put row(option=PutIfPresent, employee_id=%d, department_id=%d) succeeded.\n", empId, deptId)
+		fmt.Printf("put row(option=PutIfPresent, employee_id=%d, department_id=%d) succeeded.\n", empID, deptID)
 	} else {
-		fmt.Printf("put row(option=PutIfPresent, employee_id=%d, department_id=%d) failed.\n", empId, deptId)
+		fmt.Printf("put row(option=PutIfPresent, employee_id=%d, department_id=%d) failed.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Put_putIfAbsent() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -201,10 +237,10 @@ func ExampleClient_Put_putIfAbsent() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 171
-	deptId := 80
+	empID := 171
+	deptID := 80
 	value := &types.MapValue{}
-	value.Put("employee_id", empId).Put("department_id", deptId)
+	value.Put("employee_id", empID).Put("department_id", deptID)
 	value.Put("first_name", "William").Put("last_name", "Smith")
 	value.Put("email", "WSMITH@example.com").Put("phone_number", "011.44.1343.629268")
 	value.Put("hire_date", "2007-02-23").Put("salary", 14000)
@@ -224,15 +260,16 @@ func ExampleClient_Put_putIfAbsent() {
 	}
 
 	if res.Success() {
-		fmt.Printf("put row(option=PutIfAbsent, employee_id=%d, department_id=%d) succeeded.\n", empId, deptId)
+		fmt.Printf("put row(option=PutIfAbsent, employee_id=%d, department_id=%d) succeeded.\n", empID, deptID)
 	} else {
-		fmt.Printf("put row(option=PutIfAbsent, employee_id=%d, department_id=%d) failed.\n", empId, deptId)
+		fmt.Printf("put row(option=PutIfAbsent, employee_id=%d, department_id=%d) failed.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Put_putIfVersion() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -247,10 +284,10 @@ func ExampleClient_Put_putIfVersion() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 172
-	deptId := 80
+	empID := 172
+	deptID := 80
 	pk := &types.MapValue{}
-	pk.Put("employee_id", empId).Put("department_id", deptId)
+	pk.Put("employee_id", empID).Put("department_id", deptID)
 
 	getReq := &nosqldb.GetRequest{
 		TableName: "employees",
@@ -267,7 +304,7 @@ func ExampleClient_Put_putIfVersion() {
 	currVersion := getRes.Version
 
 	value := &types.MapValue{}
-	value.Put("employee_id", empId).Put("department_id", deptId)
+	value.Put("employee_id", empID).Put("department_id", deptID)
 	value.Put("first_name", "Elizabeth").Put("last_name", "Bates")
 	value.Put("email", "EBATES@example.com").Put("phone_number", "011.44.1343.529268")
 	value.Put("hire_date", "2007-03-24").Put("salary", 15300)
@@ -288,15 +325,16 @@ func ExampleClient_Put_putIfVersion() {
 	}
 
 	if res.Success() {
-		fmt.Printf("put row(option=PutIfVersion, employee_id=%d, department_id=%d) succeeded.\n", empId, deptId)
+		fmt.Printf("put row(option=PutIfVersion, employee_id=%d, department_id=%d) succeeded.\n", empID, deptID)
 	} else {
-		fmt.Printf("put row(option=PutIfVersion, employee_id=%d, department_id=%d) failed.\n", empId, deptId)
+		fmt.Printf("put row(option=PutIfVersion, employee_id=%d, department_id=%d) failed.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Delete() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -311,10 +349,10 @@ func ExampleClient_Delete() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 100
-	deptId := 90
+	empID := 100
+	deptID := 90
 	pk := &types.MapValue{}
-	pk.Put("employee_id", empId).Put("department_id", deptId)
+	pk.Put("employee_id", empID).Put("department_id", deptID)
 
 	req := &nosqldb.DeleteRequest{
 		TableName: "employees",
@@ -329,15 +367,16 @@ func ExampleClient_Delete() {
 	}
 
 	if res.Success {
-		fmt.Printf("delete row(employee_id=%d, department_id=%d) succeeded.\n", empId, deptId)
+		fmt.Printf("delete row(employee_id=%d, department_id=%d) succeeded.\n", empID, deptID)
 	} else {
-		fmt.Printf("delete row(employee_id=%d, department_id=%d) failed.\n", empId, deptId)
+		fmt.Printf("delete row(employee_id=%d, department_id=%d) failed.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Delete_deleteIfVersion() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -352,10 +391,10 @@ func ExampleClient_Delete_deleteIfVersion() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	empId := 100
-	deptId := 90
+	empID := 100
+	deptID := 90
 	pk := &types.MapValue{}
-	pk.Put("employee_id", empId).Put("department_id", deptId)
+	pk.Put("employee_id", empID).Put("department_id", deptID)
 
 	getReq := &nosqldb.GetRequest{
 		TableName: "employees",
@@ -385,15 +424,16 @@ func ExampleClient_Delete_deleteIfVersion() {
 	}
 
 	if res.Success {
-		fmt.Printf("delete row(option=DeleteIfVersion, employee_id=%d, department_id=%d) succeeded.\n", empId, deptId)
+		fmt.Printf("delete row(option=DeleteIfVersion, employee_id=%d, department_id=%d) succeeded.\n", empID, deptID)
 	} else {
-		fmt.Printf("delete row(option=DeleteIfVersion, employee_id=%d, department_id=%d) failed.\n", empId, deptId)
+		fmt.Printf("delete row(option=DeleteIfVersion, employee_id=%d, department_id=%d) failed.\n", empID, deptID)
 	}
 }
 
 func ExampleClient_Query() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -448,16 +488,17 @@ func ExampleClient_Query() {
 
 	fmt.Printf("got %d results\n", len(results))
 	for _, r := range results {
-		empId, _ := r.GetInt("employee_id")
+		empID, _ := r.GetInt("employee_id")
 		firstName, _ := r.GetString("firstName")
 		lastName, _ := r.GetString("lastName")
-		fmt.Printf("%d: %s %s\n", empId, firstName, lastName)
+		fmt.Printf("%d: %s %s\n", empID, firstName, lastName)
 	}
 }
 
 func ExampleClient_MultiDelete() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -472,9 +513,9 @@ func ExampleClient_MultiDelete() {
 	// CREATE TABLE employees (employee_id INTEGER, first_name STRING, last_name STRING,
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
-	deptId := 90
+	deptID := 90
 	sk := &types.MapValue{}
-	sk.Put("department_id", deptId)
+	sk.Put("department_id", deptID)
 
 	req := &nosqldb.MultiDeleteRequest{
 		TableName: "employees",
@@ -493,7 +534,8 @@ func ExampleClient_MultiDelete() {
 
 func ExampleClient_WriteMultiple() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -509,26 +551,26 @@ func ExampleClient_WriteMultiple() {
 	// email STRING, phone_number STRING, hire_date TIMESTAMP(0), salary DOUBLE,
 	// department_id INTEGER, PRIMARY KEY(shard(department_id), employee_id))
 	type emp struct {
-		empId       int
+		empID       int
 		firstName   string
 		lastName    string
 		email       string
 		phoneNumber string
 		hireDate    time.Time
 		salary      float64
-		deptId      int
+		deptID      int
 	}
 
 	formerEmployees := []*emp{
-		&emp{empId: 101, deptId: 80},
-		&emp{empId: 107, deptId: 80},
-		&emp{empId: 109, deptId: 80},
+		&emp{empID: 101, deptID: 80},
+		&emp{empID: 107, deptID: 80},
+		&emp{empID: 109, deptID: 80},
 	}
 
 	newEmployees := []*emp{
 		&emp{
-			empId:       211,
-			deptId:      80,
+			empID:       211,
+			deptID:      80,
 			firstName:   "Tayler",
 			lastName:    "Fox",
 			email:       "TFOX@example.com",
@@ -537,8 +579,8 @@ func ExampleClient_WriteMultiple() {
 			salary:      17000,
 		},
 		&emp{
-			empId:       212,
-			deptId:      80,
+			empID:       212,
+			deptID:      80,
 			firstName:   "William",
 			lastName:    "Smith",
 			email:       "WSMITH@example.com",
@@ -555,7 +597,7 @@ func ExampleClient_WriteMultiple() {
 
 	for _, e := range formerEmployees {
 		pk := &types.MapValue{}
-		pk.Put("employee_id", e.empId).Put("department_id", e.deptId)
+		pk.Put("employee_id", e.empID).Put("department_id", e.deptID)
 		delReq := &nosqldb.DeleteRequest{
 			TableName: "employees",
 			Key:       pk,
@@ -566,7 +608,7 @@ func ExampleClient_WriteMultiple() {
 
 	for _, e := range newEmployees {
 		value := &types.MapValue{}
-		value.Put("employee_id", e.empId).Put("department_id", e.deptId)
+		value.Put("employee_id", e.empID).Put("department_id", e.deptID)
 		value.Put("first_name", e.firstName).Put("last_name", e.lastName)
 		value.Put("email", e.email).Put("phone_number", e.phoneNumber)
 		value.Put("hire_date", e.hireDate).Put("salary", e.salary)
@@ -595,7 +637,8 @@ func ExampleClient_WriteMultiple() {
 
 func ExampleClient_DoTableRequest() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -612,9 +655,9 @@ func ExampleClient_DoTableRequest() {
 	req := &nosqldb.TableRequest{
 		Statement: stmt,
 		TableLimits: &nosqldb.TableLimits{
-			ReadUnits:  2000,
-			WriteUnits: 2000,
-			StorageGB:  5,
+			ReadUnits:  200,
+			WriteUnits: 200,
+			StorageGB:  2,
 		},
 		Timeout: 5 * time.Second,
 	}
@@ -636,7 +679,8 @@ func ExampleClient_DoTableRequest() {
 
 func ExampleClient_DoTableRequestAndWait_createTable() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -653,9 +697,9 @@ func ExampleClient_DoTableRequestAndWait_createTable() {
 	req := &nosqldb.TableRequest{
 		Statement: stmt,
 		TableLimits: &nosqldb.TableLimits{
-			ReadUnits:  2000,
-			WriteUnits: 2000,
-			StorageGB:  5,
+			ReadUnits:  200,
+			WriteUnits: 200,
+			StorageGB:  2,
 		},
 		Timeout: 3 * time.Second,
 	}
@@ -671,7 +715,8 @@ func ExampleClient_DoTableRequestAndWait_createTable() {
 
 func ExampleClient_DoTableRequestAndWait_changeTableLimits() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -684,9 +729,9 @@ func ExampleClient_DoTableRequestAndWait_changeTableLimits() {
 	req := &nosqldb.TableRequest{
 		TableName: "employees",
 		TableLimits: &nosqldb.TableLimits{
-			ReadUnits:  4000,
-			WriteUnits: 2000,
-			StorageGB:  8,
+			ReadUnits:  400,
+			WriteUnits: 400,
+			StorageGB:  2,
 		},
 		Timeout: 3 * time.Second,
 	}
@@ -702,7 +747,8 @@ func ExampleClient_DoTableRequestAndWait_changeTableLimits() {
 
 func ExampleClient_DoTableRequestAndWait_dropTable() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -730,7 +776,8 @@ func ExampleClient_DoTableRequestAndWait_dropTable() {
 
 func ExampleClient_GetTable() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -756,7 +803,8 @@ func ExampleClient_GetTable() {
 
 func ExampleClient_GetIndexes() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -785,7 +833,8 @@ func ExampleClient_GetIndexes() {
 
 func ExampleClient_ListTables() {
 	cfg := nosqldb.Config{
-		Endpoint: "https://nosql-example-region1.oraclecloud.com",
+		Mode:     "cloudsim",
+		Endpoint: "http://localhost:8080",
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -817,6 +866,11 @@ func ExampleClient_DoSystemRequest() {
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -852,6 +906,11 @@ func ExampleClient_DoSystemRequestAndWait() {
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -877,6 +936,11 @@ func ExampleClient_GetSystemStatus() {
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -917,6 +981,11 @@ func ExampleClient_ListNamespaces() {
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -944,6 +1013,11 @@ func ExampleClient_ListRoles() {
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
@@ -971,6 +1045,11 @@ func ExampleClient_ListUsers() {
 		Mode:     "onprem",
 		Username: "testUser",
 		Password: []byte("F;0s2M0;-Tdr"),
+		// Specify InsecureSkipVerify to skip verification for server certificate.
+		// This is used for testing, not recommended for production use.
+		HTTPConfig: httputil.HTTPConfig{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	client, err := nosqldb.NewClient(cfg)
