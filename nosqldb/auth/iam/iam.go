@@ -31,6 +31,9 @@ const (
 // This implements the nosqldb.AuthorizationProvider interface.
 type SignatureProvider struct {
 
+	// the configuration provider
+	configProvider ConfigurationProvider
+
 	// the signer we use to sign each request
 	signer HTTPRequestSigner
 
@@ -121,6 +124,7 @@ func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassword
 		expiryInterval:         expiryInterval,
 		compartmentID:          compartmentID,
 		signer:                 signer,
+		configProvider:         configProvider,
 	}
 
 	return p, nil
@@ -164,9 +168,15 @@ func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, 
 		expiryInterval:         expiryInterval,
 		compartmentID:          compartmentID,
 		signer:                 signer,
+		configProvider:         configProvider,
 	}
 
 	return p, nil
+}
+
+// Profile returns the profile used for the signature provider.
+func (p *SignatureProvider) Profile() ConfigurationProvider {
+	return p.configProvider
 }
 
 // AuthorizationScheme returns "Signature" for this provider which means the requests

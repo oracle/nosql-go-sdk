@@ -17,6 +17,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -52,8 +56,9 @@ const (
 // Most of the configuration parameters are optional and have default values if
 // not specified.
 type Config struct {
-	// Endpoint specifies the NoSQL service endpoint that client connects to.
-	// It is required when connect to the cloud simulator or on-premise NoSQL server.
+	// Endpoint specifies the Oracle NoSQL server endpoint that clients connect to.
+	// It is required when connect to the Oracle NoSQL cloud simulator or
+	// the on-premise Oracle NoSQL server.
 	// It must include the target address, and may include protocol and port.
 	// The syntax is:
 	//
@@ -61,17 +66,18 @@ type Config struct {
 	//
 	// For example, these are valid endpoints:
 	//
-	//   nosql.us-ashburn-1.oci.oraclecloud.com
-	//   https://nosql.us-ashburn-1.oci.oraclecloud.com
 	//   localhost:8080
+	//   http://localhost:8080
+	//   https://localhost:8090
 	//
 	// If port is omitted, the endpoint defaults to 443.
 	// If protocol is omitted, the endpoint uses https if the port is 443, and
 	// http in all other cases.
 	Endpoint string
 
-	// Region specifies the region for NoSQL service that client would connect to.
-	// Region takes precedence over Endpoint if both are specified.
+	// Region specifies the region for the Oracle NoSQL cloud service that clients connect to.
+	// Region takes precedence over the "region" property that may be specified
+	// in the OCI configuration file which is ~/.oci/config by default.
 	//
 	// This is used for cloud service only.
 	Region Region
@@ -117,6 +123,131 @@ type Config struct {
 	host     string
 	port     string
 	protocol string
+
+	httpClient *httputil.HTTPClient
+}
+
+func (c *Config) validate() error {
+	c.Mode = strings.ToLower(c.Mode)
+	switch c.Mode {
+	case "", "cloud":
+	case "cloudsim", "onprem":
+		if len(c.Endpoint) == 0 {
+			return fmt.Errorf("Endpoint must be specified")
+		}
+	default:
+		return fmt.Errorf("the specified configuration mode %q is not supported", c.Mode)
+	}
+
+	if len(c.Endpoint) > 0 && len(c.Region) > 0 {
+		return fmt.Errorf("cannot have both Endpoint and Region specified")
+	}
+
+	return nil
+}
+
+func (c *Config) setDefaults() (err error) {
+	err = c.validate()
+	if err != nil {
+		return
+	}
+
+	// Set a default logger.
+	if c.Logger == nil && !c.DisableLogging {
+		c.Logger = logger.DefaultLogger
+	}
+
+	// Set a default RetryHandler if not specified.
+	if c.RetryHandler == nil {
+		c.RetryHandler, err = NewDefaultRetryHandler(5, time.Second)
+		if err != nil {
+			return
+		}
+	}
+
+	// Check the specified endpoint and set default authorization provider
+	// when connect to cloud simulator or on-premise server.
+	if c.Mode == "cloudsim" || c.Mode == "onprem" {
+		err = c.parseEndpoint()
+		if err != nil {
+			return err
+		}
+
+		if c.Mode == "cloudsim" {
+			// Set a default AuthorizationProvider if not specified.
+			if c.AuthorizationProvider == nil {
+				c.AuthorizationProvider = &cloudsim.AccessTokenProvider{
+					TenantID: "ExampleTenantId",
+				}
+			}
+
+			return nil
+		}
+
+		// Create an AuthorizationProvider for the secure on-premise NoSQL server,
+		// for non-secure on-premise NoSQL server, the AuthorizationProvider
+		// is not required.
+		if c.AuthorizationProvider == nil && len(c.Username) > 0 && len(c.Password) > 0 {
+			c.httpClient, err = httputil.NewHTTPClient(c.HTTPConfig)
+			if err != nil {
+				return err
+			}
+
+			options := auth.ProviderOptions{
+				Timeout:    c.DefaultSecurityInfoTimeout(),
+				Logger:     c.Logger,
+				HTTPClient: c.httpClient,
+			}
+
+			c.AuthorizationProvider, err = kvstore.NewAccessTokenProvider(c.Username, c.Password, options)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Set service endpoint for the on-premise NoSQL server.
+		if atp, ok := c.AuthorizationProvider.(*kvstore.AccessTokenProvider); ok {
+			atp.SetEndpoint(c.Endpoint)
+		}
+
+		return nil
+	}
+
+	// Set default signature provider for cloud service if not specified,
+	// then check the region or endpoint.
+	if c.AuthorizationProvider == nil {
+		c.AuthorizationProvider, err = iam.NewSignatureProvider()
+		if err != nil {
+			return err
+		}
+	}
+
+	// When connect to cloud service, look for Region or Endpoint in order:
+	//
+	//   1. use Config.Region if it is specified
+	//   2. use the "region" field from OCI configuration file if it is specified
+	//   3. use Config.Endpoint if it is specified
+	//
+	if len(c.Region) == 0 {
+		var regionID string
+		if sp, ok := c.AuthorizationProvider.(*iam.SignatureProvider); ok {
+			if profile := sp.Profile(); profile != nil {
+				regionID, _ = profile.Region()
+			}
+		}
+
+		switch {
+		// region is specified in OCI config file
+		case len(regionID) > 0:
+			c.Region = Region(regionID)
+		// neither region nor endpoint is specified
+		case len(c.Endpoint) == 0:
+			return fmt.Errorf("Region must be specified")
+		}
+	}
+
+	err = c.parseEndpoint()
+	return
 }
 
 // parseEndpoint returns endpoint for the Region if specified, or tries to parse
@@ -143,6 +274,7 @@ func (c *Config) parseEndpoint() (err error) {
 		c.protocol = "https"
 		c.port = "443"
 		c.Endpoint = c.protocol + "://" + c.host + ":" + c.port
+		c.HTTPConfig.UseHTTPS = true
 		return nil
 	}
 
@@ -152,11 +284,12 @@ func (c *Config) parseEndpoint() (err error) {
 	}
 
 	c.Endpoint = c.protocol + "://" + c.host + ":" + c.port
+	c.HTTPConfig.UseHTTPS = c.protocol == "https"
 	return nil
 }
 
-// IsCloudMode returns whether the configuration is used for cloud service.
-func (c *Config) IsCloudMode() bool {
+// IsCloud returns whether the configuration is used for cloud service.
+func (c *Config) IsCloud() bool {
 	return c.Mode == "" || strings.EqualFold(c.Mode, "cloud")
 }
 

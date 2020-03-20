@@ -23,9 +23,6 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
@@ -82,68 +79,28 @@ var (
 //
 // Applications should call the Close() method on the Client when it terminates.
 func NewClient(cfg Config) (*Client, error) {
-	err := cfg.parseEndpoint()
+	err := cfg.setDefaults()
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.HTTPConfig.UseHTTPS = cfg.protocol == "https"
-	httpClient, err := httputil.NewHTTPClient(cfg.HTTPConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	var lgr *logger.Logger
-	if !cfg.DisableLogging && cfg.Logger == nil {
-		lgr = logger.DefaultLogger
+	if cfg.httpClient == nil {
+		cfg.httpClient, err = httputil.NewHTTPClient(cfg.HTTPConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	c := &Client{
 		Config:     cfg,
-		HTTPClient: httpClient,
+		HTTPClient: cfg.httpClient,
 		requestURL: cfg.Endpoint + sdkutil.DataServiceURI,
 		requestID:  0,
 		serverHost: cfg.host,
-		executor:   httpClient,
-		logger:     lgr,
+		executor:   cfg.httpClient,
+		logger:     cfg.Logger,
 	}
-
 	c.handleResponse = c.processResponse
-
-	// Set a default AuthorizationProvider if not specified.
-	if c.AuthorizationProvider == nil {
-		options := auth.ProviderOptions{
-			Timeout:    c.DefaultSecurityInfoTimeout(),
-			Logger:     lgr,
-			HTTPClient: httpClient,
-		}
-
-		if cfg.IsCloudMode() {
-			// Use the default OCI configuration file ~/.oci/config
-			c.AuthorizationProvider, err = iam.NewSignatureProvider()
-		} else if cfg.IsCloudSim() {
-			c.AuthorizationProvider = &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}
-		} else if cfg.Username != "" && len(cfg.Password) > 0 {
-			c.AuthorizationProvider, err = kvstore.NewAccessTokenProvider(cfg.Username, cfg.Password, options)
-		}
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if p, ok := c.AuthorizationProvider.(*kvstore.AccessTokenProvider); ok {
-		p.SetEndpoint(c.Endpoint)
-	}
-
-	// Set a default RetryHandler if not specified.
-	if c.RetryHandler == nil {
-		c.RetryHandler, err = NewDefaultRetryHandler(5, time.Second)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return c, nil
 }
 

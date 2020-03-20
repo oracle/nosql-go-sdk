@@ -13,9 +13,217 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestValidateConfig(t *testing.T) {
+	ep := "https://nosql.us-ashburn-1.oci.oraclecloud.com"
+	tests := []struct {
+		desc                   string
+		mode, endpoint, region string
+		ok                     bool
+	}{
+		// unsupported configuration mode
+		{
+			desc:     "unsupported configuration mode xyz",
+			mode:     "xyz",
+			endpoint: ep,
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		// cloud service
+		{
+			desc:     "specify Endpoint and Region for mode=cloud",
+			mode:     "cloud",
+			endpoint: ep,
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		{
+			desc:     "specify Endpoint and Region for cloud service",
+			mode:     "",
+			endpoint: ep,
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		{
+			desc:     "specify a Region for cloud service",
+			mode:     "cloud",
+			endpoint: "",
+			region:   "us-ashburn-1",
+			ok:       true,
+		},
+		// This is ok as the region may be specified in OCI config.
+		{
+			desc:     "neither an Endpoint nor Region is specified for cloud service",
+			mode:     "cloud",
+			endpoint: "",
+			region:   "",
+			ok:       true,
+		},
+		// cloud simulator
+		{
+			desc:     "specify Endpoint and Region for cloud simulator",
+			mode:     "cloudsim",
+			endpoint: ep,
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		{
+			desc:     "specify an Endpoint for cloud simulator",
+			mode:     "cloudsim",
+			endpoint: "http://localhost:8080",
+			region:   "",
+			ok:       true,
+		},
+		{
+			desc:     "specify a Region for cloud simulator",
+			mode:     "cloudsim",
+			endpoint: "",
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		{
+			desc:     "neither an Endpoint nor Region is specified for cloud simulator",
+			mode:     "cloudsim",
+			endpoint: "",
+			region:   "",
+			ok:       false,
+		},
+		// on-premise
+		{
+			desc:     "specify Endpoint and Region for on-premise server",
+			mode:     "onprem",
+			endpoint: ep,
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		{
+			desc:     "specify an Endpoint for on-premise server",
+			mode:     "onprem",
+			endpoint: "http://localhost:8080",
+			region:   "",
+			ok:       true,
+		},
+		{
+			desc:     "specify a Region for on-premise server",
+			mode:     "onprem",
+			endpoint: "",
+			region:   "us-ashburn-1",
+			ok:       false,
+		},
+		{
+			desc:     "neither an Endpoint nor Region is specified for on-premise server",
+			mode:     "onprem",
+			endpoint: "",
+			region:   "",
+			ok:       false,
+		},
+	}
+
+	for _, r := range tests {
+		c := &Config{
+			Mode:     r.mode,
+			Endpoint: r.endpoint,
+			Region:   Region(r.region),
+		}
+
+		err := c.validate()
+		if r.ok {
+			assert.NoErrorf(t, err, "%: should be valid, got error", r.desc, err)
+		} else {
+			assert.Errorf(t, err, "%: should be invalid", r.desc)
+		}
+	}
+}
+
+// TestRegionConfig tests the cases that specify a region for cloud service
+// either in Config.Region, OCI configuration file, or specify the service
+// endpoint explicitly.
+func TestRegionConfig(t *testing.T) {
+	//  Profile DEFAULT specifies eu-zurich-1 as region.
+	sp0, err := iam.NewSignatureProviderFromFile("testdata/dummy_config", "DEFAULT", "", "")
+	if !assert.NoErrorf(t, err, "cannot create a signature provider using DEFAULT profile") {
+		return
+	}
+
+	// Profile USER01 does not specify a region.
+	sp1, err := iam.NewSignatureProviderFromFile("testdata/dummy_config", "USER01", "", "")
+	if !assert.NoErrorf(t, err, "cannot create a signature provider using profile USER01") {
+		return
+	}
+
+	// Profile USER02 specifies an invalid region "bad-xyz-1".
+	sp2, err := iam.NewSignatureProviderFromFile("testdata/dummy_config", "USER02", "", "")
+	if !assert.NoErrorf(t, err, "cannot create a signature provider using profile USER02") {
+		return
+	}
+
+	tests := []struct {
+		desc         string
+		cfg          *Config
+		wantEndpoint string
+		ok           bool
+	}{
+		{
+			desc:         "specify a Config.Region that is invalid",
+			cfg:          &Config{Region: "ab-cde-1"},
+			wantEndpoint: "",
+			ok:           false,
+		},
+		{
+			desc:         "specify an invalid region in OCI config file",
+			cfg:          &Config{Region: "", AuthorizationProvider: sp2},
+			wantEndpoint: "",
+			ok:           false,
+		},
+		{
+			desc:         "neither Config.Region nor region in OCI config is specified",
+			cfg:          &Config{Region: "", AuthorizationProvider: sp1},
+			wantEndpoint: "",
+			ok:           false,
+		},
+		{
+			desc:         "use the specified Config.Region",
+			cfg:          &Config{Region: "us-ashburn-1"},
+			wantEndpoint: "nosql.us-ashburn-1.oci.oraclecloud.com",
+			ok:           true,
+		},
+		{
+			desc:         "use the specified Config.Region rather than region in OCI config",
+			cfg:          &Config{Region: "us-ashburn-1", AuthorizationProvider: sp0},
+			wantEndpoint: "nosql.us-ashburn-1.oci.oraclecloud.com",
+			ok:           true,
+		},
+		{
+			desc:         "use the region specified in OCI config",
+			cfg:          &Config{Region: "", AuthorizationProvider: sp0},
+			wantEndpoint: "nosql.eu-zurich-1.oci.oraclecloud.com",
+			ok:           true,
+		},
+		{
+			desc:         "use the specified Config.Endpoint",
+			cfg:          &Config{Endpoint: "nosql.us-phoenix-1.oci.oraclecloud.com", AuthorizationProvider: sp1},
+			wantEndpoint: "nosql.us-phoenix-1.oci.oraclecloud.com",
+			ok:           true,
+		},
+	}
+
+	for _, r := range tests {
+		err := r.cfg.setDefaults()
+		if !r.ok {
+			assert.Errorf(t, err, "%s: should have failed", r.desc)
+		} else {
+			if assert.NoErrorf(t, err, "%s: got unexpected error", r.desc, err) {
+				// Do not compare with r.cfg.Endpoint as it has been normalized to https://host:443
+				gotHost := r.cfg.host
+				assert.Equalf(t, r.wantEndpoint, gotHost, "%s: got unexpected endpoint", r.desc)
+			}
+		}
+	}
+}
 
 func TestParseEndpoint(t *testing.T) {
 	tests := []struct {
