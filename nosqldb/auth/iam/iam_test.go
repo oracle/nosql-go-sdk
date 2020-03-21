@@ -74,7 +74,7 @@ var testCasesForNewProvider = []*testProviderInfo{
 		shortDesc:  SP("Basic passing case with alternate compartmentID"),
 		expectErr:  false,
 	},
-	// Specify a non-exist file for "key_file" property.
+	// "key_file" property not specified
 	{
 		user:        SP(testUserOCID),
 		fingerprint: SP(testFingerprint),
@@ -84,6 +84,30 @@ var testCasesForNewProvider = []*testProviderInfo{
 		compartment: nil,
 		expectAuth:  nil,
 		shortDesc:   SP("Missing key file"),
+		expectErr:   true,
+	},
+	// specify a directory for private key file
+	{
+		user:        SP(testUserOCID),
+		fingerprint: SP(testFingerprint),
+		keyFile:     SP("testdata"),
+		tenancy:     SP(testTenancyOCID),
+		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
+		shortDesc:   SP("Specify a directory for private key file"),
+		expectErr:   true,
+	},
+	// specify a private key file that does not exist
+	{
+		user:        SP(testUserOCID),
+		fingerprint: SP(testFingerprint),
+		keyFile:     SP("testdata/_non_exists_file"),
+		tenancy:     SP(testTenancyOCID),
+		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
+		shortDesc:   SP("Specify a private key file that does not exist"),
 		expectErr:   true,
 	},
 	// specify a mangled key
@@ -130,6 +154,76 @@ var testCasesForNewProvider = []*testProviderInfo{
 	// compare signature with invalid / empty date
 }
 
+func (suite *iamTestSuite) TestNewRawSignatureProvider() {
+	var p *SignatureProvider
+	var err error
+	var msgPrefix string
+
+	// This case is specific to the NewRawSignatureProvider function
+	// that specifies private key content directly.
+	testcase := &testProviderInfo{
+		user:        SP(testUserOCID),
+		fingerprint: SP(testFingerprint),
+		keyFile:     SP(testPrivateKeyConf),
+		tenancy:     SP(testTenancyOCID),
+		region:      SP(testRegion),
+		compartment: nil,
+		expectAuth:  nil,
+		shortDesc:   SP("Specify private key content directly"),
+		expectErr:   false,
+	}
+
+	var tests []*testProviderInfo
+	tests = append(tests, testCasesForNewProvider...)
+	tests = append(tests, testcase)
+
+	for i, r := range tests {
+		if r == nil {
+			continue
+		}
+
+		tenancy := getOrDefault(r.tenancy, "")
+		user := getOrDefault(r.user, "")
+		region := getOrDefault(r.region, "")
+		fingerprint := getOrDefault(r.fingerprint, "")
+		compID := getOrDefault(r.compartment, "")
+		privateKeyOrFile := getOrDefault(r.keyFile, "")
+		passphrase := ""
+
+		msgPrefix = fmt.Sprintf("Testcase %d (%s): NewRawSignatureProvider() ", i+1, *r.shortDesc)
+		p, err = NewRawSignatureProvider(tenancy, user, region, fingerprint,
+			compID, privateKeyOrFile, &passphrase)
+
+		if r.expectErr {
+			suite.Errorf(err, msgPrefix+"should have failed, but succeeded")
+			continue
+		}
+
+		if suite.NoErrorf(err, msgPrefix+"got error: %v", err) {
+			err = suite.checkSignatureGeneration(p, r, msgPrefix)
+			suite.NoErrorf(err, msgPrefix+"http header signing error")
+		}
+	}
+}
+
+func (suite *iamTestSuite) TestFileExists() {
+	tests := []struct {
+		shortDesc string
+		file      string
+		expectOK  bool
+	}{
+		{"file exists", "testdata/test-iam.valid.pem", true},
+		{"file not exists", "testdata/__not_exists_file_", false},
+		{"file (starts with a tilde) not exists", "~/__not__exists__", false},
+		{"file is a directory", "testdata", false},
+	}
+
+	for i, r := range tests {
+		_, ok := fileExists(r.file)
+		suite.Equalf(r.expectOK, ok, "Testcase %d (%s): got unexpected result", i+1, r.shortDesc)
+	}
+}
+
 func (suite *iamTestSuite) TestNewSignatureProvider() {
 	var p *SignatureProvider
 	var err error
@@ -168,6 +262,14 @@ func (suite *iamTestSuite) TestNewSignatureProvider() {
 			suite.NoErrorf(err, msgPrefix+"http header signing error")
 		}
 	}
+}
+
+func getOrDefault(p *string, defaultValue string) string {
+	if p == nil {
+		return defaultValue
+	}
+
+	return *p
 }
 
 func SP(s string) *string {

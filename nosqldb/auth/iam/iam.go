@@ -13,11 +13,14 @@ package iam
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
 )
 
 const (
@@ -74,7 +77,7 @@ func NewSignatureProvider() (*SignatureProvider, error) {
 //
 // ociProfile is optional; if empty, "DEFAULT" will be used.
 //
-// privateKeyPassword is only required if the private key uses a password and
+// privateKeyPassphrase is only required if the private key uses a passphrase and
 // it is not specified in the "pass_phrase" field in the OCI configuration file.
 //
 // compartmentID is optional; if empty, the tenancyOCID is used in its place.
@@ -83,7 +86,7 @@ func NewSignatureProvider() (*SignatureProvider, error) {
 // the root compartment as compartmentID.
 // For example, if using rootCompartment.compartmentA.compartmentB, the
 // compartmentID should be set to compartmentA.compartmentB.
-func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassword, compartmentID string) (*SignatureProvider, error) {
+func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassphrase, compartmentID string) (*SignatureProvider, error) {
 
 	// default to OCI "DEFAULT" if none given
 	if ociProfile == "" {
@@ -91,9 +94,9 @@ func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassword
 	}
 
 	// open/read creds config file
-	// note: if privateKeyPassword=="", it will be read from "pass_phrase" in
+	// note: if privateKeyPassphrase=="", it will be read from "pass_phrase" in
 	//       the config file (if needed)
-	configProvider, err := ConfigurationProviderFromFileWithProfile(configFilePath, ociProfile, privateKeyPassword)
+	configProvider, err := ConfigurationProviderFromFileWithProfile(configFilePath, ociProfile, privateKeyPassphrase)
 	if configProvider == nil {
 		return nil, err
 	}
@@ -133,11 +136,21 @@ func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassword
 // NewRawSignatureProvider creates a signature provider based on the raw
 // credentials given (no files necessary).
 //
-// privateKeyPassword is only required if the private key uses a password.
+// privateKeyPassphrase is only required if the private key uses a passphrase.
 //
 // compartmentID is optional; if empty, the tenancyOCID is used in its place.
 //
-func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, privateKey string, privateKeyPassphrase *string) (*SignatureProvider, error) {
+// privateKeyOrFile specifies the private key or full path to the private key file.
+func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, privateKeyOrFile string, privateKeyPassphrase *string) (*SignatureProvider, error) {
+
+	privateKey := privateKeyOrFile
+	if file, ok := fileExists(privateKeyOrFile); ok {
+		pemData, err := ioutil.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read private key file %s: %v", file, err)
+		}
+		privateKey = string(pemData)
+	}
 
 	configProvider := NewRawConfigurationProvider(tenancy, user, region, fingerprint, privateKey, privateKeyPassphrase)
 
@@ -172,6 +185,23 @@ func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, 
 	}
 
 	return p, nil
+}
+
+// fileExists checks if a file exists and is not a directory.
+// It returns a possibly expanded file path and a bool flag representing
+// if the file exists.
+func fileExists(file string) (string, bool) {
+	expandedPath, err := sdkutil.ExpandPath(file)
+	if err != nil {
+		return file, false
+	}
+
+	info, err := os.Stat(expandedPath)
+	if os.IsNotExist(err) || info.IsDir() {
+		return expandedPath, false
+	}
+
+	return expandedPath, true
 }
 
 // Profile returns the profile used for the signature provider.
