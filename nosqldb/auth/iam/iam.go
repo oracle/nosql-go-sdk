@@ -249,7 +249,7 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 	// calculate new signature
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.signatureFormattedDate = now.Format(time.RFC1123)
+	p.signatureFormattedDate = now.UTC().Format(http.TimeFormat)
 	req.Header.Set(requestHeaderDate, p.signatureFormattedDate)
 	p.signer.Sign(req)
 	p.signature = req.Header.Get(requestHeaderAuthorization)
