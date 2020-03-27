@@ -96,6 +96,9 @@ func (r GetResult) String() string {
 
 // ValueAsJSON returns a JSON string representation of the GetResult.Value.
 func (r GetResult) ValueAsJSON() string {
+	if r.Value == nil {
+		return ""
+	}
 	return jsonutil.AsJSON(r.Value.Map())
 }
 

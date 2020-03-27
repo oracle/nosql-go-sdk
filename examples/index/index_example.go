@@ -32,21 +32,21 @@ import (
 )
 
 func main() {
-	args := examples.ParseArgs()
-	runIndexExample(args)
+
+	client, err := examples.CreateClient()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer client.Close()
+
+	err = runExample(client)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
-func runIndexExample(args *examples.Args) {
-
-	authProvider, err := examples.CreateAuthorizationProvider(args)
-	examples.ExitOnError(err)
-
-	cfg := nosqldb.Config{
-		Endpoint:              args.Endpoint,
-		AuthorizationProvider: authProvider,
-	}
-	client, err := nosqldb.NewClient(cfg)
-	examples.ExitOnError(err)
+func runExample(client *nosqldb.Client) error {
 
 	// Creates a table.
 	tableName := "exampleProfiles"
@@ -61,12 +61,16 @@ func runIndexExample(args *examples.Args) {
 		},
 	}
 	tableRes, err := client.DoTableRequest(tableReq)
-	fmt.Println("Creating table", tableName)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to create table %s: %v", tableName, err)
+	}
+	fmt.Printf("Creating table %s ...\n", tableName)
 
 	// The create table request is asynchronous, wait for table creation to complete.
 	_, err = tableRes.WaitForCompletion(client, 60*time.Second, time.Second)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to create table %s: %v", tableName, err)
+	}
 	fmt.Println("Created table", tableName)
 
 	// Create an index on the firstName field inside the userInfo JSON object.
@@ -77,11 +81,15 @@ func runIndexExample(args *examples.Args) {
 		Statement: stmt,
 	}
 	tableRes, err = client.DoTableRequest(idxReq)
-	fmt.Println("Creating index", idxName)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to create index %s: %v", idxName, err)
+	}
+	fmt.Printf("Creating index %s ...\n", idxName)
 
 	_, err = tableRes.WaitForCompletion(client, 60*time.Second, time.Second)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to create index %s: %v", idxName, err)
+	}
 	fmt.Println("Created index", idxName)
 
 	// Put with json
@@ -93,7 +101,9 @@ func runIndexExample(args *examples.Args) {
 	}
 	for i, s := range jsonStrings {
 		v, err := types.NewMapValueFromJSON(s)
-		examples.ExitOnError(err)
+		if err != nil {
+			return fmt.Errorf("failed to create value from JSON: %v", err)
+		}
 
 		value := &types.MapValue{}
 		value.Put("id", i+1).Put("userInfo", v)
@@ -102,15 +112,19 @@ func runIndexExample(args *examples.Args) {
 			Value:     value,
 		}
 		putRes, err := client.Put(putReq)
-		examples.ExitOnError(err)
-		fmt.Printf("Put row:%v,\nresult: %s\n", jsonutil.AsPrettyJSON(putReq.Value.Map()),
+		if err != nil {
+			return fmt.Errorf("failed to put a row: %v", err)
+		}
+		fmt.Printf("Put row: %v,\nresult: %s\n", jsonutil.AsPrettyJSON(putReq.Value.Map()),
 			jsonutil.AsPrettyJSON(putRes))
 	}
 
 	//  Query from the indexed field
 	query := "SELECT * FROM " + tableName + " p WHERE p.userInfo.firstName=\"Taylor\""
 	results, err := examples.RunQuery(client, query)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to execute statement %q: %v", query, err)
+	}
 	fmt.Printf("Number of query results for %q: %d\n", query, len(results))
 	for i, r := range results {
 		fmt.Printf("\t%d: %s\n", i+1, jsonutil.AsJSON(r.Map()))
@@ -121,6 +135,10 @@ func runIndexExample(args *examples.Args) {
 		Statement: "DROP TABLE IF EXISTS " + tableName,
 	}
 	tableRes, err = client.DoTableRequestAndWait(dropReq, 60*time.Second, time.Second)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to drop table %s: %v", tableName, err)
+	}
 	fmt.Println("Dropped table", tableName)
+
+	return nil
 }

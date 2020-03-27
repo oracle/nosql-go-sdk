@@ -33,21 +33,21 @@ import (
 )
 
 func main() {
-	args := examples.ParseArgs()
-	runBasicTableExample(args)
+
+	client, err := examples.CreateClient()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer client.Close()
+
+	err = runExample(client)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
-func runBasicTableExample(args *examples.Args) {
-
-	authProvider, err := examples.CreateAuthorizationProvider(args)
-	examples.ExitOnError(err)
-
-	cfg := nosqldb.Config{
-		Endpoint:              args.Endpoint,
-		AuthorizationProvider: authProvider,
-	}
-	client, err := nosqldb.NewClient(cfg)
-	examples.ExitOnError(err)
+func runExample(client *nosqldb.Client) error {
 
 	// Creates a simple table with a LONG key and a single JSON field.
 	tableName := "audienceData"
@@ -61,16 +61,20 @@ func runBasicTableExample(args *examples.Args) {
 		TableLimits: &nosqldb.TableLimits{
 			ReadUnits:  50,
 			WriteUnits: 50,
-			StorageGB:  5,
+			StorageGB:  1,
 		},
 	}
 	tableRes, err := client.DoTableRequest(tableReq)
-	examples.ExitOnError(err)
-	fmt.Println("Creating table", tableName)
+	if err != nil {
+		return fmt.Errorf("failed to create table %s: %v", tableName, err)
+	}
+	fmt.Printf("Creating table %s ...\n", tableName)
 
 	// The create table request is asynchronous, wait for table creation to complete.
 	_, err = tableRes.WaitForCompletion(client, 60*time.Second, time.Second)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to create table %s: %v", tableName, err)
+	}
 	fmt.Println("Created table", tableName)
 
 	// Put a row
@@ -103,7 +107,9 @@ func runBasicTableExample(args *examples.Args) {
 		Value:     types.NewMapValue(val),
 	}
 	putRes, err := client.Put(putReq)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to put a row: %v", err)
+	}
 	fmt.Printf("Put row: %v\nresult: %v\n", jsonutil.AsPrettyJSON(putReq.Value.Map()), putRes)
 
 	// Get the row
@@ -114,8 +120,12 @@ func runBasicTableExample(args *examples.Args) {
 		Key:       key,
 	}
 	getRes, err := client.Get(getReq)
-	examples.ExitOnError(err)
-	fmt.Printf("Got row: %v\n", getRes.ValueAsJSON())
+	if err != nil {
+		return fmt.Errorf("failed to get a row: %v", err)
+	}
+	if getRes.Value != nil {
+		fmt.Printf("Got row: %v\n", getRes.ValueAsJSON())
+	}
 
 	// PUT a second row using JSON to enter the entire value
 	jsonString := "{" +
@@ -124,14 +134,18 @@ func runBasicTableExample(args *examples.Args) {
 		`"audience_segment": {"sports_lover": "2019-01-05", "foodie": "2018-12-31"}}}`
 
 	value, err := types.NewMapValueFromJSON(jsonString)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to create value from JSON: %v", err)
+	}
 
 	putReq = &nosqldb.PutRequest{
 		TableName: tableName,
 		Value:     value,
 	}
 	putRes, err = client.Put(putReq)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to put a row: %v", err)
+	}
 	fmt.Printf("Put row from JSON: %v\n", jsonString)
 
 	// Get the 2nd row
@@ -142,13 +156,19 @@ func runBasicTableExample(args *examples.Args) {
 		Key:       key,
 	}
 	getRes, err = client.Get(getReq)
-	examples.ExitOnError(err)
-	fmt.Printf("Got second row: %v\n", getRes.ValueAsJSON())
+	if err != nil {
+		return fmt.Errorf("failed to get a row: %v", err)
+	}
+	if getRes.Value != nil {
+		fmt.Printf("Got second row: %v\n", getRes.ValueAsJSON())
+	}
 
 	// QUERY the table. The table name is inferred from the query statement.
 	query := "select * from " + tableName + " where cookie_id=123"
 	results, err := examples.RunQuery(client, query)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to execute query %q: %v", query, err)
+	}
 	fmt.Printf("Number of query results for %q: %d\n", query, len(results))
 	for i, r := range results {
 		fmt.Printf("\t%d: %s\n", i+1, jsonutil.AsJSON(r.Map()))
@@ -160,7 +180,9 @@ func runBasicTableExample(args *examples.Args) {
 		Key:       key,
 	}
 	delRes, err := client.Delete(delReq)
-	examples.ExitOnError(err)
+	if err != nil {
+		return fmt.Errorf("failed to delete a row: %v", err)
+	}
 	fmt.Printf("Deleted key: %v\nresult: %v\n", jsonutil.AsJSON(delReq.Key.Map()), delRes)
 
 	// Drop the table
@@ -168,5 +190,10 @@ func runBasicTableExample(args *examples.Args) {
 		Statement: "DROP TABLE IF EXISTS " + tableName,
 	}
 	tableRes, err = client.DoTableRequestAndWait(dropReq, 60*time.Second, time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to drop table %s: %v", tableName, err)
+	}
 	fmt.Println("Dropped table", tableName)
+
+	return nil
 }

@@ -120,27 +120,25 @@ type fileConfigurationProvider struct {
 }
 
 // ConfigurationProviderFromFile creates a configuration provider from a configuration file
-// by reading the "DEFAULT" profile
+// by reading the "DEFAULT" profile.
 func ConfigurationProviderFromFile(configFilePath, privateKeyPassword string) (ConfigurationProvider, error) {
-	if configFilePath == "" {
-		return nil, fmt.Errorf("config file path can not be empty")
-	}
-
-	return fileConfigurationProvider{
-		ConfigPath:         configFilePath,
-		PrivateKeyPassword: privateKeyPassword,
-		Profile:            "DEFAULT"}, nil
+	return ConfigurationProviderFromFileWithProfile(configFilePath, "DEFAULT", privateKeyPassword)
 }
 
 // ConfigurationProviderFromFileWithProfile creates a configuration provider from a configuration file
-// and the given profile
+// and the given profile.
 func ConfigurationProviderFromFileWithProfile(configFilePath, profile, privateKeyPassword string) (ConfigurationProvider, error) {
 	if configFilePath == "" {
 		return nil, fmt.Errorf("config file path can not be empty")
 	}
 
+	expandedFilePath, ok := fileExists(configFilePath)
+	if !ok {
+		return nil, fmt.Errorf("config file %s does not exist", configFilePath)
+	}
+
 	return fileConfigurationProvider{
-		ConfigPath:         configFilePath,
+		ConfigPath:         expandedFilePath,
 		PrivateKeyPassword: privateKeyPassword,
 		Profile:            profile}, nil
 }

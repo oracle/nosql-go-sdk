@@ -35,7 +35,7 @@
 //
 // 2. Run examples against the Oracle NoSQL Cloud Service with IAM configuration.
 //
-// (1) Create an IAM configuration file (e.g. ~/iam_config).
+// (1) Create an IAM configuration file (e.g. ~/.oci/config).
 // See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
 // for the format and contents of an IAM configuration file.
 //
@@ -48,21 +48,27 @@
 //   region=us-ashburn-1
 //
 // (2) Assume the Oracle NoSQL Cloud Service is running at the US East (Ashburn)
-// region, the corresponding region key, region identifier and service endpoint
-// is "iad", "us-ashburn-1", https://nosql.us-ashburn-1.oci.oraclecloud.com,
-// respectively, use the command:
+// region, the corresponding region id is "us-ashburn-1", use the command:
 //
 //   cd nosql-go-sdk/bin/examples
 //   # Run the basic example.
-//   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=iam -configFile=~/iam_config iad
-//   or
-//   ./basic -config=iam -configFile=~/iam_config us-ashburn-1
-//   or
-//   ./basic -config=iam -configFile=~/iam_config https://nosql.us-ashburn-1.oci.oraclecloud.com
-//      Note: you may also include -iamProfileID=<profile> to use a profile other
-//            than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
-//            use a compartment ID other than the "tenancy" OCID from the IAM config file.
+//   # To run other examples, replace "basic" with the desired example binary
+//   #
+//   # usage 1:
+//   # Use the "DEFAULT" profile from the default configuration file ~/.oci/config.
+//   # Note the region id must be specified in that profile.
+//   ./basic -config=cloud
+//   #
+//   # usage 2:
+//   # Use the "DEFAULT" profile from a file other than ~/.oci/config, and
+//   # specify the region id on command line:
+//   ./basic -config=cloud -configFile=/path/to/iam_config us-ashburn-1
+//   #
+//   # usage 3:
+//   # You may also include -iamProfileID=<profile> to use a profile other
+//   # than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
+//   # use a compartment ID other than the "tenancy" OCID from the IAM config file.
+//   ./basic -config=cloud -configFile=/path/to/iam_config -iamProfileID=profile -iamCompartmentID=comp_id us-ashburn-1
 //
 // 3. Run examples against the Oracle NoSQL Database on-premise.
 //
@@ -84,7 +90,7 @@
 //   cd nosql-go-sdk/bin/examples
 //   # Run the basic example.
 //   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=kvstore -configFile=~/kvstore_config https://localhost:8080
+//   ./basic -config=onprem -configFile=~/kvstore_config https://localhost:8080
 //
 // Assume the HTTP Proxy is running at http://localhost:8080, use the command to
 // run examples against the Oracle NoSQL Database Server that has security
@@ -93,7 +99,7 @@
 //   cd nosql-go-sdk/bin/examples
 //   # Run the basic example.
 //   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=kvstore localhost:8080
+//   ./basic -config=onprem localhost:8080
 //
 package examples
 
@@ -113,8 +119,8 @@ import (
 var (
 	config = flag.String("config", "cloudsim", "Specify a configuration for the Oracle NoSQL Database "+
 		"that the examples are run against.\nThe available configurations are:\n"+
-		"\tiam      : connect to the Oracle NoSQL Cloud Service with IAM configuration\n"+
-		"\tkvstore  : connect to the Oracle NoSQL Database Server on-premise\n"+
+		"\tcloud    : connect to the Oracle NoSQL Cloud Service with IAM configuration\n"+
+		"\tonprem   : connect to the Oracle NoSQL Database Server on-premise\n"+
 		"\tcloudsim : connect to the Oracle NoSQL Cloud Simulator\n")
 
 	compartmentID = flag.String("iamCompartmentID", "", "(optional) IAM `compartment ID` to use for requests (defaults to tenantID).")
@@ -122,9 +128,9 @@ var (
 
 	// configFile specifies the path to the configuration file.
 	//
-	// This flag is required if connect to the Oracle NoSQL Cloud Service with
-	// IAM configuration, or the Oracle NoSQL Database Server on-premise with
-	// security enabled.
+	// This flag is required if connect to the Oracle NoSQL Cloud Service using
+	// an IAM configuration file other than the default file ~/.oci/config,
+	// or the Oracle NoSQL Database Server on-premise with security enabled.
 	//
 	// The format and content of the configuration file is dependent on how you
 	// connect the Oracle NoSQL Database. The sample files for different
@@ -149,46 +155,46 @@ var (
 	//   password=NoSql00__123456
 	//
 	configFile = flag.String("configFile", "", "Specify the path to the `configuration file`.\n"+
-		"This is required with -config=iam, or -config=kvstore when the NoSQL "+
+		"This is required with -config=cloud when using a configuration file "+
+		"other than ~/.oci/config, or -config=onprem when the NoSQL "+
 		"Database Server (on-premise) security configuration is enabled.")
 )
 
-// Args represents the command line arguments supplied to run the examples.
-type Args struct {
-	// NoSQL service endpoint.
-	Endpoint      string
+// cmdArgs represents the command line arguments supplied to run the examples.
+type cmdArgs struct {
+	// NoSQL service endpoint or region id
+	endpoint      string
 	config        string
 	configFile    string
 	profileID     string // (optional) for IAM config files
 	compartmentID string // (optional) for IAM
 }
 
-// ParseArgs parses and validates command line arguments.
-func ParseArgs() *Args {
+// parseArgs parses and validates command line arguments.
+func parseArgs() *cmdArgs {
 	flag.CommandLine.SetOutput(os.Stderr)
 	flag.Usage = printExampleUsage
 	flag.Parse()
-	// At least one non-flag argument is required, which specifies the NoSQL service endpoint.
-	if flag.NArg() < 1 {
-		printExampleUsage()
-		os.Exit(1)
-	}
 
-	arg0 := flag.Args()[0]
+	var arg0 string
 	switch *config {
-	case "kvstore", "cloudsim":
-	case "iam":
-		if len(*configFile) == 0 {
-			fmt.Fprintf(os.Stderr, "Please specify a configuration file for %s.\n\n", *config)
+	case "onprem", "cloudsim":
+		// A non-flag argument is required, which specifies the NoSQL service endpoint.
+		if flag.NArg() < 1 {
 			printExampleUsage()
 			os.Exit(1)
 		}
+		arg0 = flag.Args()[0]
 
-		// Try to parse arg0 as a region key or region id, if succeeds,
-		// get service endpoint for the region.
-		region, err := nosqldb.StringToRegion(arg0)
-		if err == nil {
-			arg0, _ = region.Endpoint()
+	case "cloud":
+		// If config file is not specified, use the default file ~/.oci/config.
+		if len(*configFile) == 0 {
+			*configFile = "~/.oci/config"
+		}
+
+		// If there is a non-flag argument, it should specify a region id.
+		if flag.NArg() > 0 {
+			arg0 = flag.Args()[0]
 		}
 
 	default:
@@ -196,45 +202,62 @@ func ParseArgs() *Args {
 		os.Exit(1)
 	}
 
-	return &Args{
-		Endpoint:      arg0,
+	return &cmdArgs{
+		endpoint:      arg0,
 		config:        *config,
 		configFile:    *configFile,
+		profileID:     *profileID,
 		compartmentID: *compartmentID,
 	}
 }
 
-// CreateAuthorizationProvider creates an appropriate authorization provider
-// according to user specified command line arguments.
-func CreateAuthorizationProvider(args *Args) (authProvider nosqldb.AuthorizationProvider, err error) {
+// CreateClient creates a client using the configurations from command line
+// arguments supplied by user.
+func CreateClient() (client *nosqldb.Client, err error) {
+	args := parseArgs()
+
+	var p nosqldb.AuthorizationProvider
 	switch args.config {
-	case "iam":
-		return iam.NewSignatureProviderFromFile(args.configFile, args.profileID, "", args.compartmentID)
+	case "cloud":
+		p, err = iam.NewSignatureProviderFromFile(args.configFile,
+			args.profileID, "", args.compartmentID)
 	case "cloudsim":
-		return &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}, nil
-	case "kvstore":
-		if len(args.configFile) == 0 {
-			return &kvstore.AccessTokenProvider{}, nil
+		p = &cloudsim.AccessTokenProvider{TenantID: "ExampleTenantId"}
+	case "onprem":
+		if len(args.configFile) > 0 {
+			p, err = kvstore.NewAccessTokenProviderFromFile(args.configFile)
 		}
-		return kvstore.NewAccessTokenProviderFromFile(args.configFile)
 	default:
 		return nil, fmt.Errorf("invalid configuration %s", args.config)
 	}
+
+	if err != nil {
+		return
+	}
+
+	cfg := nosqldb.Config{
+		Mode:                  args.config,
+		AuthorizationProvider: p,
+	}
+
+	if cfg.IsCloud() {
+		region, err := nosqldb.StringToRegion(args.endpoint)
+		if err != nil {
+			cfg.Endpoint = args.endpoint
+		} else {
+			cfg.Region = region
+		}
+	} else {
+		cfg.Endpoint = args.endpoint
+	}
+
+	return nosqldb.NewClient(cfg)
 }
 
 func printExampleUsage() {
-	fmt.Fprintf(os.Stderr, "Usage:\n%s [OPTIONS] <NoSQL service endpoint or OCI region key/id>\n\n  OPTIONS:\n\n",
+	fmt.Fprintf(os.Stderr, "Usage:\n%s [OPTIONS] <NoSQL service endpoint or OCI region id>\n\n  OPTIONS:\n\n",
 		os.Args[0])
 	flag.PrintDefaults()
-}
-
-// ExitOnError checks the specified error and exits the program if error is not nil.
-func ExitOnError(err error) {
-	if err == nil {
-		return
-	}
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
 }
 
 // RunQuery executes a query in a loop to be sure that all results have been
