@@ -11,7 +11,6 @@ package nosqldb
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -677,6 +676,10 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer) (err error) {
 			return
 		}
 
+		if !req.checkSubReqSize {
+			continue
+		}
+
 		n := w.Size() - n1
 		// Check size limit for each sub request.
 		if err = checkRequestSizeLimit(subReq, n); err != nil {
@@ -1183,7 +1186,8 @@ func checkRequestSizeLimit(req Request, size int) error {
 	}
 
 	if size > limit {
-		return fmt.Errorf("the request size %d exceeds the limit %d", size, limit)
+		return nosqlerr.New(nosqlerr.RequestSizeLimitExceeded,
+			"the request size of %d exceeds the limit of %d", size, limit)
 	}
 
 	return nil

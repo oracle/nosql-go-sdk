@@ -18,11 +18,13 @@ import (
 	"math/big"
 	"math/rand"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/internal/test"
 	"github.com/oracle/nosql-go-sdk/nosqldb"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/suite"
@@ -674,6 +676,110 @@ func (suite *DataOpsTestSuite) TestPutIdentity() {
 	suite.Truef(nosqlerr.IsIllegalArgument(err),
 		"Put(pk=%d, id=%d) expect IllegalArgument error, got: %v", pk, 1, err)
 
+}
+
+// Test request size limit.
+func (suite *DataOpsTestSuite) TestRequestSizeLimit() {
+	table := suite.GetTableName("RequestSizeTest")
+	// Drop and re-create test tables.
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
+		"sk STRING, "+
+		"pk STRING, "+
+		"data STRING, "+
+		"PRIMARY KEY(shard(sk), pk))", table)
+	limits := &nosqldb.TableLimits{
+		ReadUnits:  50,
+		WriteUnits: 50,
+		StorageGB:  1,
+	}
+	suite.ReCreateTable(table, stmt, limits)
+
+	skSize, pkSize, dataSize := 5, 10, proto.RequestSizeLimit
+	value := &types.MapValue{}
+	sk := strings.Repeat("s", skSize)
+	value.Put("sk", sk).Put("pk", strings.Repeat("a", pkSize))
+	value.Put("data", strings.Repeat("d", dataSize))
+	putReq := &nosqldb.PutRequest{
+		TableName: table,
+		Value:     value,
+	}
+
+	msgPrefix := fmt.Sprintf("Put(skSize=%d, pkSize=%d, dataSize=%d) ",
+		skSize, pkSize, dataSize)
+	_, err := suite.Client.Put(putReq)
+	// Request size is not checked for on-premise case.
+	if suite.IsOnPrem() {
+		suite.NoErrorf(err, msgPrefix+"got error %v", err)
+	} else {
+		// There are two violations in this test case.
+		// 1. the request size exceeds the limit of 2MB
+		// 2. the row size exceeds the limit of 512KB
+		// We expect a RequestSizeLimitExceeded error, rather than
+		// RowSizeLimitExceeded error, because the 1st error is reported early
+		// by client.
+		suite.Truef(nosqlerr.Is(err, nosqlerr.RequestSizeLimitExceeded),
+			msgPrefix+"got %v, expect RequestSizeLimitExceeded", err)
+	}
+
+	// Test sub request size for write multiple request.
+	key := &types.MapValue{}
+	key.Put("sk", sk).Put("pk", strings.Repeat("b", pkSize))
+	delReq := &nosqldb.DeleteRequest{
+		TableName: table,
+		Key:       key,
+	}
+
+	wmReq := &nosqldb.WriteMultipleRequest{
+		TableName: table,
+	}
+	wmReq.AddPutRequest(putReq, true)
+	wmReq.AddDeleteRequest(delReq, true)
+	msgPrefix = fmt.Sprintf("WriteMultiple: Put(size=%d), Delete(size=%d) ",
+		skSize+pkSize+dataSize, skSize+pkSize)
+
+	_, err = suite.Client.WriteMultiple(wmReq)
+	if suite.IsOnPrem() {
+		suite.NoErrorf(err, msgPrefix+"got error %v", err)
+	} else {
+		suite.Truef(nosqlerr.Is(err, nosqlerr.RequestSizeLimitExceeded),
+			msgPrefix+"got error %v, expect RequestSizeLimitExceeded", err)
+	}
+
+	// Test the case where each sub request size does not exceed the limit,
+	// but the WriteMultipleRequest size exceeds the limit.
+	wmReq.Clear()
+	wmReq.TableName = table
+	totalSize := 0
+	pkSize = 0
+	dataSize = proto.RequestSizeLimit / 2
+	for {
+		pkSize++
+		value := &types.MapValue{}
+		value.Put("sk", sk)
+		value.Put("pk", strings.Repeat("a", pkSize))
+		value.Put("data", strings.Repeat("d", dataSize))
+		totalSize += skSize + pkSize + dataSize
+		putReq := &nosqldb.PutRequest{
+			TableName: table,
+			Value:     value,
+		}
+		wmReq.AddPutRequest(putReq, true)
+		if totalSize > proto.BatchRequestSizeLimit {
+			break
+		}
+	}
+
+	_, err = suite.Client.WriteMultiple(wmReq)
+	if suite.IsOnPrem() {
+		// Request size is not checked for on-premise, but the server may set
+		// a limit for http request content length, e.g. 25MB, we may get the
+		// "error response: 413 Request Entity Too Large" error.
+		suite.Truef(err == nil || strings.Contains(err.Error(), "413 Request Entity Too Large"),
+			"WriteMultiple() got unexpected error %v", err)
+	} else {
+		suite.Truef(nosqlerr.Is(err, nosqlerr.RequestSizeLimitExceeded),
+			"WriteMultiple() got error %v, expect RequestSizeLimitExceeded", err)
+	}
 }
 
 // Test key size limit and data size limit of Put request.

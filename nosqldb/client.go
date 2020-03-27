@@ -64,6 +64,10 @@ type Client struct {
 	// returned from server.
 	// This is used internally by tests for customizing response processing.
 	handleResponse func(httpResp *http.Response, req Request) (Result, error)
+
+	// isCloud represents whether the client connects to the cloud service or
+	// cloud simulator.
+	isCloud bool
 }
 
 var (
@@ -99,6 +103,7 @@ func NewClient(cfg Config) (*Client, error) {
 		serverHost: cfg.host,
 		executor:   cfg.httpClient,
 		logger:     cfg.Logger,
+		isCloud:    cfg.IsCloud() || cfg.IsCloudSim(),
 	}
 	c.handleResponse = c.processResponse
 	return c, nil
@@ -643,6 +648,7 @@ func (c *Client) WriteMultiple(req *WriteMultipleRequest) (*WriteMultipleResult,
 		return nil, errNilRequest
 	}
 
+	req.checkSubReqSize = c.isCloud
 	res, err := c.execute(req)
 	if err != nil {
 		return nil, err
@@ -762,7 +768,17 @@ func (c *Client) processRequest(req Request) (data []byte, err error) {
 		return nil, err
 	}
 
-	return serializeRequest(req)
+	data, err = serializeRequest(req)
+	if err != nil || !c.isCloud {
+		return
+	}
+
+	// check request size for cloud
+	if err = checkRequestSizeLimit(req, len(data)); err != nil {
+		return nil, err
+	}
+
+	return
 }
 
 // execute is used for request execution.
@@ -1007,11 +1023,6 @@ func serializeRequest(req Request) (data []byte, err error) {
 	}
 
 	if err = req.serialize(wr); err != nil {
-		return
-	}
-
-	// check request size limit
-	if err = checkRequestSizeLimit(req, wr.Size()); err != nil {
 		return
 	}
 

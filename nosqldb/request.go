@@ -1320,6 +1320,10 @@ type WriteMultipleRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// checkSubReqSize represents whether to check sub request size.
+	// This is for internal use, and is set automatically by client.
+	checkSubReqSize bool
 }
 
 func (r *WriteMultipleRequest) validate() (err error) {
