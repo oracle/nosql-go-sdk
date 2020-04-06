@@ -354,8 +354,8 @@ func createClient() (*nosqldb.Client, error) {
 		// relative to the root compartment as compartmentID.
 		// For example, if using rootCompartment.compartmentA.compartmentB, the
 		// compartmentID should be set to compartmentA.compartmentB.
-        // Alternatively you can use the compartment OCID as the
-        // string value.
+		// Alternatively you can use the compartment OCID as the
+		// string value.
 		compartmentID := "<optional-compartment-name-or-ID>"
 
 		if !useConfigFile {
