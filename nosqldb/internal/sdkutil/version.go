@@ -17,8 +17,8 @@ import (
 
 const (
 	// Major, minor and patch versions for the SDK.
-	major = 1
-	minor = 1
+	major = 5
+	minor = 2
 	patch = 0
 
 	// NoSQL service version.
