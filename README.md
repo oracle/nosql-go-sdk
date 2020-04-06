@@ -66,7 +66,7 @@ import "github.com/oracle/nosql-go-sdk/nosqldb"
 commands will automatically add new dependencies as needed to satisfy imports,
 updating *go.mod* and downloading the new dependencies.
 
-When needed, more specific versions of the SDK can be downloaded explicitly 
+When needed, more specific versions of the SDK can be downloaded explicitly
 with commands such as:
 
 ```sh
@@ -347,14 +347,16 @@ func createClient() (*nosqldb.Client, error) {
 		// EDIT: set desired region id for NoSQL cloud service. e.g. us-ashburn-1
 		region := "<nosql-service-region-identifier>"
 
-		// EDIT: set desired compartment id.
+		// EDIT: set desired compartment name or id.
 		// Set to an empty string to use the default compartment, that is
 		// the root compartment of the tenancy.
 		// If using a nested compartment, specify the full compartment path
 		// relative to the root compartment as compartmentID.
 		// For example, if using rootCompartment.compartmentA.compartmentB, the
 		// compartmentID should be set to compartmentA.compartmentB.
-		compartmentID := "<optional-compartmentID>"
+        // Alternatively you can use the compartment OCID as the
+        // string value.
+		compartmentID := "<optional-compartment-name-or-ID>"
 
 		if !useConfigFile {
 			// EDIT: set the following information accordingly:
