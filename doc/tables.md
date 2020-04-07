@@ -141,7 +141,7 @@ idxReq := &nosqldb.TableRequest{
 idxRes, err := client.DoTableRequestAndWait(idxReq, 5*time.Second, time.Second)
 ```
 
-See examples of creating a table using [DoTableRequest](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-DoTableRequest) and [DoTableRequestAndWait](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#ex-Client-DoTableRequestAndWait-CreateTable) for more details.
+See examples of creating a table using [DoTableRequest](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-DoTableRequest) and [DoTableRequestAndWait](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-DoTableRequestAndWait-CreateTable) for more details.
 
 ## Add Data
 
@@ -155,15 +155,15 @@ represents an input to the [nosqldb.Put()](https://godoc.org/github.com/oracle/n
 function used to insert single rows. This function can be used for unconditional
 and conditional puts to:
 
-* Overwrite any existing row. This is the default. See an example of [unconditional put](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#ex-Client-Put).
+* Overwrite any existing row. This is the default. See an example of [unconditional put](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-Put).
 * Succeed only if the row does not exist. Specify *types.PutIfAbsent* for the
-*PutRequest.PutOption* field for this case. See an example of [PutIfAbsent](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#ex-Client-Put-PutIfAbsent).
+*PutRequest.PutOption* field for this case. See an example of [PutIfAbsent](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-Put-PutIfAbsent).
 * Succeed only if the row exists. Specify *types.PutIfPresent* for the
-*PutRequest.PutOption* field for this case. See an example of [PutIfPresent](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#ex-Client-Put-PutIfPresent).
+*PutRequest.PutOption* field for this case. See an example of [PutIfPresent](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-Put-PutIfPresent).
 * Succeed only if the row exists and its version matches a specific version.
 Specify *types.PutIfVersion* for the *PutRequest.PutOption* field and a desired
 version for the *PutRequest.MatchVersion* field for this case.
-See an example of [PutIfVersion](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#ex-Client-Put-PutIfVersion).
+See an example of [PutIfVersion](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#example-Client-Put-PutIfVersion).
 
 When adding data the values supplied must accurately correspond to the schema
 for the table. If they do not, *nosqlerr.IllegalArgumentError* is reported.
