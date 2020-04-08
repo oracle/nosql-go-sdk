@@ -7,6 +7,109 @@
 // appropriate download for a copy of the license and additional information.
 //
 
+// Package types defines types and values used to represent and manipulate data
+// in the Oracle NoSQL Database. A table in Oracle NoSQL database is defined
+// using a fixed schema that describes the data that table will hold. Application
+// developers should know the data types for each field in the table. The values
+// provided to the table field in an application must conform to the table schema,
+// Go driver makes best effort to map the provided Go values to table field values,
+// the values are validated against the table schema on the backend Oracle NoSQL
+// Database and if they do not conform an error is reported.
+//
+// On input, the mappings between Go driver types and database types:
+//
+//   Go Driver Types                              Database Types
+//   =========================================    ===============
+//   byte, int8, uint8, int16, uint16, int32      INTEGER
+//   uint32 (0 <= x <= math.MaxInt32)
+//   int (math.MinInt32 <= x <= math.MaxInt32)
+//   -----------------------------------------    ---------------
+//   int64                                        LONG
+//   uint64 (0 <= x <= math.MaxInt64)
+//   uint32 (math.MaxInt32 < x <= math.MaxInt64)
+//   uint (math.MaxInt32 < x <= math.MaxInt64)
+//   int (math.MaxInt32 < x <= math.MaxInt64 or
+//        math.MinInt64 <= x < math.MinInt32)
+//   -----------------------------------------    ---------------
+//   *big.Rat                                     NUMBER
+//   uint64 (x > math.MaxInt64)
+//   uint (x > math.MaxInt64)
+//   -----------------------------------------    ---------------
+//   float32, float64                             DOUBLE
+//   -----------------------------------------    ---------------
+//   *string                                      STRING
+//   string
+//   -----------------------------------------    ---------------
+//   []byte                                       BINARY
+//   -----------------------------------------    ---------------
+//   bool                                         BOOLEAN
+//   -----------------------------------------    ---------------
+//   *MapValue                                    MAP
+//   map[string]interface{}
+//   -----------------------------------------    ---------------
+//   []FieldValue                                 ARRAY
+//   []interface{}
+//   -----------------------------------------    ---------------
+//   time.Time                                    TIMESTAMP
+//   string representation of time.Time in the
+//   form "2006-01-02T15:04:05.999999999"
+//
+// On output, the mappings between database types and Go driver types:
+//
+//   Database Types      Go Driver Types
+//   ==============      ================
+//   INTEGER             int
+//   LONG                int64
+//   NUMBER              *big.Rat
+//   DOUBLE              float64
+//   STRING              *string
+//   BINARY              []byte
+//   BOOLEAN             bool
+//   MAP                 *MapValue
+//   ARRAY               []FieldValue
+//   TIMESTAMP           time.Time
+//
+// Note that there are several database types that do not have direct equivalents.
+//
+// 1. ENUM. Enumerations require a schema. When an application fetches a row with
+// an enumeration its value will be mapped to a string value. On input, a string
+// value must be created to represent an ENUM.
+//
+// 2. FIXED_BINARY. This is a specialization of BINARY that uses a fixed number
+// of bytes. It is mapped to []byte that is validated on input.
+//
+// 3. RECORD. This is a fixed-schema map. It is represented as a MapValue,
+// which is more flexible, but is validated on input.
+//
+// The database types of MAP and ARRAY are fixed-type in that they contain a
+// single type, for example a MAP of INTEGER, an ARRAY of LONG. Although the
+// corresponding Go driver types map[string]interface{} and []interface{} are
+// not fixed-type, on input the types of the elements of these collections must
+// match the table schema.
+//
+// JSON Mappings
+//
+// JSON is commonly used as a format for data and there are also well-defined
+// mappings between JSON types and Go driver types. It is a common pattern to
+// construct a row (MapValue) from JSON and generate JSON from a row. Methods on
+// the MapValue type make this pattern easy to use. The following table defines
+// the mappings from JSON types to Go driver types.
+//
+//   JSON Types          Go Driver Types
+//   ============        ==============
+//   ARRAY               []FieldValue
+//   BOOLEAN             bool
+//   NUMBER              int, int64, float64 or *big.Rat
+//   OBJECT              *MapValue
+//   STRING              string
+//
+// JSON has only a single numeric type. By default JSON numbers will be mapped to
+// the most appropriate numeric type (int, int64, float64 or *big.Rat) depending
+// on the value.
+//
+// The special values JSONNullValueInstance, NullValueInstance and EmptyValueInstance
+// are served as output of the queries for the Oracle NoSQL database, they should not
+// be used as input values.
 package types
 
 import (
