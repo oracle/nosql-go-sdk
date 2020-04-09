@@ -15,7 +15,7 @@ GO=go
 GIT=git
 ZIP=zip
 # The version should be consistent with that specified in nosqldb/internal/sdkutil/version.go
-version ?= 1.1.0
+version ?= 1.2.0
 
 ROOT := $(shell pwd)
 BIN := $(ROOT)/bin

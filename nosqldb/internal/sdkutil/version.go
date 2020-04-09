@@ -17,7 +17,7 @@ import (
 
 const (
 	// Major, minor and patch versions for the SDK.
-	major = 5
+	major = 1
 	minor = 2
 	patch = 0
 

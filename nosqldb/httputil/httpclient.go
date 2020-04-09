@@ -7,6 +7,7 @@
 // appropriate download for a copy of the license and additional information.
 //
 
+// Package httputil provides utility functions used for HTTP clients.
 package httputil
 
 import (
