@@ -289,7 +289,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
@@ -376,7 +375,9 @@ func createClient() (*nosqldb.Client, error) {
 
 			sp, err := iam.NewRawSignatureProvider(tenancy, user, region, fingerprint,
 				compartmentID, privateKey, &privateKeyPassphrase)
-			exitOnError(err, "Cannot create a Signature Provider")
+			if err != nil {
+				return nil, fmt.Errorf("cannot create a Signature Provider: %v", err)
+			}
 
 			cfg = nosqldb.Config{
 				Mode:                  "cloud",
@@ -396,7 +397,9 @@ func createClient() (*nosqldb.Client, error) {
 			// pass_phrase=<optional-passphrase>
 			//
 			sp, err := iam.NewSignatureProviderFromFile("~/.oci/config", "", "", compartmentID)
-			exitOnError(err, "Cannot create a Signature Provider")
+			if err != nil {
+				return nil, fmt.Errorf("cannot create a Signature Provider: %v", err)
+			}
 			cfg = nosqldb.Config{
 				Mode:                  "cloud",
 				Region:                nosqldb.Region(region),
@@ -409,17 +412,12 @@ func createClient() (*nosqldb.Client, error) {
 	return client, err
 }
 
-func exitOnError(err error, msg string) {
-	if err == nil {
-		return
-	}
-	fmt.Fprintln(os.Stderr, msg+": ", err)
-	os.Exit(1)
-}
-
 func main() {
 	client, err := createClient()
-	exitOnError(err, "Can't create NoSQL DB client")
+	if err != nil {
+		fmt.Printf("cannot create NoSQL client: %v\n", err)
+		return
+	}
 	defer client.Close()
 
 	// Creates a simple table with a LONG key and a single STRING field.
@@ -438,11 +436,17 @@ func main() {
 		},
 	}
 	tableRes, err := client.DoTableRequest(tableReq)
-	exitOnError(err, "Can't initiate CREATE TABLE request")
+	if err != nil {
+		fmt.Printf("cannot initiate CREATE TABLE request: %v\n", err)
+		return
+	}
 
 	// The create table request is asynchronous, wait for table creation to complete.
 	_, err = tableRes.WaitForCompletion(client, 60*time.Second, time.Second)
-	exitOnError(err, "Error finishing CREATE TABLE request")
+	if err != nil {
+		fmt.Printf("Error finishing CREATE TABLE request: %v\n", err)
+		return
+	}
 	fmt.Println("Created table ", tableName)
 
 	// put a simple set of string data
@@ -453,7 +457,10 @@ func main() {
 		Value:     mapVals,
 	}
 	putRes, err := client.Put(putReq)
-	exitOnError(err, "Can't put single row")
+	if err != nil {
+		fmt.Printf("failed to put single row: %v\n", err)
+		return
+	}
 	fmt.Printf("Put row: %v\nresult: %v\n", putReq.Value.Map(), putRes)
 
 	// get data back
@@ -464,7 +471,11 @@ func main() {
 		Key:       key,
 	}
 	getRes, err := client.Get(getReq)
-	exitOnError(err, "Can't get single row")
+	if err != nil {
+		fmt.Printf("failed to get single row: %v\n", err)
+		return
+	}
+
 	if getRes.RowExists() {
 		fmt.Printf("Got row: %v\n", getRes.ValueAsJSON())
 	} else {
@@ -477,7 +488,11 @@ func main() {
 		Key:       key,
 	}
 	delRes, err := client.Delete(delReq)
-	exitOnError(err, "Can't delete single row")
+	if err != nil {
+		fmt.Printf("failed to delete single row: %v\n", err)
+		return
+	}
+
 	if delRes.Success {
 		fmt.Printf("Deleted key: %v\nresult: %v\n", jsonutil.AsJSON(delReq.Key.Map()), delRes)
 	}
@@ -487,9 +502,13 @@ func main() {
 		Statement: "DROP TABLE IF EXISTS " + tableName,
 	}
 	tableRes, err = client.DoTableRequestAndWait(dropReq, 60*time.Second, time.Second)
-	exitOnError(err, "Can't drop created table")
+	if err != nil {
+		fmt.Printf("failed to drop table: %v\n", err)
+		return
+	}
 	fmt.Println("Dropped table ", tableName)
 }
+
 ```
 
 Create a directory `quickstart`, save the example program as `quickstart.go` in the directory.
