@@ -508,8 +508,13 @@ go build -o quickstart
 ./quickstart
 ```
 
-For more details on how to configure applications to connect to different supported
-environments, see [How to Connect Tutorial](https://github.com/oracle/nosql-go-sdk/blob/master/doc/connect.md).
+See also:
+
+* [Connecting Your Application](https://github.com/oracle/nosql-go-sdk/blob/master/doc/connect.md) 
+  for details on how to configure applications to connect to different supported
+  environments.
+* [Working with Tables](https://github.com/oracle/nosql-go-sdk/blob/master/doc/tables.md)
+  for details on how to use tables to store and retrieve data.
 
 ## API Reference
 

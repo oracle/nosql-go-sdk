@@ -24,6 +24,9 @@ Full Example
 
 See https://github.com/oracle/nosql-go-sdk/blob/master/README.md#simple-example for an example program that uses the Go SDK to interact with an Oracle NoSQL database.
 
+Working with Tables
+
+See https://github.com/oracle/nosql-go-sdk/blob/master/doc/tables.md for a tutorial that uses tables to store and retrieve data.
 
 */
 package nosql
