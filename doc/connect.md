@@ -273,7 +273,7 @@ the default system CA, you also need to specifiy *CertPath* and *ServerName* for
 the certificate path and server name used to verify server's certificate.
 
 ```go
-cfg := nosqldb.Client{
+cfg := nosqldb.Config{
     Mode:     "onprem",
     Endpoint: "https://exampleHostServer",
     Username: "driverUser",
@@ -291,7 +291,7 @@ you may not want to verify the certificate presented by server, you can specify 
 *InsecureSkipVerify* paramater.
 
 ```go
-cfg := nosqldb.Client{
+cfg := nosqldb.Config{
     Mode:     "onprem",
     Endpoint: "https://exampleHostServer",
     Username: "driverUser",
