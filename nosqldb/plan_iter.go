@@ -23,16 +23,17 @@ import (
 type planIterKind int
 
 const (
-	constRef  planIterKind = 0
-	varRef    planIterKind = 1
-	extVarRef planIterKind = 2
-	arithOp   planIterKind = 8
-	fieldStep planIterKind = 11
-	sfw       planIterKind = 14
-	recv      planIterKind = 17
-	fnSum     planIterKind = 39
-	fnMinMax  planIterKind = 41
-	sorting   planIterKind = 47
+	constRef   planIterKind = 0
+	varRef     planIterKind = 1
+	extVarRef  planIterKind = 2
+	arithOp    planIterKind = 8
+	fieldStep  planIterKind = 11
+	sfw        planIterKind = 14
+	recv       planIterKind = 17
+	sumFunc    planIterKind = 39
+	minMaxFunc planIterKind = 41
+	sorting    planIterKind = 47
+	group      planIterKind = 65
 )
 
 func (itk planIterKind) String() string {
@@ -51,12 +52,14 @@ func (itk planIterKind) String() string {
 		return "SFW"
 	case recv:
 		return "RECV"
-	case fnSum:
+	case sumFunc:
 		return "FN_SUM"
-	case fnMinMax:
+	case minMaxFunc:
 		return "FN_MIN_MAX"
 	case sorting:
 		return "SORT"
+	case group:
+		return "GROUP"
 	default:
 		return "UNKNOWN"
 	}
@@ -71,6 +74,14 @@ const (
 
 	// opMultDiv represents the function code for multiplication/division operations.
 	opMultDiv funcCode = 15
+
+	fnCountStar funcCode = 42
+
+	fnCount funcCode = 43
+
+	fnCountNumbers funcCode = 44
+
+	fnSum funcCode = 45
 
 	// fnMin represents the function code for the min() function.
 	fnMin funcCode = 47
@@ -89,6 +100,14 @@ func (fc funcCode) String() string {
 		return "FN_MIN"
 	case fnMax:
 		return "FN_MAX"
+	case fnCountStar:
+		return "FN_COUNT_STAR"
+	case fnCount:
+		return "FN_COUNT"
+	case fnCountNumbers:
+		return "FN_COUNT_NUMBERS"
+	case fnSum:
+		return "FN_SUM"
 	default:
 		return "UNKNOWN"
 	}
@@ -224,9 +243,9 @@ func deserializePlanIter(r proto.Reader) (planIter, error) {
 		return newArithOpIter(r)
 	case fieldStep:
 		return newFieldStepIter(r)
-	case fnSum:
+	case sumFunc:
 		return newFuncSumIter(r)
-	case fnMinMax:
+	case minMaxFunc:
 		return newFuncMinMaxIter(r)
 	case sorting:
 		return newSortIter(r)
@@ -234,8 +253,10 @@ func deserializePlanIter(r proto.Reader) (planIter, error) {
 		return newSFWIter(r)
 	case recv:
 		return newReceiveIter(r)
+	case group:
+		return newGroupIter(r)
 	default:
-		return nil, fmt.Errorf("unknow query plan iterator of kind: %d", kind)
+		return nil, fmt.Errorf("unknown query plan iterator of kind: %d", kind)
 	}
 
 }

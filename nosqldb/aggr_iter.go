@@ -75,7 +75,7 @@ type funcSumIter struct {
 }
 
 func newFuncSumIter(r proto.Reader) (iter *funcSumIter, err error) {
-	delegate, err := newPlanIterDelegate(r, fnSum)
+	delegate, err := newPlanIterDelegate(r, sumFunc)
 	if err != nil {
 		return
 	}
@@ -336,7 +336,7 @@ type funcMinMaxIter struct {
 }
 
 func newFuncMinMaxIter(r proto.Reader) (iter *funcMinMaxIter, err error) {
-	delegate, err := newPlanIterDelegate(r, fnMinMax)
+	delegate, err := newPlanIterDelegate(r, minMaxFunc)
 	if err != nil {
 		return
 	}
@@ -414,10 +414,6 @@ func (iter *funcMinMaxIter) next(rcb *runtimeControlBlock) (more bool, err error
 
 		value = iter.input.getResult(rcb)
 
-		if value == types.NullValueInstance || value == types.JSONNullValueInstance {
-			continue
-		}
-
 		err = iter.computeMinMax(rcb, state, value)
 		if err != nil {
 			return false, err
@@ -427,30 +423,32 @@ func (iter *funcMinMaxIter) next(rcb *runtimeControlBlock) (more bool, err error
 
 // computeMinMax computes the min or max value.
 func (iter *funcMinMaxIter) computeMinMax(rcb *runtimeControlBlock, state *aggrIterState, value types.FieldValue) (err error) {
+
+	// Do not compare values of BINARY, MAP, ARRAY, EMPTY, NULL and JSON_NULL.
+	switch value.(type) {
+	case []byte, *types.MapValue, map[string]interface{}, []types.FieldValue, []interface{},
+		*types.EmptyValue, *types.NullValue, *types.JSONNullValue:
+		return nil
+	}
+
 	if state.minMax == types.NullValueInstance {
 		state.minMax = value
 		return nil
 	}
 
-	compareRes, err := compareAtomicValues(rcb, false, state.minMax, value)
+	cmp, err := compareAtomicValues(rcb, true, value, state.minMax)
 	if err != nil {
 		return
 	}
 
-	rcb.trace(2, "funcMinMaxIter.computeMinMax() : compared values %v and %v, result=%#v",
-		state.minMax, value, *compareRes)
+	rcb.trace(3, "funcMinMaxIter.computeMinMax() : compared values %v and %v, result=%v",
+		value, state.minMax, cmp)
 
-	if iter.fnCode == fnMin {
-		if compareRes.incompatible || compareRes.comp < 0 {
-			return
-		}
-	} else {
-		if compareRes.incompatible || compareRes.comp > 0 {
-			return
-		}
+	if (iter.fnCode == fnMin && cmp < 0) || (iter.fnCode == fnMax && cmp > 0) {
+		rcb.trace(2, "funcMinMaxIter.computeMinMax(): setting min/max to %v", value)
+		state.minMax = value
 	}
 
-	state.minMax = value
 	return
 }
 
@@ -482,142 +480,194 @@ func (iter *funcMinMaxIter) displayContent(sb *strings.Builder, f *planFormatter
 	iter.displayPlan(iter.input, sb, f)
 }
 
-type compareResult struct {
-	incompatible bool
-	hasNull      bool
-	comp         int
-}
-
-func (r *compareResult) reset() {
-	r.incompatible = false
-	r.hasNull = false
-	r.comp = 0
-}
-
-// compareAtomicValues compares 2 atomic values and returns the result of comparison.
-func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.FieldValue) (res *compareResult, err error) {
+// compareAtomicValues compares two atomic values and returns the result of comparison.
+// This function returns an error if either of the two values is non-atomic or
+// the values are not comparable. Otherwise, the returned res is:
+//
+//   0 if v1 == v2
+//   1 if v1 > v2
+//   -1 if v1 < v2
+//
+// Whether the two values are comparable depends on the "forSort" parameter.
+// If true, then values that would otherwise be considered non-comparable are
+// assumed to have the following order:
+//
+//   NUMERICS < TIMESTAMP < STRING < BOOLEAN < EMPTY < JSON_NULL < NULL
+//
+func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.FieldValue) (res int, err error) {
 	if rcb != nil {
 		rcb.trace(4, "compareAtomicValues() : comparing values %v and %v", v1, v2)
 	}
 
-	res = &compareResult{}
-
-	if v1 == types.NullValueInstance || v2 == types.NullValueInstance {
-		res.hasNull = true
-		return
-	}
-
-	if v1 == types.JSONNullValueInstance {
-		if v2 == types.JSONNullValueInstance {
-			res.comp = 0
-			return
-		}
-
-		res.incompatible = true
-		return
-	}
-
-	if v2 == types.JSONNullValueInstance {
-		if v1 == types.JSONNullValueInstance {
-			res.comp = 0
-			return
-		}
-
-		res.incompatible = true
-		return
-	}
-
 	switch v1 := v1.(type) {
+	case *types.NullValue:
+		if forSort {
+			switch v2.(type) {
+			case *types.NullValue:
+				res = 0
+			default:
+				res = 1
+			}
+			return
+		}
+
+	case *types.JSONNullValue:
+		if _, ok := v2.(*types.JSONNullValue); ok {
+			res = 0
+			return
+		}
+
+		if forSort {
+			switch v2.(type) {
+			case *types.NullValue:
+				res = -1
+			default:
+				res = 1
+			}
+			return
+		}
+
+	case *types.EmptyValue:
+		if _, ok := v2.(*types.EmptyValue); ok {
+			res = 0
+			return
+		}
+
+		if forSort {
+			switch v2.(type) {
+			case *types.JSONNullValue, *types.NullValue:
+				res = -1
+			default:
+				res = 1
+			}
+			return
+		}
+
 	case int:
 		switch v2 := v2.(type) {
 		case int:
-			res.comp = compareInts(v1, v2)
+			res = compareInts(v1, v2)
+			return
 		case int64:
-			res.comp = compareInt64s(int64(v1), v2)
+			res = compareInt64s(int64(v1), v2)
+			return
 		case float64:
-			res.comp = compareFloat64s(float64(v1), v2)
+			res = compareFloat64s(float64(v1), v2)
+			return
 		case *big.Rat:
 			rat1 := new(big.Rat).SetInt64(int64(v1))
-			res.comp = rat1.Cmp(v2)
-		case *string, string, bool:
+			res = rat1.Cmp(v2)
+			return
+		case time.Time, string, *string, bool,
+			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			// INTEGER value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
 			if forSort {
-				res.comp = -1
-			} else {
-				res.incompatible = true
+				res = -1
+				return
 			}
-		default:
-			res.incompatible = true
 		}
-		return
 
 	case int64:
 		switch v2 := v2.(type) {
 		case int:
-			res.comp = compareInt64s(v1, int64(v2))
+			res = compareInt64s(v1, int64(v2))
+			return
 		case int64:
-			res.comp = compareInt64s(v1, v2)
+			res = compareInt64s(v1, v2)
+			return
 		case float64:
-			res.comp = compareFloat64s(float64(v1), v2)
+			res = compareFloat64s(float64(v1), v2)
+			return
 		case *big.Rat:
 			rat1 := new(big.Rat).SetInt64(v1)
-			res.comp = rat1.Cmp(v2)
-		case *string, string, bool:
+			res = rat1.Cmp(v2)
+			return
+		case time.Time, string, *string, bool,
+			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			// LONG value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
 			if forSort {
-				res.comp = -1
-			} else {
-				res.incompatible = true
+				res = -1
+				return
 			}
-		default:
-			res.incompatible = true
 		}
-		return
 
 	case float64:
 		switch v2 := v2.(type) {
 		case int:
-			res.comp = compareFloat64s(float64(v1), float64(v2))
+			res = compareFloat64s(float64(v1), float64(v2))
+			return
 		case int64:
-			res.comp = compareFloat64s(float64(v1), float64(v2))
+			res = compareFloat64s(float64(v1), float64(v2))
+			return
 		case float64:
-			res.comp = compareFloat64s(float64(v1), v2)
+			res = compareFloat64s(float64(v1), v2)
+			return
 		case *big.Rat:
 			rat1 := new(big.Rat).SetFloat64(v1)
-			res.comp = rat1.Cmp(v2)
-		case *string, string, bool:
+			res = rat1.Cmp(v2)
+			return
+		case time.Time, string, *string, bool,
+			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			// DOUBLE value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
 			if forSort {
-				res.comp = -1
-			} else {
-				res.incompatible = true
+				res = -1
+				return
 			}
-		default:
-			res.incompatible = true
 		}
-		return
 
 	case *big.Rat:
 		rat2 := new(big.Rat)
 		switch v2 := v2.(type) {
 		case int:
 			rat2.SetInt64(int64(v2))
-			res.comp = v1.Cmp(rat2)
+			res = v1.Cmp(rat2)
+			return
 		case int64:
 			rat2.SetInt64(v2)
-			res.comp = v1.Cmp(rat2)
+			res = v1.Cmp(rat2)
+			return
 		case float64:
 			rat2.SetFloat64(v2)
-			res.comp = v1.Cmp(rat2)
+			res = v1.Cmp(rat2)
+			return
 		case *big.Rat:
-			res.comp = v1.Cmp(v2)
-		case *string, string, bool:
+			res = v1.Cmp(v2)
+			return
+		case time.Time, string, *string, bool,
+			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			// NUMBER value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
 			if forSort {
-				res.comp = -1
-			} else {
-				res.incompatible = true
+				res = -1
+				return
 			}
-		default:
-			res.incompatible = true
 		}
-		return
+
+	case time.Time:
+		switch v2 := v2.(type) {
+		case time.Time:
+			switch {
+			case v1.Equal(v2):
+				res = 0
+			case v1.Before(v2):
+				res = -1
+			default:
+				res = 1
+			}
+			return
+
+		case int, int64, float64, *big.Rat:
+			if forSort {
+				res = 1
+				return
+			}
+
+		case string, *string, bool,
+			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			for forSort {
+				res = -1
+				return
+			}
+		}
 
 	case *string, string:
 		str1, ok1 := stringValue(v1)
@@ -626,81 +676,50 @@ func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.Fi
 			str2, ok2 := stringValue(v2)
 			switch {
 			case ok1 && ok2:
-				res.comp = compareStrings(str1, str2)
+				res = compareStrings(str1, str2)
 			case !ok1 && ok2:
-				res.comp = -1
+				// v1 is a nil string pointer
+				res = -1
 			case ok1 && !ok2:
-				res.comp = 1
+				// v2 is a nil string pointer
+				res = 1
 			default:
-				res.comp = 0
+				res = 0
 			}
-		case int, int64, float64, *big.Rat:
+			return
+		case int, int64, float64, *big.Rat, time.Time:
+			// STRING value is greater than INTEGER/LONG/DOUBLE/NUMBER/TIMESTAMP
 			if forSort {
-				res.comp = 1
-			} else {
-				res.incompatible = true
+				res = 1
+				return
 			}
-		case bool:
+		case bool, *types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			// STRING value is less than BOOLEAN/EMPTY/JSON_NULL/NULL
 			if forSort {
-				res.comp = -1
-			} else {
-				res.incompatible = true
+				res = -1
+				return
 			}
-		default:
-			res.incompatible = true
 		}
-		return
 
 	case bool:
 		switch v2 := v2.(type) {
 		case bool:
-			if v1 == v2 {
-				res.comp = 0
-			} else if v1 == false {
-				res.comp = -1
-			} else {
-				res.comp = 1
-			}
-		case int, int64, float64, *big.Rat, string, *string:
-			if forSort {
-				res.comp = 1
-			} else {
-				res.incompatible = true
-			}
-		default:
-			res.incompatible = true
-		}
-		return
-
-	case time.Time:
-		if v2, ok := v2.(time.Time); ok {
-			switch {
-			case v1.Equal(v2):
-				res.comp = 0
-			case v1.Before(v2):
-				res.comp = -1
-			default:
-				res.comp = 1
-			}
+			res = compareBools(v1, v2)
 			return
+		case int, int64, float64, *big.Rat, time.Time, string, *string:
+			if forSort {
+				res = 1
+				return
+			}
+		case *types.EmptyValue, *types.JSONNullValue, *types.NullValue:
+			if forSort {
+				res = -1
+				return
+			}
 		}
-
-		res.incompatible = true
-		return
-
-	case *types.JSONNullValue, types.JSONNullValue:
-		switch v2.(type) {
-		case *types.JSONNullValue, types.JSONNullValue:
-			res.comp = 0
-		default:
-			res.incompatible = true
-		}
-		return
-
-	default:
-		err = nosqlerr.NewIllegalState("unexpected operand type in comparison operator: %T", v1)
 	}
 
+	err = nosqlerr.NewIllegalState("cannot compare value of type %T with value of type %T", v1, v2)
 	return
 }
 
@@ -760,5 +779,16 @@ func compareStrings(x, y string) int {
 		return 1
 	default:
 		return 0
+	}
+}
+
+func compareBools(x, y bool) int {
+	switch {
+	case x == y:
+		return 0
+	case x == false:
+		return -1
+	default:
+		return 1
 	}
 }

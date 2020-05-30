@@ -357,9 +357,9 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 
 		res = scanner.nextLocal()
 		if res != nil {
-			rcb.trace(1, "receiveIter.sortingNext() : got result : %v", res)
+			rcb.trace(1, "receiveIter.sortingNext() : got result : %#v", res)
 
-			iter.convertEmptyToNull(res)
+			convertEmptyToNull(res)
 			rcb.setRegValue(iter.resultReg, res)
 
 			if scanner.isDone() {
@@ -429,10 +429,10 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 
 // convertEmptyToNull converts EmptyValue to NullValue for the entries in the
 // specified MapValue.
-func (iter *receiveIter) convertEmptyToNull(m *types.MapValue) {
-	for _, v := range m.Map() {
-		if v == types.EmptyValueInstance {
-			v = types.NullValueInstance
+func convertEmptyToNull(m *types.MapValue) {
+	for k, v := range m.Map() {
+		if _, ok := v.(*types.EmptyValue); ok {
+			m.Map()[k] = types.NullValueInstance
 		}
 	}
 }
@@ -675,7 +675,6 @@ type remoteScanner struct {
 	nextResultPos     int
 	continuationKey   []byte
 	moreRemoteResults bool
-	compRes           *compareResult
 
 	*receiveIter
 }
@@ -814,7 +813,7 @@ func (s *remoteScanner) fetch() (err error) {
 		err = s.addMemoryConsumption()
 	}
 
-	s.rcb.trace(1, "remoteScanner: got %d remote results, hasMoreRemoteResults=%t, reachedLimit=%t, readKB=%d,"+
+	s.rcb.trace(1, "remoteScanner: got %d remote results, hasMoreRemoteResults=%t, reachedLimit=%t, readKB=%d, "+
 		"readUnits=%d, writeKB=%d, memory consumption=%d", len(s.results), s.moreRemoteResults, res.reachedLimit, res.ReadKB,
 		res.ReadUnits, res.WriteKB, s.state.memoryConsumption)
 

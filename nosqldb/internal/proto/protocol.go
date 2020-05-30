@@ -21,7 +21,7 @@ const (
 	SerialVersion int16 = 2
 
 	// QueryVersion represents the version used for query requests.
-	QueryVersion int16 = 2
+	QueryVersion int16 = 3
 )
 
 const (

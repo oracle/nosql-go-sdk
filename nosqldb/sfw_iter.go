@@ -12,6 +12,7 @@ package nosqldb
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
@@ -585,8 +586,7 @@ func (iter *sfwIter) groupInputTuple(rcb *runtimeControlBlock, state *sfwIterSta
 	for ; j < iter.numGBColumns; j++ {
 		newVal := iter.columnIters[j].getResult(rcb)
 		currVal := state.gbTuples[j]
-		// TODO: compare the values.
-		if newVal != currVal {
+		if !reflect.DeepEqual(newVal, currVal) {
 			break
 		}
 	}

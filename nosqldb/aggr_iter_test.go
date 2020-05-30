@@ -62,11 +62,17 @@ func TestCompareAtomicValues(t *testing.T) {
 		{int(-2), false, -1, true, false},
 		{int(2), false, 0, false, true},
 		// int vs time
-		{int(2), time1, 0, true, true},
+		{int(2), time1, -1, true, false},
 		{int(2), time1, 0, false, true},
+		// int vs Empty
+		{int(2), types.EmptyValueInstance, -1, true, false},
+		{int(2), types.EmptyValueInstance, 0, false, true},
 		// int vs JSONNull
-		{int(2), types.JSONNullValueInstance, 0, true, true},
+		{int(2), types.JSONNullValueInstance, -1, true, false},
 		{int(2), types.JSONNullValueInstance, 0, false, true},
+		// int vs Null
+		{int(2), types.NullValueInstance, -1, true, false},
+		{int(2), types.NullValueInstance, 0, false, true},
 
 		// int64 vs int
 		{int64(-2), int(0), -1, true, false},
@@ -98,11 +104,17 @@ func TestCompareAtomicValues(t *testing.T) {
 		{int64(-2), false, -1, true, false},
 		{int64(2), false, 0, false, true},
 		// int64 vs time
-		{int64(2), time1, 0, true, true},
+		{int64(2), time1, -1, true, false},
 		{int64(2), time1, 0, false, true},
+		// int64 vs Empty
+		{int64(2), types.EmptyValueInstance, -1, true, false},
+		{int64(2), types.EmptyValueInstance, 0, false, true},
 		// int64 vs JSONNull
-		{int64(2), types.JSONNullValueInstance, 0, true, true},
+		{int64(2), types.JSONNullValueInstance, -1, true, false},
 		{int64(2), types.JSONNullValueInstance, 0, false, true},
+		// int64 vs Null
+		{int64(2), types.NullValueInstance, -1, true, false},
+		{int64(2), types.NullValueInstance, 0, false, true},
 
 		// float64 vs int
 		{float64(-2), int(0), -1, true, false},
@@ -134,11 +146,17 @@ func TestCompareAtomicValues(t *testing.T) {
 		{float64(-2), false, -1, true, false},
 		{float64(2), false, 0, false, true},
 		// float64 vs time
-		{float64(2), time1, 0, true, true},
+		{float64(2), time1, -1, true, false},
 		{float64(2), time1, 0, false, true},
-		// float64 vs JSONNull
-		{float64(2), types.JSONNullValueInstance, 0, true, true},
+		// float64 vs Empty
+		{float64(2), types.EmptyValueInstance, -1, true, false},
 		{float64(2), types.JSONNullValueInstance, 0, false, true},
+		// float64 vs JSONNull
+		{float64(2), types.JSONNullValueInstance, -1, true, false},
+		{float64(2), types.JSONNullValueInstance, 0, false, true},
+		// float64 vs Null
+		{float64(2), types.NullValueInstance, -1, true, false},
+		{float64(2), types.NullValueInstance, 0, false, true},
 
 		// *big.Rat vs int
 		{new(big.Rat).SetInt64(int64(-2)), int(0), -1, true, false},
@@ -170,11 +188,17 @@ func TestCompareAtomicValues(t *testing.T) {
 		{new(big.Rat).SetInt64(int64(-2)), false, -1, true, false},
 		{new(big.Rat).SetInt64(int64(2)), false, 0, false, true},
 		// *big.Rat vs time
-		{new(big.Rat).SetInt64(int64(2)), time1, 0, true, true},
+		{new(big.Rat).SetInt64(int64(2)), time1, -1, true, false},
 		{new(big.Rat).SetInt64(int64(2)), time1, 0, false, true},
-		// *big.Rat vs JSONNull
-		{new(big.Rat).SetInt64(int64(2)), types.JSONNullValueInstance, 0, true, true},
+		// *big.Rat vs Empty
+		{new(big.Rat).SetInt64(int64(2)), types.EmptyValueInstance, -1, true, false},
 		{new(big.Rat).SetInt64(int64(2)), types.JSONNullValueInstance, 0, false, true},
+		// *big.Rat vs JSONNull
+		{new(big.Rat).SetInt64(int64(2)), types.JSONNullValueInstance, -1, true, false},
+		{new(big.Rat).SetInt64(int64(2)), types.JSONNullValueInstance, 0, false, true},
+		// *big.Rat vs Null
+		{new(big.Rat).SetInt64(int64(2)), types.NullValueInstance, -1, true, false},
+		{new(big.Rat).SetInt64(int64(2)), types.NullValueInstance, 0, false, true},
 
 		// string vs int
 		{emptyStr, int(0), 1, true, false},
@@ -206,11 +230,17 @@ func TestCompareAtomicValues(t *testing.T) {
 		{hello, false, -1, true, false},
 		{world, false, 0, false, true},
 		// string vs time
-		{hello, time1, 0, true, true},
+		{hello, time1, 1, true, false},
 		{world, time1, 0, false, true},
+		// string vs Empty
+		{hello, types.EmptyValueInstance, -1, true, false},
+		{world, types.EmptyValueInstance, 0, false, true},
 		// string vs JSONNull
-		{hello, types.JSONNullValueInstance, 0, true, true},
+		{hello, types.JSONNullValueInstance, -1, true, false},
 		{world, types.JSONNullValueInstance, 0, false, true},
+		// string vs Null
+		{hello, types.NullValueInstance, -1, true, false},
+		{world, types.NullValueInstance, 0, false, true},
 
 		// bool vs int
 		{true, int(0), 1, true, false},
@@ -242,68 +272,168 @@ func TestCompareAtomicValues(t *testing.T) {
 		{true, false, 1, true, false},
 		{false, true, -1, true, false},
 		// bool vs time
-		{false, time1, 0, true, true},
+		{false, time1, 1, true, false},
 		{true, time1, 0, false, true},
+		// bool vs Empty
+		{true, types.EmptyValueInstance, -1, true, false},
+		{false, types.EmptyValueInstance, 0, false, true},
 		// bool vs JSONNull
-		{true, types.JSONNullValueInstance, 0, true, true},
+		{true, types.JSONNullValueInstance, -1, true, false},
 		{false, types.JSONNullValueInstance, 0, false, true},
+		// bool vs Null
+		{true, types.NullValueInstance, -1, true, false},
+		{false, types.NullValueInstance, 0, false, true},
 
 		// time vs int
-		{time1, int(0), 0, true, true},
-		{time1, int(-2), 0, true, true},
+		{time1, int(0), 1, true, false},
+		{time1, int(-2), 1, true, false},
 		{time1, int(-2), 0, false, true},
 		// time vs int64
-		{time1, int64(0), 0, true, true},
-		{time1, int64(-2), 0, true, true},
+		{time1, int64(0), 1, true, false},
+		{time1, int64(-2), 1, true, false},
 		{time1, int64(-2), 0, false, true},
 		// time vs float64
-		{time1, float64(0), 0, true, true},
-		{time1, float64(-2), 0, true, true},
+		{time1, float64(0), 1, true, false},
+		{time1, float64(-2), 1, true, false},
 		{time1, float64(-2), 0, false, true},
 		// time vs *big.Rat
-		{time1, new(big.Rat).SetInt64(int64(0)), 0, true, true},
-		{time1, new(big.Rat).SetInt64(int64(-2)), 0, true, true},
+		{time1, new(big.Rat).SetInt64(int64(0)), 1, true, false},
+		{time1, new(big.Rat).SetInt64(int64(-2)), 1, true, false},
 		{time1, new(big.Rat).SetInt64(int64(-2)), 0, false, true},
 		// time vs string
-		{time1, hello, 0, true, true},
-		{time1, hello, 0, true, true},
+		{time1, hello, -1, true, false},
+		{time1, hello, -1, true, false},
 		{time1, hello, 0, false, true},
 		// time vs *string
-		{time1, nilStrPtr, 0, true, true},
-		{time1, &hello, 0, true, true},
+		{time1, nilStrPtr, -1, true, false},
+		{time1, &hello, -1, true, false},
 		{time1, &hello, 0, false, true},
 		// time vs bool
-		{time1, true, 0, true, true},
-		{time1, false, 0, true, true},
+		{time1, true, -1, true, false},
+		{time1, false, -1, true, false},
 		{time1, false, 0, false, true},
 		{time1, true, 0, false, true},
 		// time vs time
 		{time1, time2, -1, true, false},
 		{time1, time1, 0, true, false},
 		{time2, time1, 1, true, false},
+		// time vs Empty
+		{time1, types.EmptyValueInstance, -1, true, false},
+		{time2, types.EmptyValueInstance, 0, false, true},
 		// time vs JSONNull
-		{time1, types.JSONNullValueInstance, 0, true, true},
+		{time1, types.JSONNullValueInstance, -1, true, false},
 		{time2, types.JSONNullValueInstance, 0, false, true},
+		// time vs Null
+		{time1, types.NullValueInstance, -1, true, false},
+		{time2, types.NullValueInstance, 0, false, true},
 
 		// JSONNullValue vs int
-		{types.JSONNullValueInstance, int(2), 0, true, true},
+		{types.JSONNullValueInstance, int(2), 1, true, false},
+		{types.JSONNullValueInstance, int(2), 0, false, true},
 		// JSONNullValue vs int64
-		{types.JSONNullValueInstance, int64(2), 0, true, true},
+		{types.JSONNullValueInstance, int64(2), 1, true, false},
+		{types.JSONNullValueInstance, int64(2), 0, false, true},
 		// JSONNullValue vs float64
-		{types.JSONNullValueInstance, float64(2), 0, true, true},
+		{types.JSONNullValueInstance, float64(2), 1, true, false},
+		{types.JSONNullValueInstance, float64(2), 0, false, true},
 		// JSONNullValue vs *big.Rat
-		{types.JSONNullValueInstance, new(big.Rat).SetInt64(int64(2)), 0, true, true},
+		{types.JSONNullValueInstance, new(big.Rat).SetInt64(int64(2)), 1, true, false},
+		{types.JSONNullValueInstance, new(big.Rat).SetInt64(int64(2)), 0, false, true},
 		// JSONNullValue vs string
-		{types.JSONNullValueInstance, hello, 0, true, true},
+		{types.JSONNullValueInstance, hello, 1, true, false},
+		{types.JSONNullValueInstance, hello, 0, false, true},
 		// JSONNullValue vs *string
-		{types.JSONNullValueInstance, &hello, 0, true, true},
+		{types.JSONNullValueInstance, &hello, 1, true, false},
+		{types.JSONNullValueInstance, &hello, 0, false, true},
 		// JSONNullValue vs bool
-		{types.JSONNullValueInstance, true, 0, true, true},
-		{types.JSONNullValueInstance, false, 0, true, true},
+		{types.JSONNullValueInstance, true, 1, true, false},
+		{types.JSONNullValueInstance, false, 1, true, false},
+		{types.JSONNullValueInstance, true, 0, false, true},
+		{types.JSONNullValueInstance, false, 0, false, true},
 		// JSONNullValue vs time
-		{types.JSONNullValueInstance, time1, 0, true, true},
+		{types.JSONNullValueInstance, time1, 1, true, false},
+		{types.JSONNullValueInstance, time1, 0, false, true},
+		// JSONNullValue vs EmptyValue
+		{types.JSONNullValueInstance, types.EmptyValueInstance, 1, true, false},
+		{types.JSONNullValueInstance, types.EmptyValueInstance, 0, false, true},
+		// JSONNullValue vs NullValue
+		{types.JSONNullValueInstance, types.NullValueInstance, -1, true, false},
+		{types.JSONNullValueInstance, types.NullValueInstance, 0, false, true},
 		// JSONNullValue vs JSONNullValue
 		{types.JSONNullValueInstance, types.JSONNullValueInstance, 0, true, false},
+		{types.JSONNullValueInstance, types.JSONNullValueInstance, 0, false, false},
+
+		// EmptyValue vs int
+		{types.EmptyValueInstance, int(2), 1, true, false},
+		{types.EmptyValueInstance, int(2), 0, false, true},
+		// EmptyValue vs int64
+		{types.EmptyValueInstance, int64(2), 1, true, false},
+		{types.EmptyValueInstance, int64(2), 0, false, true},
+		// EmptyValue vs float64
+		{types.EmptyValueInstance, float64(2), 1, true, false},
+		{types.EmptyValueInstance, float64(2), 0, false, true},
+		// EmptyValue vs *big.Rat
+		{types.EmptyValueInstance, new(big.Rat).SetInt64(int64(2)), 1, true, false},
+		{types.EmptyValueInstance, new(big.Rat).SetInt64(int64(2)), 0, false, true},
+		// EmptyValue vs string
+		{types.EmptyValueInstance, hello, 1, true, false},
+		{types.EmptyValueInstance, hello, 0, false, true},
+		// EmptyValue vs *string
+		{types.EmptyValueInstance, &hello, 1, true, false},
+		{types.EmptyValueInstance, &hello, 0, false, true},
+		// EmptyValue vs bool
+		{types.EmptyValueInstance, true, 1, true, false},
+		{types.EmptyValueInstance, false, 1, true, false},
+		{types.EmptyValueInstance, true, 0, false, true},
+		{types.EmptyValueInstance, false, 0, false, true},
+		// EmptyValue vs time
+		{types.EmptyValueInstance, time1, 1, true, false},
+		{types.EmptyValueInstance, time1, 0, false, true},
+		// EmptyValue vs JSONNullValue
+		{types.EmptyValueInstance, types.JSONNullValueInstance, -1, true, false},
+		{types.EmptyValueInstance, types.JSONNullValueInstance, 0, false, true},
+		// EmptyValue vs NullValue
+		{types.EmptyValueInstance, types.NullValueInstance, -1, true, false},
+		{types.EmptyValueInstance, types.NullValueInstance, 0, false, true},
+		// EmptyValue vs EmptyValue
+		{types.EmptyValueInstance, types.EmptyValueInstance, 0, true, false},
+		{types.EmptyValueInstance, types.EmptyValueInstance, 0, false, false},
+
+		// NullValue vs int
+		{types.NullValueInstance, int(2), 1, true, false},
+		{types.NullValueInstance, int(2), 0, false, true},
+		// NullValue vs int64
+		{types.NullValueInstance, int64(2), 1, true, false},
+		{types.NullValueInstance, int64(2), 0, false, true},
+		// NullValue vs float64
+		{types.NullValueInstance, float64(2), 1, true, false},
+		{types.NullValueInstance, float64(2), 0, false, true},
+		// NullValue vs *big.Rat
+		{types.NullValueInstance, new(big.Rat).SetInt64(int64(2)), 1, true, false},
+		{types.NullValueInstance, new(big.Rat).SetInt64(int64(2)), 0, false, true},
+		// NullValue vs string
+		{types.NullValueInstance, hello, 1, true, false},
+		{types.NullValueInstance, hello, 0, false, true},
+		// NullValue vs *string
+		{types.NullValueInstance, &hello, 1, true, false},
+		{types.NullValueInstance, &hello, 0, false, true},
+		// NullValue vs bool
+		{types.NullValueInstance, true, 1, true, false},
+		{types.NullValueInstance, false, 1, true, false},
+		{types.NullValueInstance, true, 0, false, true},
+		{types.NullValueInstance, false, 0, false, true},
+		// NullValue vs time
+		{types.NullValueInstance, time1, 1, true, false},
+		{types.NullValueInstance, time1, 0, false, true},
+		// NullValue vs EmptyValue
+		{types.NullValueInstance, types.EmptyValueInstance, 1, true, false},
+		{types.NullValueInstance, types.EmptyValueInstance, 0, false, true},
+		// NullValue vs JSONNullValue
+		{types.NullValueInstance, types.JSONNullValueInstance, 1, true, false},
+		{types.NullValueInstance, types.JSONNullValueInstance, 0, false, true},
+		// NullValue vs NullValue
+		{types.NullValueInstance, types.NullValueInstance, 0, true, false},
+		{types.NullValueInstance, types.NullValueInstance, 0, false, true},
 	}
 
 	var desc string
@@ -311,39 +441,14 @@ func TestCompareAtomicValues(t *testing.T) {
 	for _, r := range test01 {
 		desc = fmt.Sprintf(msgTemplate, r.forSort, r.v1, r.v2)
 		actualRes, err := compareAtomicValues(nil, r.forSort, r.v1, r.v2)
+		if r.incompatible {
+			assert.Errorf(t, err, desc+"should have failed")
+			continue
+		}
+
 		if assert.NoErrorf(t, err, desc+"got error %v", err) {
-			wantRes := &compareResult{
-				comp:         r.comp,
-				incompatible: r.incompatible,
-			}
-			assert.Equalf(t, wantRes, actualRes, desc+"got unexpected result")
+			assert.Equalf(t, r.comp, actualRes, desc+"got unexpected result")
 		}
 	}
 
-	// Test NullValue with other values.
-	test02 := []struct {
-		v1, v2       types.FieldValue
-		comp         int
-		forSort      bool
-		incompatible bool
-		hasNull      bool
-	}{
-		{types.NullValueInstance, int(2), 0, true, false, true},
-		{types.NullValueInstance, int64(2), 0, true, false, true},
-		{float64(2), types.NullValueInstance, 0, true, false, true},
-		{types.NullValueInstance, types.NullValueInstance, 0, true, false, true},
-	}
-
-	for _, r := range test02 {
-		desc = fmt.Sprintf(msgTemplate, r.forSort, r.v1, r.v2)
-		actualRes, err := compareAtomicValues(nil, r.forSort, r.v1, r.v2)
-		if assert.NoErrorf(t, err, desc+"got error %v", err) {
-			wantRes := &compareResult{
-				comp:         r.comp,
-				incompatible: r.incompatible,
-				hasNull:      r.hasNull,
-			}
-			assert.Equalf(t, wantRes, actualRes, desc+"got unexpected result")
-		}
-	}
 }
