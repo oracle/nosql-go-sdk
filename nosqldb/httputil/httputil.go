@@ -15,7 +15,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -66,13 +65,13 @@ func newHTTPRequest(method string, url string, data []byte, headers map[string]s
 		return nil, err
 	}
 
-	// Add or set http headers.
+	// Set http headers.
 	for k, v := range headers {
-		if strings.EqualFold(k, "host") {
-			httpReq.Header.Add(k, v)
-		} else {
-			httpReq.Header.Set(k, v)
-		}
+		httpReq.Header.Set(k, v)
+	}
+
+	if httpReq.Header.Get("Host") == "" {
+		httpReq.Header.Set("Host", httpReq.URL.Hostname())
 	}
 
 	return httpReq, nil
