@@ -8,6 +8,7 @@
 package nosqldb
 
 import (
+	"os"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -85,4 +86,39 @@ func TestSizeOf(t *testing.T) {
 			assert.Equalf(t, r.wantSize, actual, "unexpected memory consumed for value %v of type %[1]T", r.v)
 		}
 	}
+}
+
+func TestNewQueryLogger(t *testing.T) {
+	tests := []struct {
+		shortDesc  string
+		traceLevel string
+		traceFile  string
+		expectErr  bool
+	}{
+		{"trace level is not an integer", "ABC", "", true},
+		{"trace level is 0", "0", "", true},
+		{"trace file is not set", "1", "", false},
+		{"trace file is set", "3", "testdata/query_trace.log", false},
+		{"trace directory does not exist", "4", "testdata-not-exist/query_trace.log", true},
+	}
+
+	for _, r := range tests {
+		os.Setenv(envQueryTraceLevel, r.traceLevel)
+		if len(r.traceFile) > 0 {
+			os.Setenv(envQueryTraceFile, r.traceFile)
+			if !r.expectErr {
+				defer os.Remove(r.traceFile)
+			}
+		}
+
+		_, err := newQueryLogger()
+		if r.expectErr {
+			assert.Errorf(t, err, "%s: newQueryLogger() should have failed", r.shortDesc)
+		} else {
+			assert.NoErrorf(t, err, "%s: newQueryLogger() failed, got error %v", r.shortDesc, err)
+		}
+	}
+
+	os.Unsetenv(envQueryTraceLevel)
+	os.Unsetenv(envQueryTraceFile)
 }

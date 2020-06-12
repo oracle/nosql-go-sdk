@@ -8,14 +8,85 @@
 package nosqldb
 
 import (
+	"crypto/md5"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"sort"
+	"strconv"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+
+const (
+	// envQueryTraceLevel is the name of environment variable that specifies a
+	// level for tracing NoSQL queries.
+	// The value of trace level must be an integer that is greater than 0.
+	envQueryTraceLevel string = "NOSQL_QUERY_TRACE_LEVEL"
+
+	// envQueryTraceFile is the name of environment variable that specifies a
+	// destination file where NoSQL query tracing outputs are written.
+	envQueryTraceFile string = "NOSQL_QUERY_TRACE_FILE"
+)
+
+// queryTracer is a specialized logger used for tracing NoSQL queries.
+// The traceLevel must be an integer that is greater than 0, otherwise
+// query tracing is disabled.
+type queryTracer struct {
+	*logger.Logger
+	traceLevel int
+}
+
+// newQueryLogger creates a queryTracer with trace level and trace file
+// configurations from environment variables.
+func newQueryLogger() (tracer *queryTracer, err error) {
+	s, ok := os.LookupEnv(envQueryTraceLevel)
+	if !ok {
+		return nil, nil
+	}
+
+	traceLevel, err := strconv.Atoi(s)
+	if err != nil {
+		return nil, fmt.Errorf("the value of environment variable %q "+
+			"must be an integer, got invalid value: %v", envQueryTraceLevel, s)
+	}
+
+	if traceLevel <= 0 {
+		return nil, fmt.Errorf("the value of environment variable %q "+
+			"must be greater than 0, got invalid value: %v", envQueryTraceLevel, traceLevel)
+	}
+
+	var out io.Writer
+	filePath, ok := os.LookupEnv(envQueryTraceFile)
+	if ok {
+		traceFile, err := sdkutil.ExpandPath(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value of environment variable %q: %v",
+				envQueryTraceFile, err)
+		}
+
+		file, err := os.OpenFile(traceFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0640)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open query trace file %s: %v", traceFile, err)
+		}
+
+		out = file
+	}
+
+	if out == nil {
+		out = os.Stderr
+	}
+
+	return &queryTracer{
+		Logger:     logger.New(out, logger.Trace, false),
+		traceLevel: traceLevel,
+	}, nil
+}
 
 // runtimeControlBlock (RCB) stores all state of an executing query plan.
 // There is a single RCB instance per query execution, and all plan iterators
@@ -55,6 +126,10 @@ type runtimeControlBlock struct {
 	// consumed by the query at the client for operations such as duplicate
 	// elimination and sorting.
 	memoryConsumption int64
+
+	// sqlHashTag is a portion of the hash value of SQL text, used as a tag
+	// for query tracing.
+	sqlHashTag []byte
 }
 
 func newRCB(driver *queryDriver, rootIter planIter, numIterators, numRegisters int,
@@ -96,21 +171,31 @@ func (rcb *runtimeControlBlock) getExternalVar(varID int) types.FieldValue {
 	return rcb.externalVars[varID]
 }
 
-// getTraceLevel gets the trace level set for the query request.
-func (rcb *runtimeControlBlock) getTraceLevel() int {
-	return rcb.getRequest().traceLevel
-}
-
-// TODO:
-// trace is used to trace the execution of query plan.
+// trace is used to trace the execution of query plans.
+// It writes the specified message to query trace logger if the specified level
+// is greater than or equal to logger's trace level.
 func (rcb *runtimeControlBlock) trace(level int, messageFormat string, messageArgs ...interface{}) {
-	// if rcb.getTraceLevel() < level {
-	// 	return
-	// }
+	queryLogger := rcb.getClient().queryLogger
+	if queryLogger == nil || level < queryLogger.traceLevel {
+		return
+	}
 
-	// TODO:
-	// fmt.Printf(messageFormat+"\n", messageArgs...)
-	// return 0
+	if rcb.sqlHashTag == nil {
+		var sql string
+		ps := rcb.getRequest().PreparedStatement
+		if ps != nil {
+			sql = ps.sqlText
+		} else {
+			sql = rcb.getRequest().Statement
+		}
+		data := md5.Sum([]byte(sql))
+		// To generate a compact output, use the first 4 bytes as a tag.
+		rcb.sqlHashTag = data[:4]
+		queryLogger.Trace("[%x] SQL: %s", rcb.sqlHashTag, sql)
+	}
+
+	tag := fmt.Sprintf("[%x] ", rcb.sqlHashTag)
+	queryLogger.Trace(tag+messageFormat, messageArgs...)
 }
 
 // openIter is a convenience method that sets the plan iterator at specified

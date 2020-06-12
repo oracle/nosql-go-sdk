@@ -37,6 +37,8 @@ func (suite *LoggerTestSuite) TestNewLogger() {
 		{&out, Error + 1, true, true},
 		{&out, Fine, true, false},
 		{&out, Fine, false, false},
+		{&out, Trace, true, false},
+		{&out, Trace, false, false},
 		{&out, Debug, true, false},
 		{&out, Debug, false, false},
 		{&out, Info, true, false},
@@ -75,7 +77,7 @@ func (suite *LoggerTestSuite) TestNewLogger() {
 func (suite *LoggerTestSuite) TestLogMessage() {
 	var out bytes.Buffer
 	msg := "this is a log entry for test"
-	allLevels := []LogLevel{Fine, Debug, Info, Warn, Error, Off}
+	allLevels := []LogLevel{Fine, Trace, Debug, Info, Warn, Error, Off}
 	for i, level := range allLevels {
 		lgr := New(&out, level, false)
 		for j, logEntryLevel := range allLevels {
@@ -84,6 +86,8 @@ func (suite *LoggerTestSuite) TestLogMessage() {
 			switch logEntryLevel {
 			case Fine:
 				lgr.Fine(msg)
+			case Trace:
+				lgr.Trace(msg)
 			case Debug:
 				lgr.Debug(msg)
 			case Info:
@@ -120,7 +124,7 @@ func (suite *LoggerTestSuite) TestLogWithFn() {
 		return msg + strconv.Itoa(actualCnt)
 	}
 
-	allLevels := []LogLevel{Fine, Debug, Info, Warn, Error, Off}
+	allLevels := []LogLevel{Fine, Trace, Debug, Info, Warn, Error, Off}
 	for i, level := range allLevels {
 		lgr := New(&out, level, false)
 		for j, logEntryLevel := range allLevels {

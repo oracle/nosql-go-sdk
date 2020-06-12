@@ -20,6 +20,7 @@ import (
 // The logging levels are ordered. The available levels in ascending order are:
 //
 //   Fine
+//   Trace
 //   Debug
 //   Info
 //   Warn
@@ -27,14 +28,17 @@ import (
 //
 // Enabling logging at a given level also enables logging at all higher levels.
 // For example, if desired logging level for the logger is set to Debug, the
-// messages of Debug level, as well as Info, Warn and Error levels are all logged.
+// messages at Debug level, as well as Info, Warn and Error levels are all logged.
 //
 // In addition there is a level Off that can be used to turn off logging.
 type LogLevel int
 
 const (
-	// Fine represents a level used to log tracing messages.
+	// Fine represents a level used to log the most detailed output.
 	Fine LogLevel = 10
+
+	// Trace represents a level used to log tracing messages.
+	Trace LogLevel = 15
 
 	// Debug represents a level used to log debug messages.
 	Debug LogLevel = 20
@@ -59,6 +63,8 @@ func (level LogLevel) String() string {
 	switch level {
 	case Fine:
 		return "Fine"
+	case Trace:
+		return "Trace"
 	case Debug:
 		return "Debug"
 	case Info:
@@ -100,7 +106,7 @@ func New(out io.Writer, level LogLevel, useLocalTime bool) *Logger {
 	}
 
 	switch level {
-	case Fine, Debug, Info, Warn, Error:
+	case Fine, Trace, Debug, Info, Warn, Error:
 	case Off:
 		return nil
 	default:
@@ -121,47 +127,69 @@ func New(out io.Writer, level LogLevel, useLocalTime bool) *Logger {
 	}
 }
 
-// Fine writes the specified message to the logger if the desired logging level is set to Fine.
+// Close closes the logger and releases associated resources.
+func (l *Logger) Close() error {
+	if l == nil || l.logger == nil {
+		return nil
+	}
+
+	if f, ok := l.logger.Writer().(*os.File); ok {
+		return f.Close()
+	}
+
+	return nil
+}
+
+// Fine writes the specified message at Fine level to the logger if logger's
+// logging level is less than or equal to Fine.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Fine(messageFormat string, messageArgs ...interface{}) {
 	l.Log(Fine, messageFormat, messageArgs...)
 }
 
-// Debug writes the specified message to the logger if the desired logging level
-// is set to Debug or a value lower than Debug such as Fine.
+// Trace writes the specified message at Trace level to the logger if logger's
+// logging level is less than or equal to Trace.
+//
+// The arguments for the logging message are handled in the manner of fmt.Printf.
+func (l *Logger) Trace(messageFormat string, messageArgs ...interface{}) {
+	l.Log(Trace, messageFormat, messageArgs...)
+}
+
+// Debug writes the specified message at Debug level to the logger if logger's
+// logging level is less than or equal to Debug.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Debug(messageFormat string, messageArgs ...interface{}) {
 	l.Log(Debug, messageFormat, messageArgs...)
 }
 
-// Info writes the specified message to the logger if the desired logging level
-// is set to Info or a value lower than Info such as Debug or Fine.
+// Info writes the specified message at Info level to the logger if logger's
+// logging level is less than or equal to Info.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Info(messageFormat string, messageArgs ...interface{}) {
 	l.Log(Info, messageFormat, messageArgs...)
 }
 
-// Warn writes the specified message to the logger if the desired logging level
-// is set to Warn or a value lower than Warn such as Info, Debug or Fine.
+// Warn writes the specified message at Warn level to the logger if logger's
+// logging level is less than or equal to Warn.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Warn(messageFormat string, messageArgs ...interface{}) {
 	l.Log(Warn, messageFormat, messageArgs...)
 }
 
-// Error writes the specified message to the logger if the desired logging level
-// is set to Error or a value lower than Error such as Warn, Info, Debug or Fine.
+// Error writes the specified message at Error level to the logger if logger's
+// logging level is less than or equal to Error.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Error(messageFormat string, messageArgs ...interface{}) {
 	l.Log(Error, messageFormat, messageArgs...)
 }
 
-// Log writes the specified message to logger if the specified logging level is
-// the same as or higher than logger's desired level.
+// Log writes the specified message to logger if logger's logging level is
+// less than or equal to the specified level.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
 func (l *Logger) Log(level LogLevel, messageFormat string, messageArgs ...interface{}) {
@@ -172,8 +200,8 @@ func (l *Logger) Log(level LogLevel, messageFormat string, messageArgs ...interf
 	l.logger.Print(l.timezone+label(level), fmt.Sprintf(messageFormat, messageArgs...))
 }
 
-// LogWithFn calls the function fn if the specified logging level is the same as
-// or higher than logger's desired level, writes the message returned from fn to
+// LogWithFn calls the function fn if the logger's logging level is less than
+// or equal to specified level, writes the message returned from fn to
 // the logger.
 //
 // The arguments for the logging message are handled in the manner of fmt.Printf.
@@ -190,6 +218,8 @@ func label(level LogLevel) string {
 	switch level {
 	case Fine:
 		return "[FINE]  "
+	case Trace:
+		return "[TRACE] "
 	case Debug:
 		return "[DEBUG] "
 	case Info:

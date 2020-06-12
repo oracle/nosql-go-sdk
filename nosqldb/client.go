@@ -44,6 +44,9 @@ type Client struct {
 	// logger specifies a Client logger used to log events.
 	logger *logger.Logger
 
+	// queryLogger logs trace information for advanced queries.
+	queryLogger *queryTracer
+
 	// requestURL represents the server URL that is the target of all client requests.
 	requestURL string
 
@@ -104,6 +107,11 @@ func NewClient(cfg Config) (*Client, error) {
 		isCloud:    cfg.IsCloud() || cfg.IsCloudSim(),
 	}
 	c.handleResponse = c.processResponse
+	c.queryLogger, err = newQueryLogger()
+	if err != nil {
+		c.logger.Warn("cannot create a query logger: %v", err)
+	}
+
 	return c, nil
 }
 
@@ -111,6 +119,14 @@ func NewClient(cfg Config) (*Client, error) {
 func (c *Client) Close() error {
 	if c.AuthorizationProvider != nil {
 		c.AuthorizationProvider.Close()
+	}
+
+	if c.queryLogger != nil {
+		c.queryLogger.Close()
+	}
+
+	if c.logger != nil {
+		c.logger.Close()
 	}
 
 	return nil
