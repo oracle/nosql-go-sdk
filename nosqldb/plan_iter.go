@@ -32,6 +32,7 @@ const (
 	minMaxFunc planIterKind = 41
 	sorting    planIterKind = 47
 	group      planIterKind = 65
+	sorting2   planIterKind = 66
 )
 
 func (itk planIterKind) String() string {
@@ -58,6 +59,8 @@ func (itk planIterKind) String() string {
 		return "SORT"
 	case group:
 		return "GROUP"
+	case sorting2:
+		return "SORT2"
 	default:
 		return "UNKNOWN"
 	}
@@ -245,8 +248,8 @@ func deserializePlanIter(r proto.Reader) (planIter, error) {
 		return newFuncSumIter(r)
 	case minMaxFunc:
 		return newFuncMinMaxIter(r)
-	case sorting:
-		return newSortIter(r)
+	case sorting, sorting2:
+		return newSortIter(r, kind)
 	case sfw:
 		return newSFWIter(r)
 	case recv:

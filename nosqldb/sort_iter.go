@@ -116,7 +116,7 @@ type sortIter struct {
 	countMemory bool
 }
 
-func newSortIter(r proto.Reader) (iter *sortIter, err error) {
+func newSortIter(r proto.Reader, kind planIterKind) (iter *sortIter, err error) {
 	delegate, err := newPlanIterDelegate(r, sorting)
 	if err != nil {
 		return
@@ -137,9 +137,12 @@ func newSortIter(r proto.Reader) (iter *sortIter, err error) {
 		return
 	}
 
-	countMemory, err := r.ReadBoolean()
-	if err != nil {
-		return
+	countMemory := true
+	if kind == sorting2 {
+		countMemory, err = r.ReadBoolean()
+		if err != nil {
+			return
+		}
 	}
 
 	iter = &sortIter{
@@ -215,6 +218,16 @@ func (iter *sortIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 			v, ok = res.(*types.MapValue)
 			if !ok {
 				return false, fmt.Errorf("the value should be a *types.MapValue, got %T", res)
+			}
+
+			for _, name := range iter.sortFields {
+				value, _ := v.Get(name)
+				switch value.(type) {
+				// ARRAY/MAP values are not supported.
+				case []interface{}, []types.FieldValue, map[string]interface{}, *types.MapValue:
+					return false, fmt.Errorf("sort expression does not return a single atomic value, "+
+						"error at location %s", iter.loc)
+				}
 			}
 
 			state.results = append(state.results, v)
