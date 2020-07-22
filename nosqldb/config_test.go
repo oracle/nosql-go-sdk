@@ -185,7 +185,7 @@ func TestRegionConfig(t *testing.T) {
 		},
 		{
 			desc:         "use the specified Config.Region",
-			cfg:          &Config{Region: "us-ashburn-1"},
+			cfg:          &Config{Region: "us-ashburn-1", AuthorizationProvider: sp1},
 			wantEndpoint: "nosql.us-ashburn-1.oci.oraclecloud.com",
 			ok:           true,
 		},
