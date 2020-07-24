@@ -1,6 +1,7 @@
 [DEFAULT]
 user=ocid1.user.oc1..aaaaaaaa65vwl75tewwm32rgqvm6i34unq
 fingerprint=20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34
+# dummy_key.pem is generated on the fly during testing
 key_file=testdata/dummy_key.pem
 pass_phrase=examplephrase
 tenancy=ocid1.tenancy.oc1..aaaaaaaaba3pv6wuzr4h25vqstifsfdsq

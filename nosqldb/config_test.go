@@ -8,12 +8,19 @@
 package nosqldb
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateConfig(t *testing.T) {
@@ -137,10 +144,30 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
+// generatePrivateKeyPEM generates an RSA private key file in PEM format.
+func generatePrivateKeyPEM(fileName string) (err error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return
+	}
+	block := &pem.Block{
+		Type:  "RSA TEST PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	privateKeyPem := pem.EncodeToMemory(block)
+	err = ioutil.WriteFile(fileName, privateKeyPem, 0600)
+	return
+}
+
 // TestRegionConfig tests the cases that specify a region for cloud service
 // either in Config.Region, OCI configuration file, or specify the service
 // endpoint explicitly.
 func TestRegionConfig(t *testing.T) {
+	privateKeyFile := "testdata/dummy_key.pem"
+	err := generatePrivateKeyPEM(privateKeyFile)
+	require.NoErrorf(t, err, "cannot create private key file %s: %v", privateKeyFile, err)
+	defer os.Remove(privateKeyFile)
+
 	//  Profile DEFAULT specifies eu-zurich-1 as region.
 	sp0, err := iam.NewSignatureProviderFromFile("testdata/dummy_config", "DEFAULT", "", "")
 	if !assert.NoErrorf(t, err, "cannot create a signature provider using DEFAULT profile") {

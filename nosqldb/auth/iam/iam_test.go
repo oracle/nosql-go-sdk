@@ -9,6 +9,10 @@ package iam
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -20,6 +24,44 @@ import (
 
 type iamTestSuite struct {
 	suite.Suite
+}
+
+// SetupSuite is used to setup test resources before test.
+//
+// This implements the suite.SetupAllSuite interface.
+func (suite *iamTestSuite) SetupSuite() {
+	var err error
+	err = ioutil.WriteFile(testKeyFile, []byte(testKeyPemRaw), 0600)
+	suite.Require().NoErrorf(err, "cannot create private key file %s: %v", testKeyFile, err)
+	err = generateBadPrivateKeyPEM(testBadKeyFile)
+	suite.Require().NoErrorf(err, "cannot create private key file %s: %v", testBadKeyFile, err)
+}
+
+// TearDownSuite is used to clean up test resources after test.
+//
+// This implements the suite.TearDownAllSuite.
+func (suite *iamTestSuite) TearDownSuite() {
+	var err error
+	err = os.Remove(testKeyFile)
+	suite.Truef(err == nil || os.IsNotExist(err), "failed to remove file %s: %v", testKeyFile, err)
+	err = os.Remove(testBadKeyFile)
+	suite.Truef(err == nil || os.IsNotExist(err), "failed to remove file %s: %v", testBadKeyFile, err)
+}
+
+// generateBadPrivateKeyPEM generates a corrupt RSA private key file in PEM format.
+func generateBadPrivateKeyPEM(fileName string) (err error) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return
+	}
+	block := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+	privateKeyPem := pem.EncodeToMemory(block)
+	rand.Read(privateKeyPem[256:280])
+	err = ioutil.WriteFile(fileName, privateKeyPem, 0600)
+	return
 }
 
 // fields typically read from an OCI IAM config file
@@ -36,6 +78,21 @@ type testProviderInfo struct {
 }
 
 const (
+	testKeyPemRaw = `-----BEGIN RSA PRIVATE KEY-----
+MIICXgIBAAKBgQDCFENGw33yGihy92pDjZQhl0C36rPJj+CvfSC8+q28hxA161QF
+NUd13wuCTUcq0Qd2qsBe/2hFyc2DCJJg0h1L78+6Z4UMR7EOcpfdUE9Hf3m/hs+F
+UR45uBJeDK1HSFHD8bHKD6kv8FPGfJTotc+2xjJwoYi+1hqp1fIekaxsyQIDAQAB
+AoGBAJR8ZkCUvx5kzv+utdl7T5MnordT1TvoXXJGXK7ZZ+UuvMNUCdN2QPc4sBiA
+QWvLw1cSKt5DsKZ8UETpYPy8pPYnnDEz2dDYiaew9+xEpubyeW2oH4Zx71wqBtOK
+kqwrXa/pzdpiucRRjk6vE6YY7EBBs/g7uanVpGibOVAEsqH1AkEA7DkjVH28WDUg
+f1nqvfn2Kj6CT7nIcE3jGJsZZ7zlZmBmHFDONMLUrXR/Zm3pR5m0tCmBqa5RK95u
+412jt1dPIwJBANJT3v8pnkth48bQo/fKel6uEYyboRtA5/uHuHkZ6FQF7OUkGogc
+mSJluOdc5t6hI1VsLn0QZEjQZMEOWr+wKSMCQQCC4kXJEsHAve77oP6HtG/IiEn7
+kpyUXRNvFsDE0czpJJBvL/aRFUJxuRK91jhjC68sA7NsKMGg5OXb5I5Jj36xAkEA
+gIT7aFOYBFwGgQAQkWNKLvySgKbAZRTeLBacpHMuQdl1DfdntvAyqpAZ0lY0RKmW
+G6aFKaqQfOXKCyWoUiVknQJAXrlgySFci/2ueKlIE1QqIiLSZ8V8OlpFLRnb1pzI
+7U1yQXnTAEFYM560yJlzUpOb1V4cScGd365tiSMvxLOvTA==
+-----END RSA PRIVATE KEY-----`
 	testKeyFile       = "testdata/test-iam.valid.pem"
 	testBadKeyFile    = "testdata/test-iam.corrupted.pem"
 	testExpectedAuth  = "Signature version=\"1\",headers=\"date (request-target) host\",keyId=\"ocid1.tenancy.oc1..aaaaaaaaba3pv6wkcr4jqae5f15p2b2m2yt2j6rx32uzr4h25vqstifsfdsq/ocid1.user.oc1..aaaaaaaat5nvwcna5j6aqzjcaty5eqbb6qt2jvpkanghtgdaqedqw3rynjq/20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34\",algorithm=\"rsa-sha256\",signature=\"FY0I/Jwl2oiQrug9/tB/tPiajq2zDqiLdU+YtxDaQ5onMvF90RtSGjPRwqbLl9+n4MPhgVVMXgpPXWe9l5TZ30/yF9O97CDLVOEGZ2DhSclSmejLVVuNrl14v559VKfxookpXwjYxLA1mT4mgq50MV/6e+mRi18U62uiJ3seZZI=\""
