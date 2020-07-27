@@ -1,0 +1,3 @@
+This is a dummy file used to work around Git's empty directory issue.
+The unit tests need to use the "testdata" directory or create temporary
+files in the directory.
