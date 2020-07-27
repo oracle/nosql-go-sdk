@@ -140,7 +140,7 @@ Details of the configuration file can be found on the [SDK and Configuration Fil
 
 The **Tenancy ID**, **User ID** and **fingerprint** should be acquired using the instructions above. The path to your private key file is the absolute path of the RSA private key. The order of the properties does not matter.
 
-The **region** is only required if [`nosqldb.Config.Region`](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#Config) is not set. It should specify the region of the NoSQL cloud service you are connecting to (for example: `us-phoenix-1`). Defined regions are listed in [Region godocs](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#Region). For more information on regions, see [Regions and Availability Domains](https://docs.cloud.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm).
+The **region** is only required if [`nosqldb.Config.Region`](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#Config) is not set. It should specify the region of the NoSQL cloud service you are connecting to (for example: `us-phoenix-1`). Defined regions are listed in [Region godocs](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/common#Region). For more information on regions, see [Regions and Availability Domains](https://docs.cloud.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm).
 
 The **pass_phrase** is only required if the RSA key file itself requires a passphrase. If not supplied in the file, it may also be supplied in the API calls directly (see below).
 
@@ -293,6 +293,7 @@ import (
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
@@ -381,7 +382,7 @@ func createClient() (*nosqldb.Client, error) {
 
 			cfg = nosqldb.Config{
 				Mode:                  "cloud",
-				Region:                nosqldb.Region(region),
+				Region:                common.Region(region),
 				AuthorizationProvider: sp,
 			}
 
@@ -402,7 +403,7 @@ func createClient() (*nosqldb.Client, error) {
 			}
 			cfg = nosqldb.Config{
 				Mode:                  "cloud",
-				Region:                nosqldb.Region(region),
+				Region:                common.Region(region),
 				AuthorizationProvider: sp,
 			}
 		}

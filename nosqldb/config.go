@@ -19,6 +19,7 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -78,7 +79,7 @@ type Config struct {
 	// in the OCI configuration file which is ~/.oci/config by default.
 	//
 	// This is used for cloud service only.
-	Region Region
+	Region common.Region
 
 	// Mode specifies the configuration mode for client, which is one of:
 	//
@@ -237,7 +238,7 @@ func (c *Config) setDefaults() (err error) {
 		switch {
 		// region is specified in OCI config file
 		case len(regionID) > 0:
-			c.Region = Region(regionID)
+			c.Region = common.Region(regionID)
 		// neither region nor endpoint is specified
 		case len(c.Endpoint) == 0:
 			return fmt.Errorf("Region must be specified")

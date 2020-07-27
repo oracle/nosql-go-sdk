@@ -30,7 +30,7 @@ func ExampleNewClient_cloud() {
 	// pass_phrase=<optional-passphrase>
 	//
 	cfg := nosqldb.Config{
-		Region: nosqldb.RegionPHX,
+		Region: "us-phoenix-1",
 	}
 
 	client, err := nosqldb.NewClient(cfg)

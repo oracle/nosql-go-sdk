@@ -3,11 +3,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## 1.2.1 - 2020-??-??
+## [Unreleased]
 
 ### Added
 - Added generic GROUP BY and SELECT DISTINCT. These features will only work
-  with servers that also support generic GROUP BY.
+with servers that also support generic GROUP BY.
+- Added support for creating a signature provider with Instance Principal and
+Resource Principal. These can be used to access NoSQL cloud service from within
+Oracle Compute Instances or Oracle Functions. Cloud only.
+
+### Changed
+- Changed **nosqldb.Region** type to **common.Region**. Cloud applications need
+to specify a value of `common.Region` type for the `Region` field of
+`nosqldb.Config` when initialize client configurations. _**This is a breaking
+change**_. 
 
 ### Fixed
 - Fixed a problem where the HTTP Host header was not being added in all request

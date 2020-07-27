@@ -110,6 +110,7 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore"
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
@@ -239,7 +240,7 @@ func CreateClient() (client *nosqldb.Client, err error) {
 	}
 
 	if cfg.IsCloud() {
-		region, err := nosqldb.StringToRegion(args.endpoint)
+		region, err := common.StringToRegion(args.endpoint)
 		if err != nil {
 			cfg.Endpoint = args.endpoint
 		} else {

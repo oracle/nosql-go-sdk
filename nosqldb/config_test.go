@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -132,7 +133,7 @@ func TestValidateConfig(t *testing.T) {
 		c := &Config{
 			Mode:     r.mode,
 			Endpoint: r.endpoint,
-			Region:   Region(r.region),
+			Region:   common.Region(r.region),
 		}
 
 		err := c.validate()
@@ -304,18 +305,25 @@ func TestParseEndpoint(t *testing.T) {
 		}
 	}
 
+	regionTests := []struct {
+		region       string
+		wantEndpoint string
+	}{
+		{"us-phoenix-1", "https://nosql.us-phoenix-1.oci.oraclecloud.com:443"},
+		{"us-ashburn-1", "https://nosql.us-ashburn-1.oci.oraclecloud.com:443"},
+		{"na", ""},
+	}
 	// Validate specified Region and parse endpoint from Region.
 	for _, r := range regionTests {
 		cfg := Config{
-			Region: r.region,
+			Region: common.Region(r.region),
 		}
 
 		err := cfg.parseEndpoint()
 		if r.wantEndpoint == "" {
 			assert.Errorf(t, err, "parseEndpoint() should have failed for region %q", string(r.region))
 		} else {
-			want := "https://" + r.wantEndpoint + ":443"
-			assert.Equalf(t, want, cfg.Endpoint, "got unexpected endpoint")
+			assert.Equalf(t, r.wantEndpoint, cfg.Endpoint, "got unexpected endpoint")
 		}
 	}
 }

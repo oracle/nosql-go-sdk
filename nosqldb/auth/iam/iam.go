@@ -104,31 +104,7 @@ func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassphra
 		return nil, err
 	}
 
-	// the default compartmentID is the tenancyID
-	if compartmentID == "" {
-		compartmentID, _ = configProvider.TenancyOCID()
-	}
-
-	// we currently don't sign the -body- of the requests
-	signer := RequestSignerExcludeBody(configProvider)
-	if signer == nil {
-		return nil, fmt.Errorf("can't create request signer")
-	}
-
-	// create a new signature every 5 minutes
-	expiryInterval, _ := time.ParseDuration("5m")
-
-	p := &SignatureProvider{
-		signature:              "",
-		signatureExpiresAt:     time.Now(),
-		signatureFormattedDate: "",
-		expiryInterval:         expiryInterval,
-		compartmentID:          compartmentID,
-		signer:                 signer,
-		configProvider:         configProvider,
-	}
-
-	return p, nil
+	return NewSignatureProviderWithConfiguration(configProvider, compartmentID)
 }
 
 // NewRawSignatureProvider creates a signature provider based on the raw
@@ -152,22 +128,100 @@ func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, 
 
 	configProvider := NewRawConfigurationProvider(tenancy, user, region, fingerprint, privateKey, privateKeyPassphrase)
 
-	// validate all fields in the file
+	// validate all required fields are provided
 	ok, err := IsConfigurationProviderValid(configProvider)
 	if ok == false {
 		return nil, err
 	}
 
-	// the default compartmentID is the tenancyID
+	return NewSignatureProviderWithConfiguration(configProvider, compartmentID)
+}
+
+// NewSignatureProviderWithResourcePrincipal creates a signature provider with
+// resource principal. This can be used for applications that access NoSQL cloud
+// service from within a function that executes on Oracle Functions.
+//
+// The compartmentID specifies the OCID of compartment to which the Oracle
+// NoSQL tables belong. If empty, the tenancy OCID is used.
+//
+// Resource principal is configured using the following environment variables:
+//
+//   OCI_RESOURCE_PRINCIPAL_VERSION
+//   OCI_RESOURCE_PRINCIPAL_RPST
+//   OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM
+//   OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM_PASSPHRASE
+//   OCI_RESOURCE_PRINCIPAL_REGION
+//
+// Where OCI_RESOURCE_PRINCIPAL_VERSION specifies a resource principal version.
+// Current version is 2.2.
+//
+// OCI_RESOURCE_PRINCIPAL_RPST specifies a resource principal session token or
+// a path to the file that stores the token.
+//
+// OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM specifies an RSA private key in pem format
+// or a path to private key file.
+//
+// OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM_PASSPHRASE specifies a passphrase for the
+// private key or a path to the file that stores the passphrase.
+// This is optional, only required if the private key has a passphrase.
+//
+// OCI_RESOURCE_PRINCIPAL_REGION specifies an OCI region identifier.
+//
+// Note that if your application is deployed to Oracle Functions, these
+// environment variables are already set inside the container in which the
+// function executes.
+func NewSignatureProviderWithResourcePrincipal(compartmentID string) (*SignatureProvider, error) {
+	configProvider, err := newResourcePrincipalConfigurationProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSignatureProviderWithConfiguration(configProvider, compartmentID)
+}
+
+// NewSignatureProviderWithInstancePrincipal creates a signature provider with
+// instance principal. This can be used for applications that access NoSQL cloud
+// service from within an Oracle Compute Instance.
+//
+// The compartmentID specifies the OCID of compartment to which the Oracle
+// NoSQL tables belong. If empty, the tenancy OCID is used.
+func NewSignatureProviderWithInstancePrincipal(compartmentID string) (*SignatureProvider, error) {
+	configProvider, err := newInstancePrincipalConfigurationProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSignatureProviderWithConfiguration(configProvider, compartmentID)
+}
+
+// NewSignatureProviderWithConfiguration creates a signature provider with
+// the supplied configuration.
+//
+// The compartmentID specifies the OCID of compartment to which the Oracle
+// NoSQL tables belong. If empty, the tenancy OCID is used.
+//
+// This function can be used in the following cases:
+//
+// 1. If other NewSignatureProviderXXX() variants declared in the package do
+// not meet application requirements, you can provide an implementation of the
+// ConfigurationProvider interface and create a signature provider with it.
+//
+// 2. If your application uses OCI-GO-SDK as a dependency, you can use one of
+// the ConfigurationProvider implementations from OCI-GO-SDK and create a
+// signature provider with it.
+func NewSignatureProviderWithConfiguration(configProvider ConfigurationProvider, compartmentID string) (*SignatureProvider, error) {
+
+	var err error
+	// use the tenancy if compartmentID is not provided.
 	if compartmentID == "" {
-		compartmentID, _ = configProvider.TenancyOCID()
+		compartmentID, err = configProvider.TenancyOCID()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// we currently don't sign the -body- of the requests
 	signer := RequestSignerExcludeBody(configProvider)
-	if signer == nil {
-		return nil, fmt.Errorf("can't create request signer")
-	}
 
 	// create a new signature every 5 minutes
 	expiryInterval, _ := time.ParseDuration("5m")
@@ -249,7 +303,10 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 	defer p.mutex.Unlock()
 	p.signatureFormattedDate = now.UTC().Format(http.TimeFormat)
 	req.Header.Set(requestHeaderDate, p.signatureFormattedDate)
-	p.signer.Sign(req)
+	err := p.signer.Sign(req)
+	if err != nil {
+		return err
+	}
 	p.signature = req.Header.Get(requestHeaderAuthorization)
 	p.signatureExpiresAt = now.Add(p.expiryInterval)
 

@@ -104,7 +104,16 @@ connecting an application are associated with a specific user. If needed, create
 a user for the person or system using the API.
 See [Adding Users](https://docs.cloud.oracle.com/en-us/iaas/Content/GSG/Tasks/addingusers.htm).
 
-#### Acquire Credentials for the Oracle NoSQL Cloud Service
+There are several ways to configure an application to access NoSQL cloud service
+depending on how your application authenticates with Oracle IAM (Identity and
+Access Management) service:
+- Using user credentials
+- Using Instance Principal
+- Using Resource Principal
+
+#### Authenticate with User Credentials
+
+##### Acquire Credentials for the Oracle NoSQL Cloud Service
 
 See [Acquiring Credentials](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/acquiring-credentials.html) for details of credentials you will need to configure an application.
 
@@ -125,7 +134,7 @@ See [Required Keys and OCIDs](https://docs.cloud.oracle.com/iaas/Content/API/Con
 - [How to Upload the Public Key](https://docs.cloud.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm#How2)
 
 
-#### Supply Credentials to the Application
+##### Supply Credentials to the Application
 
 Credentials are used to establish the initial connection from your application
 to the service. There are 2 ways to supply credentials to the application:
@@ -138,7 +147,7 @@ If using a configuration file it's default location is *$HOME/.oci/config*, but
 the location can be changed using the API [`iam.NewSignatureProviderFromFile`](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/auth/iam#NewSignatureProviderFromFile).
 
 The format of the configuration file is that of a properties file with the
-format of *key=value*, with one property per line. The contents and format are::
+format of *key=value*, with one property per line. The contents and format are:
 
 ```ini
 [DEFAULT]
@@ -214,6 +223,50 @@ cfg := nosqldb.Config{
     // This is only required if the "region" property is not specified in the config file.
     Region: "us-ashburn-1",
 }
+...
+```
+
+#### Authenticate with Instance Principal
+
+This can be used when access NoSQL cloud service from within an Oracle Compute
+Instance.
+
+> *Instance Principal* is an IAM service feature that enables instances to be
+authorized actors (or principals) to perform actions on service resources.
+Each compute instance has its own identity, and it authenticates using the
+certificates that are added to it.
+
+```go
+sp, err := iam.NewSignatureProviderWithInstancePrincipal("compartment_id")
+if err != nil {
+    return
+}
+cfg := nosqldb.Config{
+    AuthorizationProvider: sp,
+    Region:                "us-ashburn-1",
+}
+client, err := nosqldb.NewClient(cfg)
+...
+```
+
+#### Authenticate with Resource Principal
+
+This can be used when access NoSQL cloud service from within a function that
+executes in a container using Oracle Functions service.
+
+> *Resource Principal* is an IAM service feature that enables the resources to be
+authorized actors (or principals) to perform actions on service resources.
+
+```go
+sp, err := iam.NewSignatureProviderWithResourcePrincipal("compartment_id")
+if err != nil {
+    return
+}
+cfg := nosqldb.Config{
+    AuthorizationProvider: sp,
+    Region:                "us-ashburn-1",
+}
+client, err := nosqldb.NewClient(cfg)
 ...
 ```
 
