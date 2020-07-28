@@ -105,6 +105,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
@@ -244,6 +245,9 @@ func CreateClient() (client *nosqldb.Client, err error) {
 			cfg.Endpoint = args.endpoint
 		} else {
 			cfg.Region = region
+		}
+		if runtime.GOOS == "windows" {
+			cfg.InsecureSkipVerify = true
 		}
 	} else {
 		cfg.Endpoint = args.endpoint
