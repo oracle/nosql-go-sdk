@@ -1,7 +1,8 @@
 {
     "mode": "cloudsim",
     "endpoint": "http://localhost:8080",
-    "tablePrefix": "GOSDK",
+    "version": "1.3.2",
+    "tablePrefix": "Go",
     "reCreateTables": true,
     "dropTablesOnTearDown": true
 }

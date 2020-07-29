@@ -69,6 +69,8 @@ The test configuration parameters are described as follows:
 | mode | Yes | cloudsim: test with the Oracle NoSQL Cloud Simulator. |
 |      |     | onprem: test with the Oracle NoSQL Database on-premise. |
 | endpoint  | Yes | Specify the NoSQL service endpoint. |
+| version | Yes | Specify the Oracle NoSQL Database on-premise release version or the Oracle NoSQL Cloud Simulator release version. |
+|         |     | This is used to determine the tests that only apply to specific release versions. |
 | username  | No  | Specify the username used to authenticate with the Oracle NoSQL Database on-premise. |
 |           |     | This is only required if the Oracle NoSQL Database on-premise has security configuration enabled. |
 | password  | No  | Specify the password used to authenticate with the Oracle NoSQL Database on-premise. |

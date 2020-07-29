@@ -893,6 +893,7 @@ func (suite *DataOpsTestSuite) TestNonNumericDataTypes() {
 	suite.ReCreateTable(table, stmt, limits)
 
 	intVal := 1
+	int64Val := int64(1)
 	boolVal := true
 	strVal := "Oracle NoSQL"
 	bi10Val := test.GenBytes(10)
@@ -903,11 +904,13 @@ func (suite *DataOpsTestSuite) TestNonNumericDataTypes() {
 	tsVal, err := time.Parse(types.ISO8601Layout, tsStrVal)
 	suite.Require().NoErrorf(err, "failed to parse %s as time.Time, got error %v.", tsStrVal, err)
 
-	testCases := []struct {
+	type nonNumericTest struct {
 		targetField   string
 		invalidValues []types.FieldValue
 		validValues   []types.FieldValue
-	}{
+	}
+
+	testCases := []*nonNumericTest{
 		// Boolean type
 		{"bl", []types.FieldValue{intVal, tsVal, bi10Val}, []types.FieldValue{boolVal, strVal, "TRUE", "FalSE"}},
 		// String type
@@ -919,13 +922,6 @@ func (suite *DataOpsTestSuite) TestNonNumericDataTypes() {
 			[]types.FieldValue{intVal, boolVal, strVal, tsVal, bi10Val, "RED", "YEllow", "BLue"},
 			[]types.FieldValue{"red", "yellow", "blue"},
 		},
-		// Timestamp type
-		{
-			"ts",
-			[]types.FieldValue{intVal, boolVal, strVal, bi10Val, "2019-05-02 10:23:42.123"},
-			[]types.FieldValue{tsVal, tsStrVal, tsVal.Format(types.ISO8601Layout),
-				tsVal.Format(time.RFC3339), tsVal.Format(time.RFC3339Nano)},
-		},
 		// Binary type
 		{"bi", []types.FieldValue{intVal, boolVal, strVal, tsVal}, []types.FieldValue{bi10Val, bi20Val, strByte10, strByte20}},
 		// Fixed binary type
@@ -933,6 +929,24 @@ func (suite *DataOpsTestSuite) TestNonNumericDataTypes() {
 		// JSON type
 		{"json", nil, []types.FieldValue{intVal, boolVal, strVal, tsVal, bi10Val, bi20Val, strByte10, strByte20}},
 	}
+
+	// Test case for TIMESTAMP data type
+	tsTest := &nonNumericTest{
+		"ts",
+		[]types.FieldValue{boolVal, strVal, bi10Val, "2019-05-02 10:23:42.123"},
+		[]types.FieldValue{tsVal, tsStrVal, tsVal.Format(types.ISO8601Layout),
+			tsVal.Format(time.RFC3339), tsVal.Format(time.RFC3339Nano)},
+	}
+
+	// int/int64 values are valid for TIMESTAMP data type starting with NoSQL
+	// Server 20.2.14 on-premise release and Cloud Simulator 1.3.2 release.
+	if suite.IsOnPrem() && suite.Version >= "20.2.14" || suite.IsCloudSim() && suite.Version >= "1.3.2" {
+		tsTest.validValues = append(tsTest.validValues, []types.FieldValue{intVal, int64Val}...)
+	} else {
+		tsTest.invalidValues = append(tsTest.invalidValues, []types.FieldValue{intVal, int64Val}...)
+	}
+
+	testCases = append(testCases, tsTest)
 
 	for i, r := range testCases {
 		id := i*10 + 1

@@ -43,6 +43,12 @@ type Config struct {
 	// server.
 	Endpoint string `json:"endpoint"`
 
+	// Version specifies the Oracle NoSQL Database on-premise release version
+	// or the Oracle NoSQL Cloud Simulator release version.
+	//
+	// This is used to determine the tests that only apply to specific releases.
+	Version string `json:"version"`
+
 	// TablePrefix specifies a prefix for table names created in the tests.
 	TablePrefix string `json:"tablePrefix"`
 
@@ -83,6 +89,12 @@ func newConfig(configFile string) (*Config, error) {
 // service or cloud simulator, returns false otherwise.
 func (cfg *Config) IsCloud() bool {
 	return cfg != nil && (cfg.Mode == "cloud" || cfg.Mode == "cloudsim")
+}
+
+// IsCloudSim returns true if tests are configured to run against the NoSQL
+// cloud simulator, returns false otherwise.
+func (cfg *Config) IsCloudSim() bool {
+	return cfg != nil && cfg.Mode == "cloudsim"
 }
 
 // IsOnPrem returns true if tests are configured to run against the on-premise

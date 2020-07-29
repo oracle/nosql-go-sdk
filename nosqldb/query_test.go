@@ -179,25 +179,27 @@ func (suite *QueryTestSuite) TestQueryWithSmallLimit() {
 		}
 	}
 
-	// Update with maxReadKB of 1, expect an IllegalArgument error.
-	stmt = fmt.Sprintf(`update %s set longString = "%s" where sid = 0 and id = 1`,
-		suite.table, longStr)
-	for kb := 1; kb <= expectReadKB; kb++ {
-		req = &nosqldb.QueryRequest{
-			Statement: stmt,
-			MaxReadKB: uint(kb),
-		}
-		res, err = suite.Client.Query(req)
-		if kb < expectReadKB {
-			suite.Truef(nosqlerr.IsIllegalArgument(err),
-				"Update with MaxReadKB=%d (expect ReadKB=%d) should have failed with an "+
-					"IllegalArgument error, got error %v", kb, expectReadKB, err)
+	if suite.IsCloud() || (suite.IsOnPrem() && suite.Version > "20.3") {
+		// Update with maxReadKB of 1, expect an IllegalArgument error.
+		stmt = fmt.Sprintf(`update %s set longString = "%s" where sid = 0 and id = 1`,
+			suite.table, longStr)
+		for kb := 1; kb <= expectReadKB; kb++ {
+			req = &nosqldb.QueryRequest{
+				Statement: stmt,
+				MaxReadKB: uint(kb),
+			}
+			res, err = suite.Client.Query(req)
+			if kb < expectReadKB {
+				suite.Truef(nosqlerr.IsIllegalArgument(err),
+					"Update with MaxReadKB=%d (expect ReadKB=%d) should have failed with an "+
+						"IllegalArgument error, got error %v", kb, expectReadKB, err)
 
-		} else if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-			if test.IsCloud() {
-				suite.AssertReadWriteKB(res, expectReadKB, expectWriteKB, prepCost, true)
-			} else {
-				suite.AssertZeroReadWriteKB(res)
+			} else if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
+				if test.IsCloud() {
+					suite.AssertReadWriteKB(res, expectReadKB, expectWriteKB, prepCost, true)
+				} else {
+					suite.AssertZeroReadWriteKB(res)
+				}
 			}
 		}
 	}
@@ -1362,8 +1364,6 @@ func (suite *QueryTestSuite) executeQueryWithOpts(stmt string, keyOnly, indexSca
 		totalPrepCost += prepCost
 		numBatches++
 
-		// suite.T().Logf("+++++++++ stats: numBatches=%d, readKB=%d, readUnits=%d, totalPrepCost=%d, numRows=%d\n",
-		// 	numBatches, readKB, readUnits, totalPrepCost, numRows)
 		if req.IsDone() {
 			break
 		}
@@ -1392,7 +1392,6 @@ func (suite *QueryTestSuite) executeQueryWithOpts(stmt string, keyOnly, indexSca
 					delta <<= 1
 				}
 				expReadUnits += totalPrepCost
-				// suite.T().Logf("expReadUnits=%d, delta=%d\n", expReadUnits, delta)
 				suite.GreaterOrEqual(readUnits, expReadUnits, "wrong readUnits")
 				suite.LessOrEqual(readUnits, expReadUnits+delta, "wrong readUnits")
 				test.AssertReadUnits(suite.Assert(), readKB, readUnits, totalPrepCost, isAbsolute)

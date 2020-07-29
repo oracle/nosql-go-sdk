@@ -1,9 +1,10 @@
 {
     "mode": "onprem",
-    "endpoint": "https://localhost:9090",
+    "endpoint": "http://localhost:8081",
+    "version": "20.2.14",
     "username": "",
     "password": "",
     "tablePrefix": "Go",
     "reCreateTables": true,
-    "dropTablesOnTearDown": false
+    "dropTablesOnTearDown": true
 }
