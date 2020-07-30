@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
-	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
 )
 
 var (
@@ -29,20 +28,6 @@ var (
 
 // Config represents a test configuration.
 type Config struct {
-	// Mode specifies on which mode the tests run.
-	// Available test modes are:
-	//
-	//   cloud    : test with the NoSQL cloud service
-	//   cloudsim : test with the NoSQL cloud simulator
-	//   onprem   : test with the on-premise NoSQL server
-	//
-	Mode string `json:"mode"`
-
-	// Endpoint specifies an endpoint to use to connect to the Oracle NoSQL
-	// database cloud service or, if on-premise, the Oracle NoSQL database proxy
-	// server.
-	Endpoint string `json:"endpoint"`
-
 	// Version specifies the Oracle NoSQL Database on-premise release version
 	// or the Oracle NoSQL Cloud Simulator release version.
 	//
@@ -58,11 +43,8 @@ type Config struct {
 	// If not specified, the tables are kept after test.
 	DropTablesOnTearDown bool `json:"dropTablesOnTearDown"`
 
-	// Username and password are used to authenticate with the secure NoSQL server on-premise.
-	//
-	// These are only used for on-premise test.
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	// NoSQL database client configurations.
+	nosqldb.Config `json:"clientConfig"`
 }
 
 // newConfig creates a test configuration object from the specified JSON file.
@@ -110,7 +92,7 @@ func (cfg *Config) IsOnPremSecureStore() bool {
 		return false
 	}
 
-	return cfg.IsOnPrem() && cfg.Username != "" && cfg.Password != ""
+	return cfg.IsOnPrem() && cfg.Username != "" && len(cfg.Password) > 0
 }
 
 // createConfig creates a test configuration object from the JSON file specified
@@ -155,31 +137,8 @@ func getConfig() (*Config, error) {
 
 // createClient creates a NoSQL client with the specified test configuration.
 func createClient(cfg *Config) (*nosqldb.Client, error) {
-	clientConfig := nosqldb.Config{
-		Endpoint: cfg.Endpoint,
-		Mode:     cfg.Mode,
-	}
-
-	switch cfg.Mode {
-	case "cloudsim":
-		clientConfig.AuthorizationProvider = &cloudsim.AccessTokenProvider{
-			TenantID: "TestTenantId",
-		}
-
-	case "onprem":
-		if cfg.Username != "" && cfg.Password != "" {
-			clientConfig.Username = cfg.Username
-			clientConfig.Password = []byte(cfg.Password)
-		}
-
-		// Accept any certificates presented by the server and any host name in that certificate.
-		//
-		// This is used for testing, not recommended in production.
-		clientConfig.InsecureSkipVerify = true
-	}
-
 	var err error
-	client, err = nosqldb.NewClient(clientConfig)
+	client, err = nosqldb.NewClient(cfg.Config)
 	if err != nil {
 		return nil, err
 	}

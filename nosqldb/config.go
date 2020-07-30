@@ -72,14 +72,14 @@ type Config struct {
 	// If port is omitted, the endpoint defaults to 443.
 	// If protocol is omitted, the endpoint uses https if the port is 443, and
 	// http in all other cases.
-	Endpoint string
+	Endpoint string `json:"endpoint"`
 
 	// Region specifies the region for the Oracle NoSQL cloud service that clients connect to.
 	// Region takes precedence over the "region" property that may be specified
 	// in the OCI configuration file which is ~/.oci/config by default.
 	//
 	// This is used for cloud service only.
-	Region common.Region
+	Region common.Region `json:"region"`
 
 	// Mode specifies the configuration mode for client, which is one of:
 	//
@@ -88,24 +88,24 @@ type Config struct {
 	//   "onprem": for connecting to an on-premise NoSQL server
 	//
 	// If not set, the "cloud" mode is used by default.
-	Mode string
+	Mode string `json:"mode"`
 
 	// Username specifies the user that used to authenticate with the server.
 	// This is only used for on-premise NoSQL server that configured with security.
-	Username string
+	Username string `json:"username,omitempty"`
 
 	// Password specifies the password for user that used to authenticate with the server.
 	// This is only used for on-premise NoSQL server that configured with security.
-	Password []byte
+	Password []byte `json:"password,omitempty"`
 
 	// Configurations for requests.
-	RequestConfig
+	RequestConfig `json:"requestConfig,omitempty"`
 
 	// Configurations for HTTP client.
-	httputil.HTTPConfig
+	httputil.HTTPConfig `json:"httpConfig,omitempty"`
 
 	// Configurations for logging.
-	LoggingConfig
+	LoggingConfig `json:"loggingConfig,omitempty"`
 
 	// Authorization provider.
 	// If not specified, use the default authorization provider depending on the
@@ -381,22 +381,22 @@ type RequestConfig struct {
 	// RequestTimeout specifies a timeout value for requests.
 	// This applies to any requests other than TableRequest.
 	// If set, it must be greater than or equal to 1 millisecond.
-	RequestTimeout time.Duration
+	RequestTimeout time.Duration `json:"requestTimeout,omitempty"`
 
 	// TableRequestTimeout specifies a timeout value for TableRequest.
 	// If set, it must be greater than or equal to 1 millisecond.
-	TableRequestTimeout time.Duration
+	TableRequestTimeout time.Duration `json:"tableRequestTimeout,omitempty"`
 
 	// SecurityInfoTimeout specifies a timeout value for retrieving security
 	// information such as access tokens from authorization service.
 	// This specifies a period of time waiting for security information to be available.
 	// If set, it must be greater than or equal to 1 millisecond.
-	SecurityInfoTimeout time.Duration
+	SecurityInfoTimeout time.Duration `json:"securityInfoTimeout,omitempty"`
 
 	// Consistency specifies a Consistency value for read requests, which
 	// include GetRequest and QueryRequest.
 	// If set, it must be either types.Eventual or types.Absolute.
-	Consistency types.Consistency
+	Consistency types.Consistency `json:"consistency,omitempty"`
 }
 
 // DefaultRequestTimeout returns the default timeout value for requests.
@@ -448,5 +448,5 @@ type LoggingConfig struct {
 	*logger.Logger
 
 	// DisableLogging represents whether logging is disabled.
-	DisableLogging bool
+	DisableLogging bool `json:"disableLogging,omitempty"`
 }

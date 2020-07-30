@@ -64,21 +64,35 @@ in that package that are used to configure the test with the Oracle NoSQL Cloud
 Simulator and the Oracle NoSQL Database on-premise respectively.
 The test configuration parameters are described as follows:
 
-| Parameter | Required? | Notes |
-------------|-----------|-------|
-| mode | Yes | cloudsim: test with the Oracle NoSQL Cloud Simulator. |
-|      |     | onprem: test with the Oracle NoSQL Database on-premise. |
-| endpoint  | Yes | Specify the NoSQL service endpoint. |
+- General configuration parameters
+
+| Parameter    | Required?   | Notes   |
+| ------------ | ----------- | ------- |
+| clientConfig.mode     | Yes | cloudsim: test with the Oracle NoSQL Cloud Simulator. |
+|                       |     | onprem: test with the Oracle NoSQL Database on-premise. |
+| clientConfig.endpoint | Yes | Specify the NoSQL service endpoint. |
 | version | Yes | Specify the Oracle NoSQL Database on-premise release version or the Oracle NoSQL Cloud Simulator release version. |
 |         |     | This is used to determine the tests that only apply to specific release versions. |
-| username  | No  | Specify the username used to authenticate with the Oracle NoSQL Database on-premise. |
-|           |     | This is only required if the Oracle NoSQL Database on-premise has security configuration enabled. |
-| password  | No  | Specify the password used to authenticate with the Oracle NoSQL Database on-premise. |
-|           |     | This is only required if the Oracle NoSQL Database on-premise has security configuration enabled. |
 | tablePrefix | No | Specify the prefix for table names. |
 |             |    | You can use a prefix to discriminate between tables created by different test users. |
 | reCreateTables | No | A bool flag that indicates if tables should be drop-and-recreate before tests. |
 | dropTablesOnTearDown | No | A bool flag that indicates if tables should be dropped after tests. |
+
+- Configuration parameters used when test against on-premise Oracle NoSQL Database Server that has security configuration enabled
+
+| Parameter    | Required?   | Notes   |
+| ------------ | ----------- | ------- |
+| clientConfig.username | Yes  | Specify the username used to authenticate with the Oracle NoSQL Database Server. |
+| clientConfig.password | Yes  | Specify a base64 encoded string of the password used to authenticate with the Oracle NoSQL Database Server. |
+|                       |      | For example, the output of \`echo -n "Password" \| base64` could be used as the value. |
+| clientConfig.httpConfig.certPath   | No | Specify the certificate used by the Oracle NoSQL Database Server. |
+| clientConfig.httpConfig.serverName | No | Specify the server name of the Oracle NoSQL Database Server. |
+|                                    |    | This should match the "CN" subject value from the certificate specified by "certPath". |
+| clientConfig.httpConfig.insecureSkipVerify | No | A bool flag that indicates whether to skip server certificate verification. |
+|                                            |    | If this is set to true, the "certPath" and "serverName" are ignored. |
+
+>**Note**: The test configurations include NoSQL client configurations represented by the `clientConfig` parameter.  For a complete list of
+configuration parameters for `clientConfig`, please see [nosqldb.Config](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#Config).
 
 ### Run tests with the Oracle NoSQL Cloud Simulator
 - Start a Cloud Simulator instance.

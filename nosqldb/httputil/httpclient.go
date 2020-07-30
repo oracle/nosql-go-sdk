@@ -123,64 +123,64 @@ var DefaultHTTPClient = &HTTPClient{
 // HTTPConfig contains parameters used to configure HTTPClient.
 type HTTPConfig struct {
 	// UseHTTPS indicates if HTTPS is used.
-	UseHTTPS bool
+	UseHTTPS bool `json:"useHTTPS,omitempty"`
 
 	// ProxyURL specifies an HTTP proxy server URL.
 	// If specified, all transports go through the proxy server.
-	ProxyURL string
+	ProxyURL string `json:"proxyURL,omitempty"`
 
 	// ProxyUsername specifies the username used to authenticate with HTTP proxy
 	// server if required.
-	ProxyUsername string
+	ProxyUsername string `json:"proxyUsername,omitempty"`
 
 	// ProxyPassword specifies the password used to authenticate with HTTP proxy
 	// server if required.
-	ProxyPassword string
+	ProxyPassword string `json:"proxyPassword,omitempty"`
 
 	// UseProxyFromEnv indicates whether to use the proxy server that is set by
 	// the environment variables HTTP_PROXY, HTTPS_PROXY and NO_PROXY
 	// (or the lowercase versions thereof).
 	// If UseProxyFromEnv is true, it takes precedence over the ProxyURL
 	// parameter.
-	UseProxyFromEnv bool
+	UseProxyFromEnv bool `json:"useProxyFromEnv,omitempty"`
 
 	// MaxIdleConns controls the maximum number of idle (keep-alive) connections
 	// across all hosts.
 	// The default value is 100.
-	MaxIdleConns int
+	MaxIdleConns int `json:"maxIdleConns,omitempty"`
 
 	// MaxIdleConnsPerHost controls the maximum idle (keep-alive) connections
 	// to keep per-host.
 	// The default value is 100.
-	MaxIdleConnsPerHost int
+	MaxIdleConnsPerHost int `json:"maxIdleConnsPerHost,omitempty"`
 
 	// IdleConnTimeout is the maximum amount of time an idle (keep-alive)
 	// connection will remain idle before closing itself.
 	// The default is 90 seconds.
-	IdleConnTimeout time.Duration
+	IdleConnTimeout time.Duration `json:"idleConnTimeout,omitempty"`
 
 	// SslSessionTimeout is the timeout value for an SSL session.
 	// The default is 30 seconds.
-	SslSessionTimeout time.Duration
+	SslSessionTimeout time.Duration `json:"sslSessionTimeout,omitempty"`
 
 	// InsecureSkipVerify controls whether a client verifies the server's
 	// certificate chain and host name.
 	// If InsecureSkipVerify is true, TLS accepts any certificate presented by
 	// the server and any host name in that certificate.
 	// In this mode, TLS is susceptible to man-in-the-middle attacks.
-	InsecureSkipVerify bool
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
 
 	// CertPath specifies the path to a pem-encoded certificate file.
 	// Certificates in this file will be used in addition to system certificates.
 	// This field is typically used for local self-signed certificates.
 	// If InsecureSkipVerify is true, this field is ignored.
-	CertPath string
+	CertPath string `json:"certPath,omitempty"`
 
 	// ServerName is used to verify the hostname for self-signed certificates.
 	// This field is only used if CertPath is nonempty, and is typically set
 	// to the "CN" subject value from the certificate specified by CertPath.
 	// If InsecureSkipVerify is true, this field is ignored.
-	ServerName string
+	ServerName string `json:"serverName,omitempty"`
 
 	// TODO:
 	// CipherSuites	   []uint16

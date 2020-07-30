@@ -1,10 +1,16 @@
 {
-    "mode": "onprem",
-    "endpoint": "http://localhost:8081",
-    "version": "20.2.14",
-    "username": "",
-    "password": "",
+    "version": "20.2.15",
     "tablePrefix": "Go",
     "reCreateTables": true,
-    "dropTablesOnTearDown": true
+    "dropTablesOnTearDown": true,
+    "clientConfig": {
+        "mode": "onprem",
+        "endpoint": "https://localhost:8091",
+        "username": "driver_user",
+        "password": "RHJpdmVyVXNlcl9fMTIzNDU2",
+        "httpConfig": {
+            "certPath": "/path/to/server_certificate.pem",
+            "serverName": "localhost"
+        }
+    }
 }
