@@ -207,6 +207,19 @@ func (c *Config) setDefaults() (err error) {
 		// Set service endpoint for the on-premise NoSQL server.
 		if atp, ok := c.AuthorizationProvider.(*kvstore.AccessTokenProvider); ok {
 			atp.SetEndpoint(c.Endpoint)
+
+			// If user provides an AccessTokenProvider that does not set an
+			// http client, create one and set it for the provider.
+			if atp.GetHTTPClient() == nil {
+				if c.httpClient == nil {
+					c.httpClient, err = httputil.NewHTTPClient(c.HTTPConfig)
+					if err != nil {
+						return err
+					}
+				}
+
+				atp.SetHTTPClient(c.httpClient)
+			}
 		}
 
 		return nil

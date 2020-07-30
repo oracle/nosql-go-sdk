@@ -40,7 +40,7 @@ var defaultOptions = auth.ProviderOptions{
 	Timeout:      10 * time.Second,
 	ExpiryWindow: 2 * time.Minute,
 	Logger:       logger.DefaultLogger,
-	HTTPClient:   httputil.DefaultHTTPClient,
+	HTTPClient:   nil,
 }
 
 // AccessTokenProvider is an access token provider used for on-premise NoSQL server.
@@ -192,6 +192,17 @@ func NewAccessTokenProvider(username string, password []byte, options ...auth.Pr
 func (p *AccessTokenProvider) SetEndpoint(endpoint string) *AccessTokenProvider {
 	p.endpoint = endpoint + sdkutil.SecurityServiceURI
 	return p
+}
+
+// SetHTTPClient sets the specified http client for the provider.
+func (p *AccessTokenProvider) SetHTTPClient(httpClient *httputil.HTTPClient) *AccessTokenProvider {
+	p.httpClient = httpClient
+	return p
+}
+
+// GetHTTPClient returns the http client associated with the provider.
+func (p *AccessTokenProvider) GetHTTPClient() *httputil.HTTPClient {
+	return p.httpClient
 }
 
 // AuthorizationScheme returns "Bearer" for this provider which means the bearer

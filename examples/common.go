@@ -105,6 +105,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/cloudsim"
@@ -248,6 +249,12 @@ func CreateClient() (client *nosqldb.Client, err error) {
 		}
 	} else {
 		cfg.Endpoint = args.endpoint
+	}
+
+	// If the example client runs on a Windows system or runs against on-premise
+	// secure server, skip server certificate verification.
+	if _, ok := p.(*kvstore.AccessTokenProvider); ok || runtime.GOOS == "windows" {
+		cfg.InsecureSkipVerify = true
 	}
 
 	return nosqldb.NewClient(cfg)
