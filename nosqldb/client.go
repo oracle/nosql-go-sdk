@@ -736,11 +736,9 @@ func (c *Client) Prepare(req *PrepareRequest) (*PrepareResult, error) {
 // request is limited by a system default and can be further limited using
 // QueryRequest.MaxReadKB. This limits the amount of data read and not the
 // amount of data returned, which means that a query can return zero results but
-// still have more data to read. This situation is detected by checking if the
-// returned QueryResult.ContinuationKey is nil. For this reason queries should
-// always operate in a loop, acquiring more results, until the continuation key
-// is nil, indicating that the query is done. Inside the loop the continuation
-// key is applied to the QueryRequest using QueryRequest.ContinuationKey.
+// still have more data to read. For this reason queries should always operate
+// in a loop, acquiring more results, until QueryRequest.IsDone() returns true,
+// indicating that the query is done.
 func (c *Client) Query(req *QueryRequest) (*QueryResult, error) {
 	if req == nil {
 		return nil, errNilRequest
