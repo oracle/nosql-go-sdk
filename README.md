@@ -178,7 +178,7 @@ if err != nil {
     fmt.Printf("failed to create a NoSQL client: %v\n", err)
     return
 }
-defer client.close()
+defer client.Close()
 
 // use client for all NoSQL DB operations
 // ...
