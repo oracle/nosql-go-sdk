@@ -134,11 +134,11 @@ func (aggr *aggrValue) add(rcb *runtimeControlBlock, countMemory bool, val inter
 		aggr.gotNumericInput = true
 		switch v := val.(type) {
 		case int:
-			aggr.value, err = calcInt('+', aggr.value, v)
+			aggr.value, err = calcInt('+', aggr.value, v, fpSpec)
 		case int64:
-			aggr.value, err = calcInt64('+', aggr.value, v)
+			aggr.value, err = calcInt64('+', aggr.value, v, fpSpec)
 		case float64:
-			aggr.value, err = calcFloat64('+', aggr.value, v)
+			aggr.value, err = calcFloat64('+', aggr.value, v, fpSpec)
 		case *big.Rat:
 			aggr.value, err = calcBigRat('+', aggr.value, v, fpSpec)
 		}

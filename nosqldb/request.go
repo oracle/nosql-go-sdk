@@ -1101,10 +1101,6 @@ func (r *QueryRequest) getShardID() int {
 }
 
 func (r *QueryRequest) getFPArithSpec() *FPArithSpec {
-	if r.FPArithSpec == nil {
-		r.FPArithSpec = &Decimal32
-	}
-
 	return r.FPArithSpec
 }
 

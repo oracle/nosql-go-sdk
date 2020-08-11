@@ -18,6 +18,10 @@ import (
 )
 
 var _ planIter = (*arithOpIter)(nil)
+var (
+	divByZeroErr = nosqlerr.NewIllegalState("arithmetic operation failed: divide by zero")
+	ratZero      = new(big.Rat).SetInt64(0)
+)
 
 // arithOpIter represents a plan iterator that implements the arithmetic operations.
 //
@@ -159,13 +163,7 @@ func (iter *arithOpIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 		opResult = int(1)
 	}
 
-	// Recover from panics such as "divide by zero".
-	defer func() {
-		if e := recover(); e != nil {
-			rcb.trace(1, "arithOpIter.next(): %v", e)
-			err = fmt.Errorf("arithmetic operation failed: %v", e)
-		}
-	}()
+	fpArithSpec := rcb.getRequest().getFPArithSpec()
 
 	for i, argIter := range iter.argIters {
 		more, err = argIter.next(rcb)
@@ -180,7 +178,7 @@ func (iter *arithOpIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 
 		argVal := argIter.getResult(rcb)
 		if argVal == types.NullValueInstance {
-			rcb.trace(1, "argVal: %v, ================= got nullValue", argVal)
+			rcb.trace(1, "argVal: %v, got nullValue", argVal)
 			rcb.setRegValue(iter.resultReg, types.NullValueInstance)
 			state.done()
 			return true, nil
@@ -189,13 +187,25 @@ func (iter *arithOpIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 		op := iter.ops[i]
 		switch argVal := argVal.(type) {
 		case int:
-			opResult, err = calcInt(op, opResult, argVal)
+			if (op == '/' || op == 'd') && argVal == 0 {
+				return false, divByZeroErr
+			}
+			opResult, err = calcInt(op, opResult, argVal, fpArithSpec)
 		case int64:
-			opResult, err = calcInt64(op, opResult, argVal)
+			if (op == '/' || op == 'd') && argVal == 0 {
+				return false, divByZeroErr
+			}
+			opResult, err = calcInt64(op, opResult, argVal, fpArithSpec)
 		case float64:
-			opResult, err = calcFloat64(op, opResult, argVal)
+			if (op == '/' || op == 'd') && argVal == 0 {
+				return false, divByZeroErr
+			}
+			opResult, err = calcFloat64(op, opResult, argVal, fpArithSpec)
 		case *big.Rat:
-			opResult, err = calcBigRat(op, opResult, argVal, rcb.getRequest().getFPArithSpec())
+			if (op == '/' || op == 'd') && argVal.Cmp(ratZero) == 0 {
+				return false, divByZeroErr
+			}
+			opResult, err = calcBigRat(op, opResult, argVal, fpArithSpec)
 		default:
 			return false, nosqlerr.NewIllegalState("operand in "+
 				"arithmetic operation has illegal type. "+
@@ -207,14 +217,14 @@ func (iter *arithOpIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 		}
 	}
 
-	rcb.trace(1, "============ arithOp result: %v", opResult)
+	rcb.trace(1, "arithOp result: %v", opResult)
 	rcb.setRegValue(iter.resultReg, opResult)
 	state.done()
 	return true, nil
 }
 
 // caclInt calculates the result of applying the specified operation to the operand of int type.
-func calcInt(op byte, currRes interface{}, v int) (res interface{}, err error) {
+func calcInt(op byte, currRes interface{}, v int, fpSpec *FPArithSpec) (res interface{}, err error) {
 	switch r := currRes.(type) {
 	case int:
 		switch op {
@@ -258,14 +268,16 @@ func calcInt(op byte, currRes interface{}, v int) (res interface{}, err error) {
 
 		switch op {
 		case '+':
-			res = r.Add(r, newVal)
+			r = r.Add(r, newVal)
 		case '-':
-			res = r.Sub(r, newVal)
+			r = r.Sub(r, newVal)
 		case '*':
-			res = r.Mul(r, newVal)
+			r = r.Mul(r, newVal)
 		case '/', 'd':
-			res = r.Quo(r, newVal)
+			r = r.Quo(r, newVal)
 		}
+
+		res = setPrecAndRounding(r, fpSpec)
 
 	default:
 		return currRes, fmt.Errorf("unsupported result type for arithmetic operation: %T", currRes)
@@ -279,7 +291,7 @@ func calcInt(op byte, currRes interface{}, v int) (res interface{}, err error) {
 }
 
 // calcInt64 calculates the result of applying the specified operation to the operand of int64 type.
-func calcInt64(op byte, currRes interface{}, v int64) (res interface{}, err error) {
+func calcInt64(op byte, currRes interface{}, v int64, fpSpec *FPArithSpec) (res interface{}, err error) {
 	switch r := currRes.(type) {
 	case int:
 		switch op {
@@ -323,14 +335,16 @@ func calcInt64(op byte, currRes interface{}, v int64) (res interface{}, err erro
 
 		switch op {
 		case '+':
-			res = r.Add(r, newVal)
+			r = r.Add(r, newVal)
 		case '-':
-			res = r.Sub(r, newVal)
+			r = r.Sub(r, newVal)
 		case '*':
-			res = r.Mul(r, newVal)
+			r = r.Mul(r, newVal)
 		case '/', 'd':
-			res = r.Quo(r, newVal)
+			r = r.Quo(r, newVal)
 		}
+
+		res = setPrecAndRounding(r, fpSpec)
 
 	default:
 		return currRes, fmt.Errorf("unsupported result type for arithmetic operation: %T", currRes)
@@ -344,7 +358,7 @@ func calcInt64(op byte, currRes interface{}, v int64) (res interface{}, err erro
 }
 
 // calcFloat64 calculates the result of applying the specified operation to the operand of float64 type.
-func calcFloat64(op byte, currRes interface{}, v float64) (res interface{}, err error) {
+func calcFloat64(op byte, currRes interface{}, v float64, fpSpec *FPArithSpec) (res interface{}, err error) {
 	switch r := currRes.(type) {
 	case int:
 		switch op {
@@ -388,14 +402,16 @@ func calcFloat64(op byte, currRes interface{}, v float64) (res interface{}, err 
 
 		switch op {
 		case '+':
-			res = r.Add(r, newVal)
+			r = r.Add(r, newVal)
 		case '-':
-			res = r.Sub(r, newVal)
+			r = r.Sub(r, newVal)
 		case '*':
-			res = r.Mul(r, newVal)
+			r = r.Mul(r, newVal)
 		case '/', 'd':
-			res = r.Quo(r, newVal)
+			r = r.Quo(r, newVal)
 		}
+
+		res = setPrecAndRounding(r, fpSpec)
 
 	default:
 		return currRes, fmt.Errorf("unsupported result type for arithmetic operation: %T", currRes)
@@ -430,21 +446,44 @@ func calcBigRat(op byte, currRes interface{}, v *big.Rat, fpSpec *FPArithSpec) (
 
 	switch op {
 	case '+':
-		rat.Add(rat, v)
+		rat = rat.Add(rat, v)
 	case '-':
-		rat.Sub(rat, v)
+		rat = rat.Sub(rat, v)
 	case '*':
-		rat.Mul(rat, v)
+		rat = rat.Mul(rat, v)
 	case '/', 'd':
-		rat.Quo(rat, v)
+		rat = rat.Quo(rat, v)
 	default:
 		return 0, fmt.Errorf("unsupported operation: %q", string(op))
 	}
 
-	// TODO: apply the specified FPArithSpec to the result
-
-	res = rat
+	res = setPrecAndRounding(rat, fpSpec)
 	return res, nil
+}
+
+// binaryPrecision returns the closest binary precision for the specified decimal precision.
+func binaryPrecision(decimalPrec uint) (prec uint) {
+	switch decimalPrec {
+	case 7:
+		return 24
+	case 16:
+		return 53
+	case 34:
+		return 113
+	default:
+		return 0
+	}
+}
+
+func setPrecAndRounding(v *big.Rat, fpSpec *FPArithSpec) *big.Rat {
+	if fpSpec == nil {
+		return v
+	}
+
+	prec := binaryPrecision(fpSpec.Precision)
+	bf := new(big.Float).SetRat(v).SetPrec(prec).SetMode(fpSpec.RoundingMode)
+	res, _ := bf.Rat(v)
+	return res
 }
 
 func (iter *arithOpIter) getPlan() string {

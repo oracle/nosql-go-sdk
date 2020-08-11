@@ -374,7 +374,16 @@ func jsonNumberEqual(n1 json.Number, v2 interface{}, fpArithSpec *nosqldb.FPArit
 		prec := binaryPrecision(fpArithSpec.Precision)
 		bf1 := big.NewFloat(f1).SetPrec(prec).SetMode(fpArithSpec.RoundingMode)
 		bf2 := big.NewFloat(f2).SetPrec(prec).SetMode(fpArithSpec.RoundingMode)
-		return bf1.Cmp(bf2) == 0
+		if bf1.Cmp(bf2) == 0 {
+			return true
+		}
+
+		decimalPrec := int(fpArithSpec.Precision)
+		if bf1.Text('G', decimalPrec) == bf2.Text('G', decimalPrec) {
+			return true
+		}
+
+		return false
 
 	case uint8, uint16, uint32, uint64:
 		i64, err := n1.Int64()
@@ -389,7 +398,7 @@ func jsonNumberEqual(n1 json.Number, v2 interface{}, fpArithSpec *nosqldb.FPArit
 		if !ok {
 			return false
 		}
-		return ratValueEqual(rat1, v2, &nosqldb.Decimal32)
+		return ratValueEqual(rat1, v2, fpArithSpec)
 
 	case json.Number:
 		rat1, ok := new(big.Rat).SetString(n1.String())
@@ -402,16 +411,11 @@ func jsonNumberEqual(n1 json.Number, v2 interface{}, fpArithSpec *nosqldb.FPArit
 			return false
 		}
 
-		return ratValueEqual(rat1, rat2, &nosqldb.Decimal32)
+		return ratValueEqual(rat1, rat2, fpArithSpec)
 
 	default:
 		return false
 	}
-}
-
-func showRat(rat *big.Rat) string {
-	bf1, _, _ := big.ParseFloat(rat.RatString(), 10, 24, big.ToNearestEven)
-	return bf1.Text('G', 7)
 }
 
 func ratValueEqual(rat1, rat2 *big.Rat, fpArithSpec *nosqldb.FPArithSpec) bool {
@@ -419,25 +423,15 @@ func ratValueEqual(rat1, rat2 *big.Rat, fpArithSpec *nosqldb.FPArithSpec) bool {
 		return true
 	}
 
-	var err error
 	var bf1, bf2 *big.Float
-
-	prec := binaryPrecision(fpArithSpec.Precision)
-
-	bf1, _, err = big.ParseFloat(rat1.RatString(), 10, prec, fpArithSpec.RoundingMode)
-	if err != nil {
-		return false
-	}
-
-	bf2, _, err = big.ParseFloat(rat2.RatString(), 10, prec, fpArithSpec.RoundingMode)
-	if err != nil {
-		return false
-	}
+	bf1 = new(big.Float).SetRat(rat1)
+	bf2 = new(big.Float).SetRat(rat2)
 
 	if bf1.Cmp(bf2) == 0 {
 		return true
 	}
 
+	// as last resort, compare the string representation.
 	decimalPrec := int(fpArithSpec.Precision)
 	if bf1.Text('G', decimalPrec) == bf2.Text('G', decimalPrec) {
 		return true
