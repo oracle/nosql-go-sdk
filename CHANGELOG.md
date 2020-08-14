@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## [Unreleased]
+## 1.2.1 - 2020-08-14
 
 ### Added
 - Added generic GROUP BY and SELECT DISTINCT. These features will only work
@@ -16,7 +16,7 @@ Oracle Compute Instances or Oracle Functions. Cloud only.
 - Changed **nosqldb.Region** type to **common.Region**. Cloud applications need
 to specify a value of `common.Region` type for the `Region` field of
 `nosqldb.Config` when initialize client configurations. _**This is a breaking
-change**_. 
+change**_.
 
 ### Fixed
 - Fixed a problem where the HTTP Host header was not being added in all request

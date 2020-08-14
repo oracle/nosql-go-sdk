@@ -17,7 +17,7 @@ const (
 	// Major, minor and patch versions for the SDK.
 	major = 1
 	minor = 2
-	patch = 0
+	patch = 1
 
 	// NoSQL service version.
 	serviceVersion = "V2"
