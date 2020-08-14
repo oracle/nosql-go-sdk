@@ -321,7 +321,7 @@ client, err := nosqldb.NewClient(cfg)
 
 To connect an application to a secure NoSQL database, you need to provide user
 credentials used to authenticate with the server. If the Proxy server is configured
-with a self-signed certificate or a certificate that is not trusted by the
+with a self-signed certificate or a certificate that is not trusted by
 the default system CA, you also need to specifiy *CertPath* and *ServerName* for
 the certificate path and server name used to verify server's certificate.
 
@@ -330,7 +330,7 @@ cfg := nosqldb.Config{
     Mode:     "onprem",
     Endpoint: "https://exampleHostServer",
     Username: "driverUser",
-    Password: "ExamplePassword__123",
+    Password: []byte("ExamplePassword__123"),
     HTTPConfig: httputil.HTTPConfig{
         CertPath: "/path/to/server-certificate",
         ServerName: "exampleHostServer", // should match the CN subject value from the certificate
@@ -348,10 +348,80 @@ cfg := nosqldb.Config{
     Mode:     "onprem",
     Endpoint: "https://exampleHostServer",
     Username: "driverUser",
-    Password: "ExamplePassword__123",
+    Password: []byte("ExamplePassword__123"),
     HTTPConfig: httputil.HTTPConfig{
         InsecureSkipVerify: true,
     },
 }
 client, err := nosqldb.NewClient(cfg)
+```
+
+#### Initialize configuration using a JSON file
+The sections above describe how to create a `nosqldb.Config` object using Go's
+struct literals, as an alternative, you can create and initialize a
+`nosqldb.Config` object using a JSON file. Note that for the fields of byte
+slice type, such as the `Password` field required for secure on-premise Oracle
+NoSQL Database, you need to specify a base64 encoded string in JSON file.
+For example, when connect to a secure on-premise Oracle NoSQL Database with
+user credentials *driver_user/DriverUser__123456*, where the username is
+*driver_user*, password is *DriverUser__123456*, base64 encoding of the
+password is *RHJpdmVyVXNlcl9fMTIzNDU2* (`echo -n "DriverUser__123456" | base64`),
+use a sample JSON file *config.json*:
+
+```json
+{
+    "mode": "onprem",
+    "endpoint": "https://localhost:8091",
+    "username": "driver_user",
+    "password": "RHJpdmVyVXNlcl9fMTIzNDU2",
+    "httpConfig": {
+        "certPath": "/path/to/server_certificate.pem",
+        "serverName": "localhost"
+    }
+}
+```
+
+Then create and initialize a `nosqldb.Config` object using the JSON file:
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+
+	"github.com/oracle/nosql-go-sdk/nosqldb"
+)
+
+func createConfigFromJSON(configFile string) (*nosqldb.Config, error) {
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %v", configFile, err)
+	}
+
+	var cfg nosqldb.Config
+	err = json.Unmarshal(data, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse configurations from file %s: %v", configFile, err)
+	}
+
+	return &cfg, nil
+}
+
+func main() {
+
+	cfg, err := createConfigFromJSON("/path/to/config.json")
+	if err != nil {
+		fmt.Printf("failed to create config: %v", err)
+		return
+	}
+
+	client, err := nosqldb.NewClient(*cfg)
+	if err != nil {
+		fmt.Printf("failed to create client: %v", err)
+		return
+	}
+	defer client.Close()
+	...
+}
 ```
