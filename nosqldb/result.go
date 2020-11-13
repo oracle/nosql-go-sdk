@@ -466,11 +466,10 @@ type PutResult struct {
 	// successful. If the operation failed nil is returned.
 	Version types.Version `json:"version"`
 
-	// GeneratedValue represents the value generated if the operation created a
-	// new value for an identity column.
-	// If the table has no identity columns this value is nil.
-	// If it has an identity column and a value was generated for that column,
-	// it is non-nil.
+	// GeneratedValue represents the value generated if the operation
+	// created a new value for an identity column or string as uuid
+	// column. If a value was generated for the column, it is non-nil,
+	// otherwise it is nil.
 	GeneratedValue types.FieldValue `json:"generatedValue"`
 }
 
@@ -602,13 +601,13 @@ type OperationResult struct {
 	// if the put operation did not succeed or the operation is a delete operation.
 	Version types.Version `json:"version"`
 
-	// GeneratedValue represents the value generated if the operation created a
-	// new value for an identity column.
-	// If the table has no identity columns this value is nil.
-	// If it has an identity column and a value was generated for that column,
-	// it is non-nil.
+	// GeneratedValue represents the value generated if the operation
+	// created a new value for an identity column or string as uuid
+	// column. If a value was generated for the column, it is non-nil,
+	// otherwise it is nil.
 	//
-	// This value is only valid for a put operation on a table with an identity column.
+	// This value is only valid for a put operation on a table with an identity
+	// column.
 	GeneratedValue types.FieldValue `json:"generatedValue"`
 }
 
