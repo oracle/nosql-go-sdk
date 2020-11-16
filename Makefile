@@ -20,20 +20,21 @@ BIN := $(ROOT)/bin
 SRC := $(ROOT)/nosqldb
 EXAMPLE_SRC := $(ROOT)/examples
 EXAMPLE_BIN := $(BIN)/examples
+#GOENV := GOARCH=amd64 GOOS=linux
 
 testcases ?=
 options ?=
 examples := basic delete index
 
-GOTEST := $(GO) test -v -run "$(testcases)" $(options)
+GOTEST := $(GOENV) $(GO) test -timeout 20m -count 1 -run "$(testcases)" -v $(options)
 
-.PHONY: all build test cloudsim-test onprem-test clean build-examples release $(examples) help
+.PHONY: all build test cloudsim-test onprem-test clean lint build-examples release $(examples) help
 
 all: build
 
 # compile all packages
 build:
-	cd $(SRC) && $(GO) build -v ./...
+	cd $(SRC) && $(GOENV) $(GO) build -v ./...
 
 # run tests
 test:
@@ -49,13 +50,17 @@ onprem-test:
 
 # clean
 clean:
-	cd $(SRC) && $(GO) clean -v ./...
+	cd $(SRC) && $(GOENV) $(GO) clean -v ./...
+
+# lint check
+lint:
+	cd $(SRC) && golint -set_exit_status -min_confidence 0.3  ./...
 
 # compile examples
 build-examples: $(examples)
 
 $(examples): %: $(wildcard $(EXAMPLE_SRC)/%/*.go) | $(EXAMPLE_BIN)
-	cd $(EXAMPLE_SRC)/$* && $(GO) build -v -o $(EXAMPLE_BIN)/$@ .
+	cd $(EXAMPLE_SRC)/$* && $(GOENV) $(GO) build -v -o $(EXAMPLE_BIN)/$@ .
 
 $(EXAMPLE_BIN):
 	mkdir -p $@

@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Added latest Oracle Cloud Infrastructure regions and region codes.
+- Added lint option to Makefile
+
 ## 1.2.1 - 2020-08-14
 
 ### Added

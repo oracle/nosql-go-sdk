@@ -8,10 +8,16 @@
 package common
 
 import (
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type regionEP struct {
@@ -132,4 +138,104 @@ func TestStringToRegion(t *testing.T) {
 		_, err = StringToRegion(s)
 		assert.Errorf(t, err, "StringToRegion(%q) should have failed", s)
 	}
+}
+
+var jsonRegionFile *string = flag.String("regionfile", "", "path to JSON regions file")
+
+// TestEndpointsFromJSON is intended for internal validation of regions code.
+// To run a test with a given regions.json file:
+// cd common ; go test . -run TestEndpointsFromJSON -regionfile /path/to/regions.json
+func TestEndpointsFromJSON(t *testing.T) {
+	// if a json file is given in the environment, use it to run tests
+	if jsonRegionFile == nil || *jsonRegionFile == "" {
+		t.Skip("no regionfile given, skipping internal json-based region tests")
+	}
+
+	jFile, err := os.Open(*jsonRegionFile)
+	require.NoErrorf(t,err, "can't open region file %s: %v", *jsonRegionFile, err)
+	defer jFile.Close()
+
+	byteValue, _ := ioutil.ReadAll(jFile)
+
+	// JSONRealm contains a name and pre/postfixes for urls
+	type JSONRealm struct {
+		Name             string `json:"name"`
+		EndpointPrefix   string `json:"epprefix"`
+		EndpointSuffix   string `json:"epsuffix"`
+		AuthPrefix       string `json:"authprefix"`
+		AuthSuffix       string `json:"authsuffix"`
+	}
+
+	// JSONRealms contains an array of JSONRealm
+	type JSONRealms struct {
+		JSONRealms []JSONRealm `json:"realms"`
+	}
+
+	// JSONRegion contains a name, three letter code, and realm
+	type JSONRegion struct {
+		Name   string `json:"name"`
+		Code   string `json:"tlc"`
+		Realm  string `json:"realm"`
+	}
+
+	// JSONRegions contains an array of JSONRegion
+	type JSONRegions struct {
+		JSONRegions []JSONRegion `json:"regions"`
+	}
+
+	var realms JSONRealms
+	err = json.Unmarshal(byteValue, &realms)
+	require.NoErrorf(t, err, "Error reading json realms from %s: %v", *jsonRegionFile, err)
+
+	var regions JSONRegions
+	err = json.Unmarshal(byteValue, &regions)
+	require.NoErrorf(t, err, "Error reading json regions from %s: %v", *jsonRegionFile, err)
+
+	for _, region := range regions.JSONRegions {
+
+		// verify we get a region when we look up based on name
+		_, err = StringToRegion(region.Name)
+		assert.NoErrorf(t, err, "StringToRegion(%s) got error %v", region.Name, err)
+		s := strings.ToUpper(region.Name)
+		_, err = StringToRegion(s)
+		assert.NoErrorf(t, err, "StringToRegion(%s) got error %v", s, err)
+
+		// verify we get a region when we look up based on three letter code
+		_, err = StringToRegion(region.Code)
+		assert.NoErrorf(t, err, "StringToRegion(%s) got error %v", region.Code, err)
+		s = strings.ToUpper(region.Code)
+		regionStruct, err := StringToRegion(s)
+		assert.NoErrorf(t, err, "StringToRegion(%s) got error %v", s, err)
+
+		// find realm
+		var realm JSONRealm
+		found := false
+		for i := 0; i < len(realms.JSONRealms); i++ {
+			if realms.JSONRealms[i].Name == region.Realm {
+				realm = realms.JSONRealms[i]
+				found = true
+				break
+			}
+		}
+		if ! assert.True(t, found, "Can't find realm \"%s\" in json realms", region.Realm) {
+			continue
+		}
+
+		assert.True(t, realm.Name == region.Realm)
+
+		// verify auth URL
+		expAuthURL := fmt.Sprintf("%s%s%s", realm.AuthPrefix, region.Name, realm.AuthSuffix)
+		actAuthURL, _ := regionStruct.EndpointForService("auth")
+		if assert.NotNil(t, actAuthURL, "Auth url for region '%s' is nil", region.Name) {
+			assert.Equal(t, expAuthURL, actAuthURL, "Wrong auth URL for region '%s'", region.Name)
+		}
+
+		// verify endpoint URL
+		expEndpointURL := fmt.Sprintf("%s%s%s", realm.EndpointPrefix, region.Name, realm.EndpointSuffix)
+		actEndpointURL, _ := regionStruct.Endpoint()
+		if assert.NotNil(t, actEndpointURL, "Endpoint url for region '%s' is nil", region.Name) {
+			assert.Equal(t, expEndpointURL, actEndpointURL, "Wrong endpoint URL for region '%s'", region.Name)
+		}
+	}
+
 }

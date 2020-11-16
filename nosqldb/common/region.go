@@ -17,16 +17,22 @@ import (
 type Region string
 
 const (
+	// OC1 REGIONS
+
 	// RegionIAD represents the region for US East (Ashburn).
 	RegionIAD Region = "us-ashburn-1"
 	// RegionPHX represents the region for US West (Phoenix).
 	RegionPHX Region = "us-phoenix-1"
+	// RegionUSSanJose1 represents the region for US West (San Jose).
+	RegionUSSanJose1 Region = "us-sanjose-1"
 	// RegionCAMontreal1 represents the region for Canada Southeast (Montreal).
 	RegionCAMontreal1 Region = "ca-montreal-1"
 	// RegionCAToronto1 represents the region for Canada Southeast (Toronto).
 	RegionCAToronto1 Region = "ca-toronto-1"
 	// RegionLHR represents the region for UK South (London).
 	RegionLHR Region = "uk-london-1"
+	// RegionUKCardiff1 represents the region for the UK (Cardiff).
+	RegionUKCardiff1 Region = "uk-cardiff-1"
 	// RegionEUAmsterdam1 represents the region for Netherlands Northwest (Amsterdam).
 	RegionEUAmsterdam1 Region = "eu-amsterdam-1"
 	// RegionFRA represents the region for Germany Central (Frankfurt).
@@ -51,13 +57,21 @@ const (
 	RegionAPMelbourne1 Region = "ap-melbourne-1"
 	// RegionSASaopaulo1 represents the region for Brazil East (Sao Paulo).
 	RegionSASaopaulo1 Region = "sa-saopaulo-1"
+	// RegionSASantiago1 represents the region for Chile (Santiago).
+	RegionSASantiago1 Region = "sa-santiago-1"
 	// RegionMEJeddah1 represents the region for Saudi Arabia West (Jeddah).
 	RegionMEJeddah1 Region = "me-jeddah-1"
+	// RegionMEDubai1 represents the region for Saudi Arabia East (Dubai).
+	RegionMEDubai1 Region = "me-dubai-1"
+
+	// OC2 REGIONS
 
 	// RegionUSLangley1 represents the region for Langley.
 	RegionUSLangley1 Region = "us-langley-1"
 	// RegionUSLuke1 represents the region for Luke.
 	RegionUSLuke1 Region = "us-luke-1"
+
+	// OC3 REGIONS
 
 	// RegionUSGovAshburn1 represents the government region for Ashburn.
 	RegionUSGovAshburn1 Region = "us-gov-ashburn-1"
@@ -66,8 +80,15 @@ const (
 	// RegionUSGovPhoenix1 represents the government region for Phoenix.
 	RegionUSGovPhoenix1 Region = "us-gov-phoenix-1"
 
+	// OC4 REGIONS
+
 	// RegionUKGovLondon1 represents the government region for London.
 	RegionUKGovLondon1 Region = "uk-gov-london-1"
+
+	// OC8 REGIONS
+
+	// RegionAPChiyoda1 represents the region for Japan East (Chiyoda).
+	RegionAPChiyoda1 Region = "ap-chiyoda-1"
 )
 
 var realm = map[string]string{
@@ -75,6 +96,7 @@ var realm = map[string]string{
 	"oc2": "oraclegovcloud.com",
 	"oc3": "oraclegovcloud.com",
 	"oc4": "oraclegovcloud.uk",
+	"oc8": "oraclecloud8.com",
 }
 
 var regionRealm = map[Region]string{
@@ -82,6 +104,8 @@ var regionRealm = map[Region]string{
 	RegionIAD:          "oc1",
 	RegionFRA:          "oc1",
 	RegionLHR:          "oc1",
+	RegionUSSanJose1:   "oc1",
+	RegionUKCardiff1:   "oc1",
 	RegionCAToronto1:   "oc1",
 	RegionCAMontreal1:  "oc1",
 	RegionAPTokyo1:     "oc1",
@@ -93,9 +117,11 @@ var regionRealm = map[Region]string{
 	RegionAPHyderabad1: "oc1",
 	RegionAPMelbourne1: "oc1",
 	RegionMEJeddah1:    "oc1",
+	RegionMEDubai1:     "oc1",
 	RegionEUZurich1:    "oc1",
 	RegionEUAmsterdam1: "oc1",
 	RegionSASaopaulo1:  "oc1",
+	RegionSASantiago1:  "oc1",
 
 	RegionUSLangley1: "oc2",
 	RegionUSLuke1:    "oc2",
@@ -105,28 +131,40 @@ var regionRealm = map[Region]string{
 	RegionUSGovPhoenix1: "oc3",
 
 	RegionUKGovLondon1: "oc4",
+
+	RegionAPChiyoda1:   "oc8",
 }
 
 var shortNameRegion = map[string]Region{
 	"phx": RegionPHX,
 	"iad": RegionIAD,
+	"sjc": RegionUSSanJose1,
 	"fra": RegionFRA,
 	"lhr": RegionLHR,
+	"cwl": RegionUKCardiff1,
 	"ams": RegionEUAmsterdam1,
 	"zrh": RegionEUZurich1,
 	"mel": RegionAPMelbourne1,
 	"bom": RegionAPMumbai1,
 	"hyd": RegionAPHyderabad1,
 	"gru": RegionSASaopaulo1,
+	"scl": RegionSASantiago1,
 	"icn": RegionAPSeoul1,
 	"yny": RegionAPChuncheon1,
+	"nja": RegionAPChiyoda1,
 	"nrt": RegionAPTokyo1,
 	"kix": RegionAPOsaka1,
 	"yul": RegionCAMontreal1,
 	"yyz": RegionCAToronto1,
 	"jed": RegionMEJeddah1,
+	"dxb": RegionMEDubai1,
 	"syd": RegionAPSydney1,
 	"ltn": RegionUKGovLondon1,
+	"lfi": RegionUSLangley1,
+	"luf": RegionUSLuke1,
+	"ric": RegionUSGovAshburn1,
+	"pia": RegionUSGovChicago1,
+	"tus": RegionUSGovPhoenix1,
 }
 
 func (region Region) secondLevelDomain() string {
