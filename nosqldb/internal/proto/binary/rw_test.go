@@ -90,9 +90,9 @@ var packedLongTests = []int64{
 var byteArrayTests = [][]byte{
 	nil,
 	make([]byte, 0),
-	[]byte{},
-	[]byte{0},
-	[]byte{0, 0},
+	{},
+	{0},
+	{0, 0},
 	genBytes(1024),
 }
 
@@ -407,9 +407,9 @@ func (suite *ReadWriteTestSuite) TestReadWriteFieldValue() {
 
 	// Array value.
 	arrayTests := [][]types.FieldValue{
-		[]types.FieldValue{1, 2, 3, 4},
-		[]types.FieldValue{int64(1), int64(2), int64(3), int64(4)},
-		[]types.FieldValue{"a", "b", "c", "d"},
+		{1, 2, 3, 4},
+		{int64(1), int64(2), int64(3), int64(4)},
+		{"a", "b", "c", "d"},
 	}
 	t.Run("ArrayValue", func(t *testing.T) {
 		for _, v := range arrayTests {

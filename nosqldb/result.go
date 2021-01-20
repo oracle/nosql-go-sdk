@@ -25,6 +25,29 @@ type Result interface {
 	// ConsumedCapacity is a function used to return the read, write throughput
 	// consumed by an operation.
 	ConsumedCapacity() (Capacity, error)
+
+	Delayed() DelayInfo
+}
+
+// DelayInfo contains information about the amount of time a request was delayed.
+type DelayInfo struct {
+	// RateLimitTime represents the time delayed due to internal rate limiting.
+	RateLimitTime time.Duration
+	// RetryTime represents the time delayed due to internal request retries.
+	RetryTime time.Duration
+}
+
+// Delayed returns the time delay information for a completed request.
+func (d DelayInfo) Delayed() DelayInfo {
+	return d
+}
+
+func (d DelayInfo) setRateLimitTime(t time.Duration) {
+	d.RateLimitTime = t
+}
+
+func (d DelayInfo) setRetryTime(t time.Duration) {
+	d.RetryTime = t
 }
 
 // Capacity represents the read/write throughput consumed by an operation.
@@ -85,6 +108,8 @@ type GetResult struct {
 	// This value is valid only if the operation successfully returned a row,
 	// which means the returned Value is non-nil.
 	ExpirationTime time.Time `json:"expirationTime"`
+
+	DelayInfo
 }
 
 // String returns a JSON string representation of the GetResult.
@@ -130,6 +155,7 @@ func (r GetResult) RowExists() bool {
 // SystemResult is used for on-premise only.
 type SystemResult struct {
 	noCapacity
+	DelayInfo
 
 	// State represents the current state of the operation.
 	State types.OperationState `json:"state"`
@@ -229,6 +255,7 @@ func (r *SystemResult) WaitForCompletion(client *Client, timeout, pollInterval t
 // table as well as its current state.
 type TableResult struct {
 	noCapacity
+	DelayInfo
 
 	// TableName represents the name of target table.
 	TableName string `json:"tableName"`
@@ -360,6 +387,7 @@ func (r *TableResult) WaitForCompletion(client *Client, timeout, pollInterval ti
 // string, sorted in alphabetical order.
 type ListTablesResult struct {
 	noCapacity
+	DelayInfo
 
 	// Tables represents a slice of string that contains table names returned
 	// by the operation, in alphabetical order.
@@ -381,6 +409,7 @@ func (r ListTablesResult) String() string {
 // On a successful operation the index information is returned in a slice of IndexInfo.
 type GetIndexesResult struct {
 	noCapacity
+	DelayInfo
 
 	// Indexes represents a slice of IndexInfo that contains index information
 	// returned by the operation.
@@ -433,6 +462,7 @@ func (r WriteResult) ExistingValueAsJSON() string {
 // and DeleteResult.ExistingVersion, depending on the use of DeleteRequest.ReturnRow.
 type DeleteResult struct {
 	Capacity
+	DelayInfo
 
 	// WriteResult is used to get the information about the existing row such as
 	// ExistingValue and ExistingVersion on operation failure.
@@ -457,6 +487,7 @@ func (r DeleteResult) String() string {
 // PutIfAbsent or PutIfVersion option.
 type PutResult struct {
 	Capacity
+	DelayInfo
 
 	// WriteResult is used to get the information about the existing row such as
 	// ExistingValue and ExistingVersion on operation failure.
@@ -529,6 +560,7 @@ func (r TableUsage) String() string {
 // This is used for cloud service only.
 type TableUsageResult struct {
 	noCapacity
+	DelayInfo
 
 	// TableName represents table name used by the operation.
 	TableName string `json:"tableName"`
@@ -555,6 +587,7 @@ func (r TableUsageResult) String() string {
 // WriteMultipleResult.GetFailedOperationResult().
 type WriteMultipleResult struct {
 	Capacity
+	DelayInfo
 
 	// ResultSet represents the list of execution results for the operations.
 	ResultSet []OperationResult `json:"resultSet"`
@@ -626,6 +659,7 @@ func (r OperationResult) String() string {
 // MultiDeleteResult.ContinuationKey.
 type MultiDeleteResult struct {
 	Capacity
+	DelayInfo
 
 	// ContinuationKey represents the continuation key where the next
 	// MultiDelete request resumes from.
@@ -646,6 +680,7 @@ func (r MultiDeleteResult) String() string {
 // QueryRequest.PreparedStatement.
 type PrepareResult struct {
 	Capacity
+	DelayInfo
 
 	// PreparedStatement represents the value of the prepared statement.
 	PreparedStatement PreparedStatement `json:"preparedStatement"`
@@ -674,6 +709,7 @@ func (r PrepareResult) String() string {
 // results if the query request is not completed.
 type QueryResult struct {
 	Capacity
+	DelayInfo
 
 	// The query request with which this query result is associated.
 	request *QueryRequest

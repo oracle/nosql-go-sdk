@@ -132,7 +132,7 @@ var regionRealm = map[Region]string{
 
 	RegionUKGovLondon1: "oc4",
 
-	RegionAPChiyoda1:   "oc8",
+	RegionAPChiyoda1: "oc8",
 }
 
 var shortNameRegion = map[string]Region{

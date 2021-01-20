@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ### Added
 - Added latest Oracle Cloud Infrastructure regions and region codes.
 - Added lint option to Makefile
+- Rate Limiting (cloud only):
+  - New boolean nosqldb.Config.RateLimitingEnabled can enable automatic internal rate limiting based on table read and write throughput limits.
+  - If rate limiting is enabled:
+    - nosqldb.Config.RateLimiterPercentage can control how much of a table's full limits this client handle can consume (default = 100%).
+    - Result classes now have a GetRateLimitDelayed() method to return the amount of time an operation was delayed due to internal rate limiting.
 
 ## 1.2.1 - 2020-08-14
 

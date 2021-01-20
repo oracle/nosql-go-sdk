@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
@@ -22,6 +23,7 @@ import (
 // It is used as the input to a Client.Get() operation which returns a single
 // row based on the specified key.
 type GetRequest struct {
+
 	// TableName specifies the name of table from which to get the row.
 	// It is required and must be non-empty.
 	TableName string `json:"tableName"`
@@ -45,6 +47,8 @@ type GetRequest struct {
 	// If not set, the default consistency value configured for Client is used,
 	// which is determined by Client.DefaultConsistency().
 	Consistency types.Consistency `json:"consistency"`
+
+	common.InternalRequestData
 }
 
 func (r *GetRequest) validate() (err error) {
@@ -87,6 +91,18 @@ func (r *GetRequest) timeout() time.Duration {
 	return r.Timeout
 }
 
+func (r *GetRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *GetRequest) doesReads() bool {
+	return true
+}
+
+func (r *GetRequest) doesWrites() bool {
+	return false
+}
+
 // GetTableRequest represents a request for retrieving table information from server.
 //
 // It is used as the input of a Client.GetTable() operation which returns static
@@ -117,6 +133,8 @@ type GetTableRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *GetTableRequest) validate() (err error) {
@@ -145,6 +163,18 @@ func (r *GetTableRequest) timeout() time.Duration {
 	return r.Timeout
 }
 
+func (r *GetTableRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *GetTableRequest) doesReads() bool {
+	return false
+}
+
+func (r *GetTableRequest) doesWrites() bool {
+	return false
+}
+
 // GetIndexesRequest represents a request for retrieving indexes information.
 //
 // It is used as the input to a Client.GetIndexes() operation which returns the
@@ -171,6 +201,8 @@ type GetIndexesRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *GetIndexesRequest) validate() (err error) {
@@ -197,6 +229,18 @@ func (r *GetIndexesRequest) shouldRetry() bool {
 
 func (r *GetIndexesRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *GetIndexesRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *GetIndexesRequest) doesReads() bool {
+	return false
+}
+
+func (r *GetIndexesRequest) doesWrites() bool {
+	return false
 }
 
 // ListTablesRequest represents a request to list all available tables.
@@ -235,6 +279,8 @@ type ListTablesRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *ListTablesRequest) validate() error {
@@ -253,6 +299,18 @@ func (r *ListTablesRequest) shouldRetry() bool {
 
 func (r *ListTablesRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *ListTablesRequest) getTableName() string {
+	return ""
+}
+
+func (r *ListTablesRequest) doesReads() bool {
+	return false
+}
+
+func (r *ListTablesRequest) doesWrites() bool {
+	return false
 }
 
 // SystemRequest represents a request used to perform any table-independent
@@ -280,6 +338,8 @@ type SystemRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultTableRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *SystemRequest) validate() (err error) {
@@ -306,6 +366,18 @@ func (r *SystemRequest) shouldRetry() bool {
 
 func (r *SystemRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *SystemRequest) getTableName() string {
+	return ""
+}
+
+func (r *SystemRequest) doesReads() bool {
+	return false
+}
+
+func (r *SystemRequest) doesWrites() bool {
+	return false
 }
 
 // SystemStatusRequest represents a request used to check the status of an
@@ -337,6 +409,8 @@ type SystemStatusRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultTableRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *SystemStatusRequest) validate() (err error) {
@@ -363,6 +437,18 @@ func (r *SystemStatusRequest) shouldRetry() bool {
 
 func (r *SystemStatusRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *SystemStatusRequest) getTableName() string {
+	return ""
+}
+
+func (r *SystemStatusRequest) doesReads() bool {
+	return false
+}
+
+func (r *SystemStatusRequest) doesWrites() bool {
+	return false
 }
 
 // TableRequest represents a request used to manage table schema and limits.
@@ -425,6 +511,8 @@ type TableRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultTableRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *TableRequest) validate() (err error) {
@@ -462,6 +550,18 @@ func (r *TableRequest) shouldRetry() bool {
 
 func (r *TableRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *TableRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *TableRequest) doesReads() bool {
+	return false
+}
+
+func (r *TableRequest) doesWrites() bool {
+	return false
 }
 
 // TableLimits is used during table creation to specify the throughput and
@@ -571,6 +671,8 @@ type DeleteRequest struct {
 	// operation.
 	// It is for internal use only.
 	isSubRequest bool
+
+	common.InternalRequestData
 }
 
 func (r *DeleteRequest) validate() (err error) {
@@ -601,6 +703,18 @@ func (r *DeleteRequest) shouldRetry() bool {
 
 func (r *DeleteRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *DeleteRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *DeleteRequest) doesReads() bool {
+	return true
+}
+
+func (r *DeleteRequest) doesWrites() bool {
+	return true
 }
 
 // PutRequest represents a request used to put a row into a table.
@@ -699,6 +813,8 @@ type PutRequest struct {
 	// operation.
 	// It is for internal use only.
 	isSubRequest bool
+
+	common.InternalRequestData
 }
 
 func (r *PutRequest) validate() (err error) {
@@ -737,6 +853,18 @@ func (r *PutRequest) shouldRetry() bool {
 
 func (r *PutRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *PutRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *PutRequest) doesReads() bool {
+	return r.PutOption != 0
+}
+
+func (r *PutRequest) doesWrites() bool {
+	return true
 }
 
 // updateTTL indicates whether the put operation should update TTL of the specified row.
@@ -788,6 +916,8 @@ type TableUsageRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *TableUsageRequest) validate() (err error) {
@@ -820,6 +950,18 @@ func (r *TableUsageRequest) timeout() time.Duration {
 	return r.Timeout
 }
 
+func (r *TableUsageRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *TableUsageRequest) doesReads() bool {
+	return false
+}
+
+func (r *TableUsageRequest) doesWrites() bool {
+	return false
+}
+
 // PrepareRequest encapsulates a query prepare call. Query preparation allows
 // queries to be compiled (prepared) and reused, saving time and resources.
 // Use of prepared queries vs. direct execution of query strings is highly
@@ -844,6 +986,8 @@ type PrepareRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *PrepareRequest) validate() (err error) {
@@ -870,6 +1014,19 @@ func (r *PrepareRequest) shouldRetry() bool {
 
 func (r *PrepareRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *PrepareRequest) getTableName() string {
+	// TODO
+	return ""
+}
+
+func (r *PrepareRequest) doesReads() bool {
+	return false
+}
+
+func (r *PrepareRequest) doesWrites() bool {
+	return false
 }
 
 // FPArithSpec specifies the desired representation in terms of decimal
@@ -1004,6 +1161,14 @@ type QueryRequest struct {
 	// shardID represents the id of shard at which the QueryRequest should be executed.
 	// This is only used for advanced queries where sorting is required.
 	shardID *int
+
+	// TableName is only used in the cloud service.
+	// TableName should be set to the table specified in the query.
+	// If this is not set, cloud rate limiting may not work properly for the
+	// query request.
+	TableName string
+
+	common.InternalRequestData
 }
 
 func (r *QueryRequest) validate() (err error) {
@@ -1040,6 +1205,18 @@ func (r *QueryRequest) timeout() time.Duration {
 	return r.Timeout
 }
 
+func (r *QueryRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *QueryRequest) doesReads() bool {
+	return true
+}
+
+func (r *QueryRequest) doesWrites() bool {
+	return true
+}
+
 // copyInternal creates an internal QueryRequest out of the application provided QueryRequest.
 func (r *QueryRequest) copyInternal() *QueryRequest {
 	return &QueryRequest{
@@ -1052,6 +1229,7 @@ func (r *QueryRequest) copyInternal() *QueryRequest {
 		PreparedStatement:    r.PreparedStatement,
 		driver:               r.driver,
 		traceLevel:           r.traceLevel,
+		TableName:            r.TableName,
 		isInternal:           true,
 	}
 }
@@ -1318,6 +1496,8 @@ type WriteMultipleRequest struct {
 	// checkSubReqSize represents whether to check sub request size.
 	// This is for internal use, and is set automatically by client.
 	checkSubReqSize bool
+
+	common.InternalRequestData
 }
 
 func (r *WriteMultipleRequest) validate() (err error) {
@@ -1367,6 +1547,18 @@ func (r *WriteMultipleRequest) shouldRetry() bool {
 
 func (r *WriteMultipleRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *WriteMultipleRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *WriteMultipleRequest) doesReads() bool {
+	return true
+}
+
+func (r *WriteMultipleRequest) doesWrites() bool {
+	return true
 }
 
 // Clear removes all of the operations from the WriteMultiple request.
@@ -1458,6 +1650,8 @@ type MultiDeleteRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
 }
 
 func (r *MultiDeleteRequest) validate() (err error) {
@@ -1492,6 +1686,18 @@ func (r *MultiDeleteRequest) shouldRetry() bool {
 
 func (r *MultiDeleteRequest) timeout() time.Duration {
 	return r.Timeout
+}
+
+func (r *MultiDeleteRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *MultiDeleteRequest) doesReads() bool {
+	return true
+}
+
+func (r *MultiDeleteRequest) doesWrites() bool {
+	return true
 }
 
 // WriteOperation represents a put or delete operation that can be added into

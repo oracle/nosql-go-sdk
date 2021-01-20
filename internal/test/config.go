@@ -45,6 +45,11 @@ type Config struct {
 
 	// NoSQL database client configurations.
 	nosqldb.Config `json:"clientConfig"`
+
+	Verbose bool `json:"verbose"`
+
+	// For extended testing
+	RunExtended bool `json:"runExtended"`
 }
 
 // newConfig creates a test configuration object from the specified JSON file.

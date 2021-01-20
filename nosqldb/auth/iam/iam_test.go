@@ -369,7 +369,7 @@ func (suite *iamTestSuite) checkSignatureGeneration(p *SignatureProvider, r *tes
 
 	req, err := http.NewRequest("POST", "/V0/nosql/data", body)
 	if err != nil {
-		return fmt.Errorf("Can't create new http request")
+		return fmt.Errorf("can't create new http request")
 	}
 
 	// the Host and Date headers are the only ones currently used for

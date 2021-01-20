@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -25,10 +26,14 @@ type serializer interface {
 // Request is an interface that defines common functions for operation requests.
 type Request interface {
 	serializer
+	getTableName() string
 	validate() error
 	setDefaults(cfg *RequestConfig)
 	shouldRetry() bool
 	timeout() time.Duration
+	doesReads() bool
+	doesWrites() bool
+	common.InternalRequestDataInt
 }
 
 // serialize writes the GetRequest to data stream using the specified protocol writer.

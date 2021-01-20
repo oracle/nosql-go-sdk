@@ -372,10 +372,10 @@ func (suite *TableOpsTestSuite) TestListTables() {
 	}
 
 	testCases := []*nosqldb.ListTablesRequest{
-		&nosqldb.ListTablesRequest{},
-		&nosqldb.ListTablesRequest{Limit: 5},
-		&nosqldb.ListTablesRequest{StartIndex: 2, Limit: 8},
-		&nosqldb.ListTablesRequest{StartIndex: 2},
+		{},
+		{Limit: 5},
+		{StartIndex: 2, Limit: 8},
+		{StartIndex: 2},
 	}
 
 	// test case number

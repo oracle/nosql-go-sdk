@@ -64,7 +64,7 @@ type DefaultRetryHandler struct {
 // maximum number of retries and retry interval. The retry interval must be
 // greater than or equal to 1 millisecond.
 func NewDefaultRetryHandler(maxNumRetries uint, retryInterval time.Duration) (*DefaultRetryHandler, error) {
-	if retryInterval < time.Millisecond {
+	if retryInterval > 0 && retryInterval < time.Millisecond {
 		return nil, errors.New("retry interval must be greater than or equal to 1 millisecond")
 	}
 
@@ -95,11 +95,20 @@ func (r DefaultRetryHandler) MaxNumRetries() uint {
 func (r DefaultRetryHandler) Delay(req Request, numRetries uint, err error) {
 	d := r.retryInterval
 	if nosqlerr.IsSecurityInfoUnavailable(err) {
-		d = securityInfoNotReadyDelay(numRetries)
+		d = securityInfoNotReadyDelay(numRetries, req)
 	} else if d <= 0 {
-		d = computeBackoffDelay(numRetries, time.Second)
+		d = computeBackoffDelay(req)
 	}
 
+	if req.timeout() > 0 {
+		if (d + req.GetRetryTime()) > req.timeout() {
+			d = req.timeout() - req.GetRetryTime()
+			if d < 0 {
+				return
+			}
+		}
+	}
+	req.SetRetryTime(req.GetRetryTime() + d)
 	time.Sleep(d)
 }
 
@@ -135,25 +144,20 @@ func (r DefaultRetryHandler) ShouldRetry(req Request, numRetries uint, err error
 	return numRetries < r.maxNumRetries
 }
 
-// Use an exponential backoff algorithm to compute time of delay.
-//
-// Assumption: numRetries starts with 1
-// DelayMS = 2^(numRetries-1) + random MS (0-1000)
-func computeBackoffDelay(numRetries uint, baseDelay time.Duration) time.Duration {
-	if numRetries < 1 {
-		return baseDelay
-	}
-	d := (1 << (numRetries - 1)) * baseDelay
-	d += (time.Duration(rand.Intn(1000)) * time.Millisecond)
+// Use an incremental backoff algorithm to compute time of delay.
+func computeBackoffDelay(req Request) time.Duration {
+	d := 200 * time.Millisecond
+	d += (time.Duration(rand.Intn(100)) * time.Millisecond)
+	d += req.GetRetryTime()
 	return d
 }
 
 // Handle security information not ready retries. If number of retries
 // is less than or equal to 10, delay for securityErrorRetryInterval.
 // Otherwise, use the backoff algorithm to compute the time of delay.
-func securityInfoNotReadyDelay(numRetries uint) time.Duration {
+func securityInfoNotReadyDelay(numRetries uint, req Request) time.Duration {
 	if numRetries <= 10 {
 		return securityErrorRetryInterval
 	}
-	return computeBackoffDelay(numRetries-10, securityErrorRetryInterval)
+	return computeBackoffDelay(req)
 }

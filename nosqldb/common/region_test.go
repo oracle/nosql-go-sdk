@@ -152,18 +152,18 @@ func TestEndpointsFromJSON(t *testing.T) {
 	}
 
 	jFile, err := os.Open(*jsonRegionFile)
-	require.NoErrorf(t,err, "can't open region file %s: %v", *jsonRegionFile, err)
+	require.NoErrorf(t, err, "can't open region file %s: %v", *jsonRegionFile, err)
 	defer jFile.Close()
 
 	byteValue, _ := ioutil.ReadAll(jFile)
 
 	// JSONRealm contains a name and pre/postfixes for urls
 	type JSONRealm struct {
-		Name             string `json:"name"`
-		EndpointPrefix   string `json:"epprefix"`
-		EndpointSuffix   string `json:"epsuffix"`
-		AuthPrefix       string `json:"authprefix"`
-		AuthSuffix       string `json:"authsuffix"`
+		Name           string `json:"name"`
+		EndpointPrefix string `json:"epprefix"`
+		EndpointSuffix string `json:"epsuffix"`
+		AuthPrefix     string `json:"authprefix"`
+		AuthSuffix     string `json:"authsuffix"`
 	}
 
 	// JSONRealms contains an array of JSONRealm
@@ -173,9 +173,9 @@ func TestEndpointsFromJSON(t *testing.T) {
 
 	// JSONRegion contains a name, three letter code, and realm
 	type JSONRegion struct {
-		Name   string `json:"name"`
-		Code   string `json:"tlc"`
-		Realm  string `json:"realm"`
+		Name  string `json:"name"`
+		Code  string `json:"tlc"`
+		Realm string `json:"realm"`
 	}
 
 	// JSONRegions contains an array of JSONRegion
@@ -217,7 +217,7 @@ func TestEndpointsFromJSON(t *testing.T) {
 				break
 			}
 		}
-		if ! assert.True(t, found, "Can't find realm \"%s\" in json realms", region.Realm) {
+		if !assert.True(t, found, "Can't find realm \"%s\" in json realms", region.Realm) {
 			continue
 		}
 

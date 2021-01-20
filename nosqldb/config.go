@@ -119,6 +119,17 @@ type Config struct {
 	// RetryHandler specifies a handler used to handle operation retries.
 	RetryHandler
 
+	// By default, internal rate limiting is disabled. Set RateLimitingEnabled to
+	// true before creating a client to enable internal rate limiting.
+	RateLimitingEnabled bool `json:"rateLimitingEnabled,omitempty"`
+
+	// RateLimiterPercentage is a default percentage of table limits to use with
+	// rate limiting. This may be useful for cases where a client should only use
+	// a portion of full table limits. This only applies if internal rate limiting is
+	// enabled.
+	// The default for this value is 100.0 (full table limits).
+	RateLimiterPercentage float64
+
 	host     string
 	port     string
 	protocol string
@@ -132,7 +143,7 @@ func (c *Config) validate() error {
 	case "", "cloud":
 	case "cloudsim", "onprem":
 		if len(c.Endpoint) == 0 {
-			return fmt.Errorf("Endpoint must be specified")
+			return fmt.Errorf("endpoint must be specified")
 		}
 	default:
 		return fmt.Errorf("the specified configuration mode %q is not supported", c.Mode)
@@ -158,7 +169,7 @@ func (c *Config) setDefaults() (err error) {
 
 	// Set a default RetryHandler if not specified.
 	if c.RetryHandler == nil {
-		c.RetryHandler, err = NewDefaultRetryHandler(5, time.Second)
+		c.RetryHandler, err = NewDefaultRetryHandler(5, 0)
 		if err != nil {
 			return
 		}
@@ -254,7 +265,7 @@ func (c *Config) setDefaults() (err error) {
 			c.Region = common.Region(regionID)
 		// neither region nor endpoint is specified
 		case len(c.Endpoint) == 0:
-			return fmt.Errorf("Region must be specified")
+			return fmt.Errorf("region must be specified")
 		}
 	}
 
@@ -312,7 +323,7 @@ func (c *Config) IsCloudSim() bool {
 
 func parseEndpoint(endpoint string) (protocol, host, port string, err error) {
 	if endpoint == "" {
-		err = errors.New("Endpoint must be specified")
+		err = errors.New("endpoint must be specified")
 		return
 	}
 

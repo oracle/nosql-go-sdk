@@ -17,10 +17,13 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
@@ -69,12 +72,24 @@ type Client struct {
 	// isCloud represents whether the client connects to the cloud service or
 	// cloud simulator.
 	isCloud bool
+
+	// Internal rate limiting: cloud only
+	rateLimiterMap map[string]common.RateLimiterPair
+
+	// Keep an internal map of tablename to next limits update time
+	tableLimitUpdateMap map[string]int64
+	limitMux            sync.Mutex
 }
 
 var (
 	errNilRequest       = nosqlerr.NewIllegalArgument("request must be non-nil")
 	errNilContext       = nosqlerr.NewIllegalArgument("nil context")
 	errUnexpectedResult = errors.New("got unexpected result for the request")
+)
+
+const (
+	// LimiterRefreshNanos is used to update table limits once every 10 minutes
+	LimiterRefreshNanos int64 = 600 * 1000 * 1000 * 1000
 )
 
 // NewClient creates a Client instance with the specified Config.
@@ -110,6 +125,11 @@ func NewClient(cfg Config) (*Client, error) {
 	c.queryLogger, err = newQueryLogger()
 	if err != nil {
 		c.logger.Warn("cannot create a query logger: %v", err)
+	}
+
+	if c.isCloud && cfg.RateLimitingEnabled {
+		c.tableLimitUpdateMap = make(map[string]int64)
+		c.rateLimiterMap = make(map[string]common.RateLimiterPair)
 	}
 
 	return c, nil
@@ -863,6 +883,40 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 	secInfoTimeout := c.DefaultSecurityInfoTimeout()
 	numRetries := 0
 	numThrottleRetries := 0
+
+	req.SetRetryTime(0)
+	var rateDelayedTime time.Duration = 0
+	checkReadUnits := false
+	checkWriteUnits := false
+
+	// if the request itself specifies rate limiters, use them
+	readLimiter := req.GetReadRateLimiter()
+	if readLimiter != nil {
+		checkReadUnits = true
+	}
+	writeLimiter := req.GetWriteRateLimiter()
+	if writeLimiter != nil {
+		checkWriteUnits = true
+	}
+
+	// if not, see if we have limiters in our map for the given table
+	if c.rateLimiterMap != nil && readLimiter == nil && writeLimiter == nil {
+		tableName := req.getTableName()
+		if tableName != "" {
+			rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
+			if ok == false {
+				if req.doesReads() || req.doesWrites() {
+					c.backgroundUpdateLimiters(tableName)
+				}
+			} else {
+				writeLimiter = rp.WriteLimiter
+				readLimiter = rp.ReadLimiter
+				req.SetReadRateLimiter(readLimiter)
+				req.SetWriteRateLimiter(writeLimiter)
+			}
+		}
+	}
+
 	startTime := time.Now()
 
 	for {
@@ -880,6 +934,24 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 					"request timed out after %d attempt(s). Timeout: %v", numRetries+1, timeout)
 			}
 
+			if readLimiter != nil && nosqlerr.Is(err, nosqlerr.ReadLimitExceeded) {
+				// ensure we check read limits next loop
+				checkReadUnits = true
+				// set limiter to its limit, if not over already
+				if readLimiter.GetCurrentRate() < 100.0 {
+					readLimiter.SetCurrentRate(100.0)
+				}
+			}
+
+			if writeLimiter != nil && nosqlerr.Is(err, nosqlerr.WriteLimitExceeded) {
+				// ensure we check write limits next loop
+				checkWriteUnits = true
+				// set limiter to its limit, if not over already
+				if writeLimiter.GetCurrentRate() < 100.0 {
+					writeLimiter.SetCurrentRate(100.0)
+				}
+			}
+
 			if !c.handleError(err, req, numThrottleRetries) {
 				return nil, err
 			}
@@ -895,6 +967,41 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 			}
 			// Increase number of retries
 			numRetries++
+		}
+
+		// Before executing request: wait for rate limiter(s) to go below limit
+		if readLimiter != nil && checkReadUnits == true {
+			// wait for read limiter to come below the limit
+			timeout = reqTimeout - time.Since(startTime)
+			if timeout <= 0 {
+				if readLimiter.TryConsumeUnits(0) == false {
+					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
+				}
+			} else {
+				// note this may sleep for a while
+				ms, err := readLimiter.ConsumeUnitsWithTimeout(0, timeout, false)
+				if err != nil {
+					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
+				}
+				rateDelayedTime += ms
+			}
+		}
+		if writeLimiter != nil && checkWriteUnits == true {
+			// wait for write limiter to come below the limit
+			// note this may sleep for a while
+			timeout = reqTimeout - time.Since(startTime)
+			if timeout <= 0 {
+				if writeLimiter.TryConsumeUnits(0) == false {
+					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
+				}
+			} else {
+				// note this may sleep for a while
+				ms, err := writeLimiter.ConsumeUnitsWithTimeout(0, timeout, false)
+				if err != nil {
+					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
+				}
+				rateDelayedTime += ms
+			}
 		}
 
 		// Handle errors that may occur when retrieving authorization string.
@@ -943,7 +1050,159 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 			continue
 		}
 
+		if result == nil {
+			return result, nil
+		}
+
+		if tResult, ok := result.(*TableResult); ok && c.rateLimiterMap != nil {
+			// update rate limiter settings for table
+			c.updateRateLimiters(tResult.TableName, tResult.Limits)
+		}
+
+		// After executing request: apply used read/write units to rate
+		// limiters, possibly delaying return
+		used, _ := result.ConsumedCapacity()
+		if used.ReadUnits > 0 && readLimiter != nil {
+			timeout = reqTimeout - time.Since(startTime)
+			rateDelayedTime += c.consumeLimiterUnits(readLimiter, int64(used.ReadUnits), timeout)
+		}
+		if used.WriteKB > 0 && writeLimiter != nil {
+			timeout = reqTimeout - time.Since(startTime)
+			rateDelayedTime += c.consumeLimiterUnits(writeLimiter, int64(used.WriteKB), timeout)
+		}
+		result.Delayed().setRateLimitTime(rateDelayedTime)
+		result.Delayed().setRetryTime(req.GetRetryTime())
+
 		return result, nil
+	}
+}
+
+func (c *Client) tableNeedsRefresh(tableName string) bool {
+	if c.tableLimitUpdateMap == nil {
+		return false
+	}
+
+	nowNanos := time.Now().UnixNano()
+	then := c.tableLimitUpdateMap[tableName]
+	return then <= nowNanos
+}
+
+func (c *Client) setTableNeedsRefresh(tableName string, needsRefresh bool) {
+	if c.tableLimitUpdateMap == nil {
+		return
+	}
+
+	lTable := strings.ToLower(tableName)
+	nowNanos := time.Now().UnixNano()
+	if needsRefresh == true {
+		c.tableLimitUpdateMap[lTable] = nowNanos - 1
+	} else {
+		c.tableLimitUpdateMap[lTable] = nowNanos + LimiterRefreshNanos
+	}
+}
+
+func (c *Client) backgroundUpdateLimiters(tableName string) {
+	lTable := strings.ToLower(tableName)
+
+	c.limitMux.Lock()
+
+	if c.tableNeedsRefresh(lTable) == false {
+		c.limitMux.Unlock()
+		return
+	}
+	c.setTableNeedsRefresh(lTable, false)
+	c.limitMux.Unlock()
+
+	go c.updateTableLimiters(lTable)
+}
+
+// Comsume rate limiter units after successful operation.
+// return the duration delayed due to rate limiting
+func (c *Client) consumeLimiterUnits(rl common.RateLimiter, units int64, timeout time.Duration) time.Duration {
+
+	if rl == nil || units <= 0 {
+		return 0
+	}
+
+	if timeout <= 0 {
+		rl.ConsumeUnitsUnconditionally(units)
+		return 0
+	}
+
+	// "true" == "consume units, even on timeout"
+	ret, _ := rl.ConsumeUnitsWithTimeout(units, timeout, true)
+	return ret
+}
+
+func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
+	if c.rateLimiterMap == nil {
+		return false
+	}
+
+	lTable := strings.ToLower(tableName)
+
+	c.setTableNeedsRefresh(lTable, false)
+
+	if limits.ReadUnits <= 0 && limits.WriteUnits <= 0 {
+		delete(c.rateLimiterMap, lTable)
+		c.logger.Info("removing rate limiting from table " + tableName)
+		return false
+	}
+
+	// Adjust units based on configured rate limiter percentage
+	RUs := float64(limits.ReadUnits)
+	WUs := float64(limits.WriteUnits)
+	if c.RateLimiterPercentage > 0.0 {
+		RUs = (RUs * c.RateLimiterPercentage) / 100.0
+		WUs = (WUs * c.RateLimiterPercentage) / 100.0
+	}
+
+	// Create or update rate limiters in map
+	rp, ok := c.rateLimiterMap[lTable]
+	if ok {
+		rp.ReadLimiter.SetLimitPerSecond(RUs)
+		rp.WriteLimiter.SetLimitPerSecond(WUs)
+	} else {
+		// Note: noSQL cloud service has a "burst" availability of
+		// 300 seconds. But we don't know if or how many other clients
+		// may have been using this table, and a duration of 30 seconds
+		// allows for more predictable usage.
+		c.rateLimiterMap[lTable] = common.RateLimiterPair{
+			ReadLimiter:  common.NewSimpleRateLimiterWithDuration(RUs, 30),
+			WriteLimiter: common.NewSimpleRateLimiterWithDuration(WUs, 30),
+		}
+	}
+
+	c.logger.Info("Updated table '%s' to have RUs=%.1f and WUs=%.1f per second",
+		tableName, RUs, WUs)
+
+	return true
+}
+
+func (c *Client) updateTableLimiters(tableName string) {
+	req := &GetTableRequest{
+		TableName: tableName,
+		Timeout:   5000 * time.Millisecond,
+	}
+	c.logger.Info("Starting GetTableRequest for table '%s'", tableName)
+	res, err := c.GetTable(req)
+	if err != nil {
+		c.logger.Info("GetTableRequest for table '%s' returned error: %v", tableName, err)
+		// allow retry after 100ms
+		c.tableLimitUpdateMap[tableName] = time.Now().UnixNano() + (100 * 1000 * 1000)
+		return
+	}
+	if res == nil {
+		c.logger.Info("GetTableRequest for table '%s' returned nil", tableName)
+		// allow retry after 100ms
+		c.tableLimitUpdateMap[tableName] = time.Now().UnixNano() + (100 * 1000 * 1000)
+		return
+	}
+
+	c.logger.Info("GetTableRequest completed for table '%s'", tableName)
+	// update/add rate limiters for table
+	if c.updateRateLimiters(tableName, res.Limits) {
+		c.logger.Info("background goroutine added limiters for table '%s'", tableName)
 	}
 }
 
@@ -1134,4 +1393,33 @@ func isRetryableError(err error) bool {
 	}
 
 	return false
+}
+
+// EnableRateLimiting is for testing purposes only. Applications should set
+// RateLimitingEnabled to true in the client Config to enable rate limiting.
+func (c *Client) EnableRateLimiting(enable bool, usePercent float64) {
+	c.RateLimiterPercentage = usePercent
+	if enable {
+		if c.rateLimiterMap != nil {
+			return
+		}
+		c.rateLimiterMap = make(map[string]common.RateLimiterPair)
+		c.tableLimitUpdateMap = make(map[string]int64)
+	} else {
+		c.tableLimitUpdateMap = nil
+		c.rateLimiterMap = nil
+	}
+}
+
+// ResetRateLimiters is for testing puposes only.
+func (c *Client) ResetRateLimiters(tableName string) {
+	if c.rateLimiterMap == nil {
+		return
+	}
+	rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
+	if ok == false {
+		return
+	}
+	rp.WriteLimiter.Reset()
+	rp.ReadLimiter.Reset()
 }

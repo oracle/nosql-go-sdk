@@ -41,22 +41,22 @@ func TestNewDefaultRetryHandler(t *testing.T) {
 
 func TestComputeBackoffDelay(t *testing.T) {
 	tests := []struct {
-		numRetries uint
-		baseDelay  time.Duration
-		wantDelay  time.Duration
+		retryTime time.Duration
+		wantDelay time.Duration
 	}{
-		{0, time.Second, time.Second},
-		{1, time.Second, time.Second},
-		{2, time.Second, 2 * time.Second},
-		{3, time.Second, 4 * time.Second},
-		{10, time.Second, 512 * time.Second},
+		{0, 200 * time.Millisecond},
+		{250 * time.Millisecond, 450 * time.Millisecond},
+		{1000 * time.Millisecond, 1200 * time.Millisecond},
+		{3000 * time.Millisecond, 3200 * time.Millisecond},
 	}
 
 	for _, r := range tests {
-		d := computeBackoffDelay(r.numRetries, r.baseDelay)
+		req := GetRequest{}
+		req.SetRetryTime(r.retryTime)
+		d := computeBackoffDelay(&req)
 		if d < r.wantDelay {
-			t.Errorf("computeBackoffDelay(%d, %v) got %v; want at least %v",
-				r.numRetries, r.baseDelay, d, r.wantDelay)
+			t.Errorf("computeBackoffDelay(%v) got %v; want at least %v",
+				r.retryTime, d, r.wantDelay)
 		}
 	}
 }
@@ -70,14 +70,14 @@ func TestSecurityInfoNotReadyDelay(t *testing.T) {
 		{0, baseDelay},
 		{1, baseDelay},
 		{10, baseDelay},
-		{11, baseDelay},
-		{12, 2 * baseDelay},
-		{13, 4 * baseDelay},
-		{20, 512 * baseDelay},
+		{11, 200 * time.Millisecond},
+		{12, 200 * time.Millisecond},
+		{20, 200 * time.Millisecond},
 	}
 
 	for _, r := range tests {
-		d := securityInfoNotReadyDelay(r.numRetries)
+		req := GetRequest{}
+		d := securityInfoNotReadyDelay(r.numRetries, &req)
 		if d < r.wantDelay {
 			t.Errorf("securityInfoNotReadyDelay(%d) got %v; want at least %v",
 				r.numRetries, d, r.wantDelay)

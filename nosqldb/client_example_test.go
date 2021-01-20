@@ -560,13 +560,13 @@ func ExampleClient_WriteMultiple() {
 	}
 
 	formerEmployees := []*emp{
-		&emp{empID: 101, deptID: 80},
-		&emp{empID: 107, deptID: 80},
-		&emp{empID: 109, deptID: 80},
+		{empID: 101, deptID: 80},
+		{empID: 107, deptID: 80},
+		{empID: 109, deptID: 80},
 	}
 
 	newEmployees := []*emp{
-		&emp{
+		{
 			empID:       211,
 			deptID:      80,
 			firstName:   "Tayler",
@@ -576,7 +576,7 @@ func ExampleClient_WriteMultiple() {
 			hireDate:    time.Date(2019, time.October, 1, 10, 0, 0, 0, time.UTC),
 			salary:      17000,
 		},
-		&emp{
+		{
 			empID:       212,
 			deptID:      80,
 			firstName:   "William",

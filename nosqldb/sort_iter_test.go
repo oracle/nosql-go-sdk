@@ -43,8 +43,8 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1", "c2"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: false, nullsFirst: true},
-				&sortSpec{isDesc: false, nullsFirst: true},
+				{isDesc: false, nullsFirst: true},
+				{isDesc: false, nullsFirst: true},
 			},
 		},
 		{
@@ -65,8 +65,8 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1", "c2"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: true, nullsFirst: true},
-				&sortSpec{isDesc: true, nullsFirst: false},
+				{isDesc: true, nullsFirst: true},
+				{isDesc: true, nullsFirst: false},
 			},
 		},
 		{
@@ -89,7 +89,7 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: false, nullsFirst: true},
+				{isDesc: false, nullsFirst: true},
 			},
 		},
 		{
@@ -112,8 +112,8 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1", "c2"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: true, nullsFirst: true},
-				&sortSpec{isDesc: true, nullsFirst: false},
+				{isDesc: true, nullsFirst: true},
+				{isDesc: true, nullsFirst: false},
 			},
 		},
 		{
@@ -132,8 +132,8 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1", "c2"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: false, nullsFirst: false},
-				&sortSpec{isDesc: false, nullsFirst: false},
+				{isDesc: false, nullsFirst: false},
+				{isDesc: false, nullsFirst: false},
 			},
 		},
 		{
@@ -154,8 +154,8 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1", "c2"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: true, nullsFirst: false},
-				&sortSpec{isDesc: false, nullsFirst: false},
+				{isDesc: true, nullsFirst: false},
+				{isDesc: false, nullsFirst: false},
 			},
 		},
 		{
@@ -178,8 +178,8 @@ func TestSortBySpec(t *testing.T) {
 			},
 			sortFields: []string{"c1", "c2"},
 			sortSpecs: []*sortSpec{
-				&sortSpec{isDesc: false, nullsFirst: false},
-				&sortSpec{isDesc: true, nullsFirst: false},
+				{isDesc: false, nullsFirst: false},
+				{isDesc: true, nullsFirst: false},
 			},
 		},
 	}
