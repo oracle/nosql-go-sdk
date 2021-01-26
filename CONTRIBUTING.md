@@ -1,6 +1,6 @@
 # Contributing to the Oracle NoSQL Database Cloud Service Go SDK
 
-*Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.*
+*Copyright (c) 2019, 2021 Oracle and/or its affiliates. All rights reserved.*
 
 The target readers of this document are those who want to contribute to the
 Oracle NoSQL Database Go SDK project, including but not limited to contributing
@@ -36,7 +36,7 @@ tracked, feel free to participate in the discussion.
 If you find an issue that is not tracked in the [Issues](https://github.com/oracle/nosql-go-sdk/issues)
 page, feel free to open a new one, describe the issue, discuss your plans or
 proposed changes.
-All contributions should be connected to an issue except for the trivial changes. 
+All contributions should be connected to an issue except for the trivial changes.
 
 ## Contributing
 
@@ -160,5 +160,3 @@ git commit --signoff
 
 Only pull requests from committers that can be verified as having
 signed the OCA can be accepted.
-
-

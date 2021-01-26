@@ -530,7 +530,7 @@ go build -o quickstart
 
 See also:
 
-* [Connecting Your Application](https://github.com/oracle/nosql-go-sdk/blob/master/doc/connect.md) 
+* [Connecting Your Application](https://github.com/oracle/nosql-go-sdk/blob/master/doc/connect.md)
   for details on how to configure applications to connect to different supported
   environments.
 * [Working with Tables](https://github.com/oracle/nosql-go-sdk/blob/master/doc/tables.md)
@@ -578,7 +578,7 @@ for information on how to contribute to the project.
 
 ## License
 
-Copyright (C) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
+Copyright (C) 2019, 2021 Oracle and/or its affiliates. All rights reserved.
 
 This SDK is licensed under the Universal Permissive License 1.0. See
 [LICENSE](https://github.com/oracle/nosql-go-sdk/blob/master/LICENSE.txt) for
