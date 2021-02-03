@@ -39,7 +39,7 @@ func (suite SmokeTestSuite) TestSmoke() {
 	tableReq := &nosqldb.TableRequest{
 		Statement: stmt,
 	}
-	tableRes, err := suite.Client.DoTableRequestAndWait(tableReq, 10*time.Second, 1*time.Second)
+	tableRes, err := suite.Client.DoTableRequestAndWait(tableReq, 20*time.Second, 1*time.Second)
 	suite.Require().NoErrorf(err, "\"%s\": %v", stmt, err)
 	suite.Require().Equalf(types.Dropped, tableRes.State, "unexpected state for table \"%s\"", tableName)
 
@@ -66,7 +66,7 @@ func (suite SmokeTestSuite) TestSmoke() {
 	}
 	tableRes, err = suite.Client.DoTableRequest(tableReq)
 	suite.Require().NoErrorf(err, "\"%s\": %v", stmt, err)
-	tableRes, err = tableRes.WaitForCompletion(suite.Client, 10*time.Second, 2*time.Second)
+	tableRes, err = tableRes.WaitForCompletion(suite.Client, 20*time.Second, 2*time.Second)
 	suite.Require().NoErrorf(err, "WaitForCompletion(table=%s): %v", tableName, err)
 	suite.Require().Equalf(types.Active, tableRes.State, "unexpected state for table \"%s\"", tableName)
 
@@ -226,7 +226,7 @@ func (suite SmokeTestSuite) TestSmoke() {
 	tableReq = &nosqldb.TableRequest{
 		Statement: stmt,
 	}
-	tableRes, err = suite.Client.DoTableRequestAndWait(tableReq, 10*time.Second, 2*time.Second)
+	tableRes, err = suite.Client.DoTableRequestAndWait(tableReq, 20*time.Second, 2*time.Second)
 	suite.Require().NoErrorf(err, "\"%s\": %v", stmt, err)
 	suite.Require().Equalf(types.Active, tableRes.State, "unexpected table state")
 
@@ -237,7 +237,7 @@ func (suite SmokeTestSuite) TestSmoke() {
 	}
 	tableRes, err = suite.Client.DoTableRequest(tableReq)
 	suite.Require().NoErrorf(err, "\"%s\": %v", stmt, err)
-	tableRes, err = tableRes.WaitForCompletion(suite.Client, 10*time.Second, 2*time.Second)
+	tableRes, err = tableRes.WaitForCompletion(suite.Client, 20*time.Second, 2*time.Second)
 	suite.Require().NoErrorf(err, "WaitForCompletion(op=createIndex(idxName=%s, tableName=%s)): %v", idx2, tableName, err)
 	suite.Require().Equalf(types.Active, tableRes.State, "unexpected table state")
 
@@ -428,7 +428,7 @@ func (suite SmokeTestSuite) doOnPremTest() {
 	tableReq := &nosqldb.TableRequest{
 		Statement: stmt,
 	}
-	tableRes, err := suite.Client.DoTableRequestAndWait(tableReq, 10*time.Second, 2*time.Second)
+	tableRes, err := suite.Client.DoTableRequestAndWait(tableReq, 20*time.Second, 2*time.Second)
 	suite.Require().NoErrorf(err, "DoTableRequestAndWait(stmt=%s): %v", stmt, err)
 	suite.Require().Equalf(types.Active, tableRes.State, "unexpected table state")
 
@@ -438,7 +438,7 @@ func (suite SmokeTestSuite) doOnPremTest() {
 	tableReq = &nosqldb.TableRequest{
 		Statement: stmt,
 	}
-	tableRes, err = suite.Client.DoTableRequestAndWait(tableReq, 10*time.Second, 2*time.Second)
+	tableRes, err = suite.Client.DoTableRequestAndWait(tableReq, 20*time.Second, 2*time.Second)
 	suite.Require().NoErrorf(err, "DoTableRequestAndWait(stmt=%s): %v", stmt, err)
 	suite.Require().Equalf(types.Active, tableRes.State, "unexpected table state")
 
