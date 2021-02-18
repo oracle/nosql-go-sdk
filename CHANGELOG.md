@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ### Added
 - Added latest Oracle Cloud Infrastructure regions and region codes.
+- Added support for ISO 8601 date strings with "Z" appended
 - Added lint option to Makefile
 - Rate Limiting (cloud only):
   - New boolean nosqldb.Config.RateLimitingEnabled can enable automatic internal rate limiting based on table read and write throughput limits.
