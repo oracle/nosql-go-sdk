@@ -298,7 +298,11 @@ func (r *Reader) ReadFieldValue() (types.FieldValue, error) {
 		if s == nil {
 			return nil, errors.New("binary.Reader: invalid Timestamp value")
 		}
-		return time.Parse(types.ISO8601Layout, *s)
+		v, err := time.Parse(types.ISO8601Layout, *s)
+		if err == nil {
+			return v, nil
+		}
+		return time.Parse(types.ISO8601ZLayout, *s)
 
 	case types.Number:
 		s, err := r.ReadString()

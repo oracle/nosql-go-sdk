@@ -199,8 +199,15 @@ func (ttl TimeToLive) ToDuration() time.Duration {
 	return time.Duration(numOfHours) * time.Hour
 }
 
+// NOTE: the date values in these are not random! They reference specific
+// fields based on their numerical strings. For example, "2006" is the
+// definition for stdLongYear. These do not follow C-style formatting.
+// See the consts in https://golang.org/src/time/format.go for more detail.
+
 // ISO8601Layout represents the ISO 8601 format of Go's reference time.
 const ISO8601Layout = "2006-01-02T15:04:05.999999999"
+// ISO8601ZLayout includes literal "Z"
+const ISO8601ZLayout = "2006-01-02T15:04:05.999999999Z"
 
 // FieldRange defines a range of values to be used in a Client.MultiDelete()
 // operation, as specified in MultiDeleteRequest.FieldRange.

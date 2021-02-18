@@ -1296,7 +1296,10 @@ func (suite *DataOpsTestSuite) TestTimestampDataType() {
 		tsValue       interface{} // Note: specify a string or time.Time value
 		shouldSucceed bool
 	}{
+		{"2019-07-13T16:48:05.123456789Z", true},
+		{"2019-07-13T16:48:05Z", true},
 		{"2019-07-13T16:48:05.123456789", true},
+		{"2019-07-13T16:48:05", true},
 		// Use Unix Epoch time
 		{epoch, true},
 		// 1970-01-01T00:00:00.999999999
@@ -1433,6 +1436,9 @@ func (suite *DataOpsTestSuite) runTimestampTest(table string, ts interface{}, pu
 	case string:
 		strVal := ts.(string)
 		tsTimeVal, err = time.Parse(types.ISO8601Layout, strVal)
+		if err != nil {
+			tsTimeVal, err = time.Parse(types.ISO8601ZLayout, strVal)
+		}
 		suite.Require().NoErrorf(err, "failed to parse %q into time.Time, got error: %v", strVal, err)
 
 	case time.Time:
@@ -1517,7 +1523,7 @@ func (suite *DataOpsTestSuite) runTimestampTest(table string, ts interface{}, pu
 				expect = tsTimeVal.Round(time.Nanosecond * d)
 			}
 
-			suite.Truef(expect.Equal(actual), "unexpect timestamp value returned, expect %v, got %v.", expect, actual)
+			suite.Truef(expect.Equal(actual), "unexpected timestamp value returned, expect %v, got %v.", expect, actual)
 		}
 	}
 
