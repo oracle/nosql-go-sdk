@@ -237,7 +237,7 @@ func (client *authClient) Call(request *http.Request) (*http.Response, error) {
 func (c *x509FederationClient) KeyID() (string, error) {
 	tenancy := c.tenancyID
 	fingerprint := fingerprint(c.leafCertificateRetriever.Certificate())
-	return fmt.Sprintf("%s/fed-x509/%s", tenancy, fingerprint), nil
+	return fmt.Sprintf("%s/fed-x509-sha256/%s", tenancy, fingerprint), nil
 }
 
 // For authClient to sign requests to X509 Federation Endpoint
@@ -403,6 +403,8 @@ type x509FederationRequest struct {
 	Certificate              string   `json:"certificate,omitempty"`
 	IntermediateCertificates []string `json:"intermediateCertificates,omitempty"`
 	PublicKey                string   `json:"publicKey,omitempty"`
+	FingerprintAlgorithm     string   `json:"fingerprintAlgorithm,omitempty"`
+	Purpose                  string   `json:"purpose,omitempty"`
 }
 
 // type X509FederationRequest struct {
@@ -438,6 +440,8 @@ func (c *x509FederationClient) makeX509FederationRequest() *x509FederationReques
 		Certificate:              certificate,
 		IntermediateCertificates: intermediateCertificates,
 		PublicKey:                publicKey,
+		FingerprintAlgorithm:     `SHA256`,
+		Purpose:                  `DEFAULT`,
 		// },
 	}
 }

@@ -21,9 +21,9 @@ import (
 func TestX509FederationClient_VeryFirstSecurityToken(t *testing.T) {
 	authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
-		expectedKeyID := fmt.Sprintf("%s/fed-x509/%s", tenancyID, leafCertFingerprint)
+		expectedKeyID := fmt.Sprintf("%s/fed-x509-sha256/%s", tenancyID, leafCertFingerprint)
 		assert.True(t, strings.HasPrefix(r.Header.Get("Authorization"), fmt.Sprintf(`Signature version="1",headers="date (request-target) content-length content-type x-content-sha256",keyId="%s",algorithm="rsa-sha256",signature=`, expectedKeyID)))
-		expectedBody := fmt.Sprintf(`{"certificate":"%s","intermediateCertificates":["%s"],"publicKey":"%s"}`,
+		expectedBody := fmt.Sprintf(`{"certificate":"%s","intermediateCertificates":["%s"],"publicKey":"%s","fingerprintAlgorithm":"SHA256","purpose":"DEFAULT"}`,
 			leafCertBodyNoNewLine, intermediateCertBodyNoNewLine, sessionPublicKeyBodyNoNewLine)
 
 		var buf bytes.Buffer
@@ -72,10 +72,10 @@ func TestX509FederationClient_VeryFirstSecurityToken(t *testing.T) {
 func TestX509FederationClient_RenewSecurityToken(t *testing.T) {
 	authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
-		expectedKeyID := fmt.Sprintf("%s/fed-x509/%s", tenancyID, leafCertFingerprint)
+		expectedKeyID := fmt.Sprintf("%s/fed-x509-sha256/%s", tenancyID, leafCertFingerprint)
 		assert.True(t, strings.HasPrefix(r.Header.Get("Authorization"), fmt.Sprintf(`Signature version="1",headers="date (request-target) content-length content-type x-content-sha256",keyId="%s",algorithm="rsa-sha256",signature=`, expectedKeyID)))
 
-		expectedBody := fmt.Sprintf(`{"certificate":"%s","intermediateCertificates":["%s"],"publicKey":"%s"}`,
+		expectedBody := fmt.Sprintf(`{"certificate":"%s","intermediateCertificates":["%s"],"publicKey":"%s","fingerprintAlgorithm":"SHA256","purpose":"DEFAULT"}`,
 			leafCertBodyNoNewLine, intermediateCertBodyNoNewLine, sessionPublicKeyBodyNoNewLine)
 		var buf bytes.Buffer
 		buf.ReadFrom(r.Body)
@@ -430,7 +430,12 @@ ysvMnQwaC0432ceRJ3r6vPAI2EPRd9KOE7Va1IFNJNmOuIkmRx8t`
 	//	certPem = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: newCertBytes})
 	//	return
 	//}
-	leafCertFingerprint  = `52:3c:9d:93:8b:b8:07:21:ce:36:30:98:ba:fc:e2:4a:bc:3a:2e:0b`
+
+	// old SHA-1 fingerprint
+	//leafCertFingerprint  = `52:3c:9d:93:8b:b8:07:21:ce:36:30:98:ba:fc:e2:4a:bc:3a:2e:0b`
+
+	// new SHA-256 fingerprint
+	leafCertFingerprint  = `0c:1e:d8:13:80:d4:30:cc:2c:62:13:57:2a:fe:d5:4e:75:be:54:32:59:12:8f:2f:96:78:f8:b1:f3:62:78:bc`
 	intermediateCertBody = `MIIC4TCCAcmgAwIBAgIRAK7jQKVEO6ssUBICuPw4OwQwDQYJKoZIhvcNAQELBQAw
 KjEoMCYGA1UEAxMfUEtJU1ZDIElkZW50aXR5IEludGVybWVkaWF0ZSByMjAeFw0x
 NzExMzAwMDE0MDhaFw0xODExMzAwMDE0MDhaMCoxKDAmBgNVBAMTH1BLSVNWQyBJ

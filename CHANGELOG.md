@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
     - nosqldb.Config.RateLimiterPercentage can control how much of a table's full limits this client handle can consume (default = 100%).
     - Result classes now have a GetRateLimitDelayed() method to return the amount of time an operation was delayed due to internal rate limiting.
 
+### Changed
+- Now uses SHA256 for OCI IAM instance principal fingerprint
+
 ## 1.2.1 - 2020-08-14
 
 ### Added

@@ -206,6 +206,7 @@ func (ttl TimeToLive) ToDuration() time.Duration {
 
 // ISO8601Layout represents the ISO 8601 format of Go's reference time.
 const ISO8601Layout = "2006-01-02T15:04:05.999999999"
+
 // ISO8601ZLayout includes literal "Z"
 const ISO8601ZLayout = "2006-01-02T15:04:05.999999999Z"
 
