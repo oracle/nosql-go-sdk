@@ -349,14 +349,6 @@ func (r *TableResult) WaitForCompletion(client *Client, timeout, pollInterval ti
 	for {
 		res, err = client.getTableWithContext(ctx, req)
 		if err != nil {
-			if nosqlerr.IsTableNotFound(err) {
-				// The operation was probably a drop. There was an OperationID,
-				// which means that the table existed when the original request
-				// was made. Update the state and return.
-				r.State = types.Dropped
-				return r, nil
-			}
-
 			return nil, err
 		}
 
