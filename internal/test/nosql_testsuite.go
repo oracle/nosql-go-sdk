@@ -104,13 +104,13 @@ func (suite *NoSQLTestSuite) ReCreateTable(table, createStmt string, limits *nos
 // table names and limits of the tables that are created.
 // If the specified namespace nsName is empty, the tables will be created in
 // the default namespace.
-func (suite *NoSQLTestSuite) CreateTables(numTables int, nsName string) (tables []string, tableLimits []*nosqldb.TableLimits) {
+func (suite *NoSQLTestSuite) CreateTables(numTables int, nsName string, offset int) (tables []string, tableLimits []*nosqldb.TableLimits) {
 	var limits *nosqldb.TableLimits
 	tables = make([]string, 0, numTables)
 	tableLimits = make([]*nosqldb.TableLimits, 0, numTables)
 
 	for i := 1; i <= numTables; i++ {
-		tableName := suite.GetNsTableName(nsName, fmt.Sprintf("Test%d", i))
+		tableName := suite.GetNsTableName(nsName, fmt.Sprintf("Test%d", i+offset))
 		if suite.IsCloud() {
 			limits = OkTableLimits
 		} else {

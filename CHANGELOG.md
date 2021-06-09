@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## [Unreleased]
+## 1.2.2 - 2021-06-08
 
 ### Added
 - Added latest Oracle Cloud Infrastructure regions and region codes.

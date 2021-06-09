@@ -363,10 +363,10 @@ func (suite *TableOpsTestSuite) TestListTables() {
 
 	// Create tables.
 	if test.IsCloud() {
-		tableNames, tableLimits = suite.CreateTables(numTables, "")
+		tableNames, tableLimits = suite.CreateTables(numTables, "", 0)
 	} else {
-		tableNames, tableLimits = suite.CreateTables(numTables/2, suite.ns)
-		names, limits := suite.CreateTables(numTables-len(tableNames), "")
+		tableNames, tableLimits = suite.CreateTables(numTables/2, suite.ns, 0)
+		names, limits := suite.CreateTables(numTables-len(tableNames), "", (numTables/2)+1)
 		tableNames = append(tableNames, names...)
 		tableLimits = append(tableLimits, limits...)
 	}
@@ -430,6 +430,9 @@ func (suite *TableOpsTestSuite) TestListTables() {
 
 		for _, table := range res.Tables {
 			returnedTables[table] = true
+			if testing.Verbose() {
+				fmt.Printf("   table=%s\n", table)
+			}
 		}
 
 		req.StartIndex = res.LastIndexReturned

@@ -940,11 +940,11 @@ func (suite *DataOpsTestSuite) TestNonNumericDataTypes() {
 
 	// int/int64 values are valid for TIMESTAMP data type starting with NoSQL
 	// Server 20.2.14 on-premise release and Cloud Simulator 1.3.2 release.
-	if suite.IsOnPrem() && suite.Version >= "20.2.14" || suite.IsCloudSim() && suite.Version >= "1.3.2" {
+	//if suite.IsOnPrem() && suite.Version >= "20.2.14" || suite.IsCloudSim() && suite.Version >= "1.3.2" {
 		tsTest.validValues = append(tsTest.validValues, []types.FieldValue{intVal, int64Val}...)
-	} else {
-		tsTest.invalidValues = append(tsTest.invalidValues, []types.FieldValue{intVal, int64Val}...)
-	}
+	//} else {
+		//tsTest.invalidValues = append(tsTest.invalidValues, []types.FieldValue{intVal, int64Val}...)
+	//}
 
 	testCases = append(testCases, tsTest)
 
