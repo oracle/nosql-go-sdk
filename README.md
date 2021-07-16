@@ -290,11 +290,13 @@ package main
 import (
 	"fmt"
 	"time"
+	"os"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth/iam"
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
@@ -408,6 +410,12 @@ func createClient() (*nosqldb.Client, error) {
 			}
 		}
 	}
+
+	lcfg := nosqldb.LoggingConfig {
+		// EDIT: change logger.Warn to logger.Fine for detailed output
+		Logger: logger.New(os.Stdout, logger.Warn, false),
+	}
+	cfg.LoggingConfig = lcfg
 
 	client, err := nosqldb.NewClient(cfg)
 	return client, err
