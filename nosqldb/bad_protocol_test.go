@@ -169,6 +169,12 @@ func (suite *BadProtocolTestSuite) doBadProtoTest(req nosqldb.Request, data []by
 	}
 }
 
+func (suite *BadProtocolTestSuite) doBadProtoTest2(req nosqldb.Request, data []byte, desc string, expectErrCode1 nosqlerr.ErrorCode, expectErrCode2 nosqlerr.ErrorCode) {
+	_, err := suite.bpTestClient.DoExecute(context.Background(), req, data)
+	suite.Truef((nosqlerr.Is(err, expectErrCode1) || nosqlerr.Is(err, expectErrCode2)),
+		"%q failed, got error %v, want error %s or %s", desc, err, expectErrCode1, expectErrCode2)
+}
+
 func (suite *BadProtocolTestSuite) TestBadGetRequest() {
 	req := &nosqldb.GetRequest{
 		TableName:   suite.table,
@@ -200,7 +206,7 @@ func (suite *BadProtocolTestSuite) TestBadGetRequest() {
 	desc = "Invalid serial version"
 	off = seekPos(lengths, 0)
 	suite.wr.Reset()
-	suite.wr.WriteSerialVersion(proto.SerialVersion + 1)
+	suite.wr.WriteSerialVersion(0)
 	copy(data[off:], suite.wr.Bytes())
 	suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
 
@@ -867,7 +873,11 @@ func (suite *BadProtocolTestSuite) TestBadTableRequest() {
 		suite.wr.Reset()
 		suite.wr.WriteInt(r.value)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+		// depending on server version, these may return
+		// BadProtocolMessage (older) or IllegalArgument (newer).
+		suite.doBadProtoTest2(req, data, desc,
+			nosqlerr.BadProtocolMessage,
+			nosqlerr.IllegalArgument)
 	}
 }
 
