@@ -61,7 +61,7 @@ const (
 	RegionSASaopaulo1 Region = "sa-saopaulo-1"
 	// RegionSASantiago1 represents the region for Chile (Santiago).
 	RegionSASantiago1 Region = "sa-santiago-1"
-	// RegionSAVinhedo1 represents the region for Chile (Vinhedo).
+	// RegionSAVinhedo1 represents the region for Brazil (Vinhedo).
 	RegionSAVinhedo1 Region = "sa-vinhedo-1"
 	// RegionMEJeddah1 represents the region for Saudi Arabia West (Jeddah).
 	RegionMEJeddah1 Region = "me-jeddah-1"
