@@ -35,6 +35,8 @@ const (
 	RegionUKCardiff1 Region = "uk-cardiff-1"
 	// RegionEUAmsterdam1 represents the region for Netherlands Northwest (Amsterdam).
 	RegionEUAmsterdam1 Region = "eu-amsterdam-1"
+	// RegionEUMilan1 represents the region for Italy (Milan).
+	RegionEUMilan1 Region = "eu-milan-1"
 	// RegionFRA represents the region for Germany Central (Frankfurt).
 	RegionFRA Region = "eu-frankfurt-1"
 	// RegionEUZurich1 represents the region for Switzerland North (Zurich).
@@ -59,10 +61,14 @@ const (
 	RegionSASaopaulo1 Region = "sa-saopaulo-1"
 	// RegionSASantiago1 represents the region for Chile (Santiago).
 	RegionSASantiago1 Region = "sa-santiago-1"
+	// RegionSAVinhedo1 represents the region for Chile (Vinhedo).
+	RegionSAVinhedo1 Region = "sa-vinhedo-1"
 	// RegionMEJeddah1 represents the region for Saudi Arabia West (Jeddah).
 	RegionMEJeddah1 Region = "me-jeddah-1"
 	// RegionMEDubai1 represents the region for Saudi Arabia East (Dubai).
 	RegionMEDubai1 Region = "me-dubai-1"
+	// RegionILJerusalem1 represents the region for Israel (Jerusalem).
+	RegionILJerusalem1 Region = "il-jerusalem-1"
 
 	// OC2 REGIONS
 
@@ -84,11 +90,15 @@ const (
 
 	// RegionUKGovLondon1 represents the government region for London.
 	RegionUKGovLondon1 Region = "uk-gov-london-1"
+	// RegionUKGovCardiff1 represents the government region for Cardiff.
+	RegionUKGovCardiff1 Region = "uk-gov-cardiff-1"
 
 	// OC8 REGIONS
 
 	// RegionAPChiyoda1 represents the region for Japan East (Chiyoda).
 	RegionAPChiyoda1 Region = "ap-chiyoda-1"
+	// RegionAPIbaraki1 represents the region for Japan East (Ibaraki).
+	RegionAPIbaraki1 Region = "ap-ibaraki-1"
 )
 
 var realm = map[string]string{
@@ -118,10 +128,13 @@ var regionRealm = map[Region]string{
 	RegionAPMelbourne1: "oc1",
 	RegionMEJeddah1:    "oc1",
 	RegionMEDubai1:     "oc1",
+	RegionILJerusalem1: "oc1",
 	RegionEUZurich1:    "oc1",
 	RegionEUAmsterdam1: "oc1",
+	RegionEUMilan1:     "oc1",
 	RegionSASaopaulo1:  "oc1",
 	RegionSASantiago1:  "oc1",
+	RegionSAVinhedo1:   "oc1",
 
 	RegionUSLangley1: "oc2",
 	RegionUSLuke1:    "oc2",
@@ -130,9 +143,11 @@ var regionRealm = map[Region]string{
 	RegionUSGovChicago1: "oc3",
 	RegionUSGovPhoenix1: "oc3",
 
-	RegionUKGovLondon1: "oc4",
+	RegionUKGovLondon1:  "oc4",
+	RegionUKGovCardiff1: "oc4",
 
 	RegionAPChiyoda1: "oc8",
+	RegionAPIbaraki1: "oc8",
 }
 
 var shortNameRegion = map[string]Region{
@@ -143,23 +158,30 @@ var shortNameRegion = map[string]Region{
 	"lhr": RegionLHR,
 	"cwl": RegionUKCardiff1,
 	"ams": RegionEUAmsterdam1,
+	"lin": RegionEUMilan1,
 	"zrh": RegionEUZurich1,
 	"mel": RegionAPMelbourne1,
 	"bom": RegionAPMumbai1,
 	"hyd": RegionAPHyderabad1,
 	"gru": RegionSASaopaulo1,
 	"scl": RegionSASantiago1,
+	"vcp": RegionSAVinhedo1,
 	"icn": RegionAPSeoul1,
 	"yny": RegionAPChuncheon1,
 	"nja": RegionAPChiyoda1,
+	// Note: ukb is actually Kobe, but OCI uses it for Ibaraki
+	"ukb": RegionAPIbaraki1,
+	"ibr": RegionAPIbaraki1,
 	"nrt": RegionAPTokyo1,
 	"kix": RegionAPOsaka1,
 	"yul": RegionCAMontreal1,
 	"yyz": RegionCAToronto1,
 	"jed": RegionMEJeddah1,
 	"dxb": RegionMEDubai1,
+	"mtz": RegionILJerusalem1,
 	"syd": RegionAPSydney1,
 	"ltn": RegionUKGovLondon1,
+	"brs": RegionUKGovCardiff1,
 	"lfi": RegionUSLangley1,
 	"luf": RegionUSLuke1,
 	"ric": RegionUSGovAshburn1,
