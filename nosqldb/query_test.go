@@ -150,98 +150,6 @@ func (suite *QueryTestSuite) TestBasicQuery() {
 	suite.executeQuery(stmt, nil, expNumRows, 0, true, expValues)
 }
 
-func (suite *QueryTestSuite) TestQueryWithSmallLimit() {
-	numMajor, numPerMajor, recordKB := 1, 5, 2
-	minRead := suite.minRead()
-	prepCost := suite.minQueryCost()
-
-	suite.loadRowsToTable(numMajor, numPerMajor, recordKB, suite.table)
-
-	// Update with number based limit of 1.
-	newRecordKB := 1
-	longStr := test.GenString((newRecordKB - 1) * 1024)
-	stmt := fmt.Sprintf(`update %s set longString = "%s" where sid = 0 and id = 0`,
-		suite.table, longStr)
-	req := &nosqldb.QueryRequest{
-		Statement: stmt,
-		Limit:     1,
-	}
-	res, err := suite.Client.Query(req)
-
-	expectReadKB := minRead + recordKB
-	expectWriteKB := recordKB + newRecordKB
-
-	if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-		if test.IsCloud() {
-			suite.AssertReadWriteKB(res, expectReadKB, expectWriteKB, prepCost, true)
-		} else {
-			suite.AssertZeroReadWriteKB(res)
-		}
-	}
-
-	if suite.IsCloud() || (suite.IsOnPrem() && suite.Version > "20.3") {
-		// Update with maxReadKB of 1, expect an IllegalArgument error.
-		stmt = fmt.Sprintf(`update %s set longString = "%s" where sid = 0 and id = 1`,
-			suite.table, longStr)
-		for kb := 1; kb <= expectReadKB; kb++ {
-			req = &nosqldb.QueryRequest{
-				Statement: stmt,
-				MaxReadKB: uint(kb),
-			}
-			res, err = suite.Client.Query(req)
-			if kb < expectReadKB {
-				suite.Truef(nosqlerr.IsIllegalArgument(err),
-					"Update with MaxReadKB=%d (expect ReadKB=%d) should have failed with an "+
-						"IllegalArgument error, got error %v", kb, expectReadKB, err)
-
-			} else if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-				if test.IsCloud() {
-					suite.AssertReadWriteKB(res, expectReadKB, expectWriteKB, prepCost, true)
-				} else {
-					suite.AssertZeroReadWriteKB(res)
-				}
-			}
-		}
-	}
-
-	// Update 0 rows with maxReadKB of 1.
-	stmt = fmt.Sprintf("update %s set longString = \"%s\" where sid = 10000 and id = 1",
-		suite.table, longStr)
-	req = &nosqldb.QueryRequest{
-		Statement: stmt,
-		MaxReadKB: 1,
-	}
-	res, err = suite.Client.Query(req)
-	if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-		if test.IsCloud() {
-			suite.AssertReadWriteKB(res, minRead, 0, prepCost, true)
-		} else {
-			suite.AssertZeroReadWriteKB(res)
-		}
-	}
-
-	// Query with number limit of 1
-	stmt = fmt.Sprintf("select * from %s where sid = 0 and id > 1", suite.table)
-	numRows := numMajor * (numPerMajor - 2)
-	expectReadKB = suite.getExpectReadKB(false, recordKB, numRows, numRows)
-	suite.executeQueryTest(stmt,
-		false,        // keyOnly
-		false,        // indexScan
-		numRows,      // expected number of rows returned
-		expectReadKB, // expected readKB
-		1,            // limit
-		0,            // maxReadKB
-		recordKB)
-
-	// Query with MaxReadKB of 1, expect an IllegalArgument error
-	req = &nosqldb.QueryRequest{
-		Statement: stmt,
-		MaxReadKB: 1,
-	}
-	_, err = suite.ExecuteQueryRequest(req)
-	suite.Truef(nosqlerr.IsIllegalArgument(err), "Query(MaxReadKB=1, stmt=%s) "+
-		"should have failed with an IllegalArgument error, got error %v", err)
-}
 
 func (suite *QueryTestSuite) TestIllegalQuery() {
 
@@ -838,8 +746,6 @@ func (suite *QueryTestSuite) TestGroupByWithLimits() {
 func (suite *QueryTestSuite) TestUpdateQuery() {
 	numMajor, numPerMajor := 1, 10
 	recordKB := 2
-	minRead := suite.minRead()
-	prepCost := suite.minQueryCost()
 
 	suite.loadRowsToTable(numMajor, numPerMajor, recordKB, suite.table)
 
@@ -849,26 +755,14 @@ func (suite *QueryTestSuite) TestUpdateQuery() {
 	stmt := fmt.Sprintf(`update %s set longString = "%s" where sid = 0 and id = 0`,
 		suite.table, longStr)
 	req := &nosqldb.QueryRequest{Statement: stmt}
-	res, err := suite.Client.Query(req)
-	if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-		if test.IsCloud() {
-			suite.AssertReadWriteKB(res, minRead+recordKB, recordKB+newRecordKB, prepCost, true)
-		} else {
-			suite.AssertZeroReadWriteKB(res)
-		}
-	}
+	_, err := suite.Client.Query(req)
+	suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err)
 
 	// Update non-exsiting row.
 	stmt = fmt.Sprintf(`update %s set longString = "test" where sid = 1000 and id = 0`, suite.table)
 	req = &nosqldb.QueryRequest{Statement: stmt}
-	res, err = suite.Client.Query(req)
-	if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-		if test.IsCloud() {
-			suite.AssertReadWriteKB(res, minRead, 0, prepCost, true)
-		} else {
-			suite.AssertZeroReadWriteKB(res)
-		}
-	}
+	_, err = suite.Client.Query(req)
+	suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err)
 
 	// Update using prepared statement
 	stmt = fmt.Sprintf("declare $sval string; $sid integer; $id integer;"+
@@ -879,25 +773,13 @@ func (suite *QueryTestSuite) TestUpdateQuery() {
 		//TODO
 		// suite.NotNil(prepRes.PreparedStatement.Statement)
 
-		if test.IsCloud() {
-			suite.AssertReadWriteKB(prepRes, prepCost, 0, 0, false)
-		} else {
-			suite.AssertZeroReadWriteKB(prepRes)
-		}
-
 		prepRes.PreparedStatement.SetVariable("$sval", longStr)
 		prepRes.PreparedStatement.SetVariable("$sid", 0)
 		prepRes.PreparedStatement.SetVariable("$id", 1)
 
 		req = &nosqldb.QueryRequest{PreparedStatement: &prepRes.PreparedStatement}
-		res, err = suite.Client.Query(req)
-		if suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err) {
-			if test.IsCloud() {
-				suite.AssertReadWriteKB(res, minRead+recordKB, recordKB+newRecordKB, 0, true)
-			} else {
-				suite.AssertZeroReadWriteKB(res)
-			}
-		}
+		_, err = suite.Client.Query(req)
+		suite.NoErrorf(err, "failed to execute %q, got error: %v", stmt, err)
 	}
 
 }
