@@ -69,6 +69,16 @@ const (
 	RegionMEDubai1 Region = "me-dubai-1"
 	// RegionILJerusalem1 represents the region for Israel (Jerusalem).
 	RegionILJerusalem1 Region = "il-jerusalem-1"
+	// RegionAFJohannesburg represents the region for Johannesburg
+	RegionAFJohannesburg Region = "af-johannesburg-1"
+	// RegionAPSignapore represents the region for singapore
+	RegionAPSignapore Region = "ap-singapore-1"
+	// RegionEUMarseille represents the region for Marseille
+	RegionEUMarseille Region = "eu-marseille-1"
+	// RegionEUStockholm represents the region for Stockholm
+	RegionEUStockholm Region = "eu-stockholm-1"
+	// RegionMEAbudhabi represents the region for Abudhabi
+	RegionMEAbudhabi Region = "me-abudhabi-1"
 
 	// OC2 REGIONS
 
@@ -99,6 +109,16 @@ const (
 	RegionAPChiyoda1 Region = "ap-chiyoda-1"
 	// RegionAPIbaraki1 represents the region for Japan East (Ibaraki).
 	RegionAPIbaraki1 Region = "ap-ibaraki-1"
+
+	// OC9 REGIONS
+
+	// RegionMEDCCMuscat represents the dedicated region for muscat
+	RegionMEDCCMuscat Region = "me-dcc-muscat-1"
+
+	// OC10 REGIONS
+
+	// RegionAPDCCCanberra represents the dedicated region for canberra
+	RegionAPDCCCanberra Region = "ap-dcc-canberra-1"
 )
 
 var realm = map[string]string{
@@ -107,6 +127,8 @@ var realm = map[string]string{
 	"oc3": "oraclegovcloud.com",
 	"oc4": "oraclegovcloud.uk",
 	"oc8": "oraclecloud8.com",
+	"oc9": "oraclecloud9.com",
+	"oc10": "oraclecloud10.com",
 }
 
 var regionRealm = map[Region]string{
@@ -135,6 +157,11 @@ var regionRealm = map[Region]string{
 	RegionSASaopaulo1:  "oc1",
 	RegionSASantiago1:  "oc1",
 	RegionSAVinhedo1:   "oc1",
+	RegionAFJohannesburg: "oc1",
+	RegionAPSignapore:  "oc1",
+	RegionEUMarseille:  "oc1",
+	RegionMEAbudhabi:   "oc1",
+	RegionEUStockholm:  "oc1",
 
 	RegionUSLangley1: "oc2",
 	RegionUSLuke1:    "oc2",
@@ -148,6 +175,10 @@ var regionRealm = map[Region]string{
 
 	RegionAPChiyoda1: "oc8",
 	RegionAPIbaraki1: "oc8",
+
+	RegionMEDCCMuscat: "oc9",
+
+	RegionAPDCCCanberra: "oc10",
 }
 
 var shortNameRegion = map[string]Region{
@@ -180,6 +211,11 @@ var shortNameRegion = map[string]Region{
 	"dxb": RegionMEDubai1,
 	"mtz": RegionILJerusalem1,
 	"syd": RegionAPSydney1,
+    "jnb": RegionAFJohannesburg,
+    "sin": RegionAPSignapore,
+    "mrs": RegionEUMarseille,
+    "auh": RegionMEAbudhabi,
+    "arn": RegionEUStockholm,
 	"ltn": RegionUKGovLondon1,
 	"brs": RegionUKGovCardiff1,
 	"lfi": RegionUSLangley1,
@@ -187,6 +223,8 @@ var shortNameRegion = map[string]Region{
 	"ric": RegionUSGovAshburn1,
 	"pia": RegionUSGovChicago1,
 	"tus": RegionUSGovPhoenix1,
+	"mct": RegionMEDCCMuscat,
+	"wga": RegionAPDCCCanberra,
 }
 
 func (region Region) secondLevelDomain() string {

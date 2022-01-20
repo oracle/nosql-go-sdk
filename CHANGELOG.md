@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ## Unpublished
 
 ### Added
-- Added latest Oracle Cloud Infrastructure regions and region codes: LIN, MTZ, VCP, BRS, UKB.
+- Added latest Oracle Cloud Infrastructure regions and region codes: LIN, MTZ, VCP, BRS, UKB, JNB, SIN, MRS, ARN, AUH, MCT, WGA.
 
 ## 1.2.2 - 2021-06-08
 
