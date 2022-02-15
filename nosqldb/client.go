@@ -31,6 +31,7 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
+	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
 // Client represents an Oracle NoSQL database client used to access the Oracle
@@ -79,6 +80,12 @@ type Client struct {
 	// Keep an internal map of tablename to next limits update time
 	tableLimitUpdateMap map[string]int64
 	limitMux            sync.Mutex
+
+	// (possibly negotiated) version of the protocol in use
+	serialVersion int16
+
+	// for managing one-time messaging
+	oneTimeMessages map[string]struct{}
 }
 
 var (
@@ -112,14 +119,15 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 
 	c := &Client{
-		Config:     cfg,
-		HTTPClient: cfg.httpClient,
-		requestURL: cfg.Endpoint + sdkutil.DataServiceURI,
-		requestID:  0,
-		serverHost: cfg.host,
-		executor:   cfg.httpClient,
-		logger:     cfg.Logger,
-		isCloud:    cfg.IsCloud() || cfg.IsCloudSim(),
+		Config:        cfg,
+		HTTPClient:    cfg.httpClient,
+		requestURL:    cfg.Endpoint + sdkutil.DataServiceURI,
+		requestID:     0,
+		serverHost:    cfg.host,
+		executor:      cfg.httpClient,
+		logger:        cfg.Logger,
+		isCloud:       cfg.IsCloud() || cfg.IsCloudSim(),
+		serialVersion: proto.DefaultSerialVersion,
 	}
 	c.handleResponse = c.processResponse
 	c.queryLogger, err = newQueryLogger()
@@ -131,6 +139,8 @@ func NewClient(cfg Config) (*Client, error) {
 		c.tableLimitUpdateMap = make(map[string]int64)
 		c.rateLimiterMap = make(map[string]common.RateLimiterPair)
 	}
+
+	c.oneTimeMessages = make(map[string]struct{})
 
 	return c, nil
 }
@@ -145,9 +155,8 @@ func (c *Client) Close() error {
 		c.queryLogger.Close()
 	}
 
-	if c.logger != nil {
-		c.logger.Close()
-	}
+	// do not close logger; it may have been passed to us and
+	// may still be in use by the application
 
 	return nil
 }
@@ -800,7 +809,7 @@ func (c *Client) processRequest(req Request) (data []byte, err error) {
 		return nil, err
 	}
 
-	data, err = serializeRequest(req)
+	data, err = c.serializeRequest(req)
 	if err != nil || !c.isCloud {
 		return
 	}
@@ -952,7 +961,16 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 				}
 			}
 
-			if !c.handleError(err, req, numThrottleRetries) {
+			if nosqlerr.Is(err, nosqlerr.UnsupportedProtocol) {
+				if c.decrementSerialVersion() == false {
+					return nil, err
+				}
+				// if serial version mismatch, we must re-serialize the request
+				data, err = c.serializeRequest(req)
+				if err != nil {
+					return nil, err
+				}
+			} else if !c.handleError(err, req, numThrottleRetries) {
 				return nil, err
 			}
 
@@ -1033,6 +1051,35 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 		err = c.signHTTPRequest(httpReq)
 		if err != nil {
 			return nil, err
+		}
+
+		// warn if using features not implemented at the connected server
+		// currently cloud does not support Durability
+		if c.serialVersion < 3 || c.isCloud {
+			needMsg := false
+			if pReq, ok := req.(*PutRequest); ok && pReq.Durability.IsSet() {
+				needMsg = true
+			} else if dReq, ok := req.(*DeleteRequest); ok && dReq.Durability.IsSet() {
+				needMsg = true
+			} else if mReq, ok := req.(*MultiDeleteRequest); ok && mReq.Durability.IsSet() {
+				needMsg = true
+			} else if wReq, ok := req.(*WriteMultipleRequest); ok && wReq.Durability.IsSet() {
+				needMsg = true
+			}
+			if needMsg {
+				c.oneTimeMessage("The requested feature is not supported " +
+					"by the connected server: Durability")
+			}
+		}
+
+		// OnDemand is not available in V2
+		if c.serialVersion < 3 {
+			if tReq, ok := req.(*TableRequest); ok && tReq.TableLimits != nil {
+				if tReq.TableLimits.CapacityMode == types.OnDemand {
+					c.oneTimeMessage("The requested feature is not supported " +
+						"by the connected server: on demand capacity table")
+				}
+			}
 		}
 
 		reqCtx, reqCancel := context.WithTimeout(ctx, reqTimeout)
@@ -1287,13 +1334,13 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 // serializeRequest serializes the specified request into a slice of bytes that
 // will be sent to the server. The serial version is always written followed by
 // the actual request payload.
-func serializeRequest(req Request) (data []byte, err error) {
+func (c *Client) serializeRequest(req Request) (data []byte, err error) {
 	wr := binary.NewWriter()
-	if _, err = wr.WriteSerialVersion(proto.SerialVersion); err != nil {
+	if _, err = wr.WriteSerialVersion(c.serialVersion); err != nil {
 		return
 	}
 
-	if err = req.serialize(wr); err != nil {
+	if err = req.serialize(wr, c.serialVersion); err != nil {
 		return
 	}
 
@@ -1329,7 +1376,7 @@ func (c *Client) processOKResponse(data []byte, req Request) (Result, error) {
 
 	// A zero byte represents the operation succeeded.
 	if code == 0 {
-		res, err := req.deserialize(rd)
+		res, err := req.deserialize(rd, c.serialVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -1372,6 +1419,10 @@ func wrapResponseErrors(code int, msg string) error {
 		return nosqlerr.New(errCode, "unknown error: %s", msg)
 
 	case nosqlerr.BadProtocolMessage:
+		// V2 proxy will return this message if V3 is used in the driver
+		if strings.Contains(msg, "Invalid driver serial version") {
+			return nosqlerr.New(nosqlerr.UnsupportedProtocol, msg)
+		}
 		return nosqlerr.NewIllegalArgument("bad protocol message: %s", msg)
 
 	default:
@@ -1422,4 +1473,51 @@ func (c *Client) ResetRateLimiters(tableName string) {
 	}
 	rp.WriteLimiter.Reset()
 	rp.ReadLimiter.Reset()
+}
+
+// VerifyConnection attempts to verify that the connection is useable.
+// It may check auth credentials, and may negotiate the protocol level
+// to use with the server.
+// This is typically only used in tests.
+func (c *Client) VerifyConnection() error {
+
+	// issue a GetTable call for a (probably) nonexistent table.
+	// expect a TableNotFound error (or success in the unlikely event a
+	// table exists with this name). Any other errors will be returned here.
+	// Internally, this may result in the client negotiating a lower
+	// protocol version, if connected to an older server.
+	req := &GetTableRequest{
+		TableName: "noop",
+		Timeout:   20 * time.Second,
+	}
+
+	_, err := c.GetTable(req)
+	if err != nil && nosqlerr.IsTableNotFound(err) == false {
+		return err
+	}
+
+	return nil
+}
+
+// decrementSerialVersion attempts to reduce the serial version used for
+// communicating with the server. If the version is already at its lowest
+// value, it will not be decremented and false will be returned.
+func (c *Client) decrementSerialVersion() bool {
+	if c.serialVersion > 2 {
+		c.serialVersion--
+		return true
+	}
+	return false
+}
+
+// GetSerialVersion is used for tests.
+func (c *Client) GetSerialVersion() int16 {
+	return c.serialVersion
+}
+
+func (c *Client) oneTimeMessage(msg string) {
+	if _, ok := c.oneTimeMessages[msg]; ok == false {
+		c.oneTimeMessages[msg] = struct{}{}
+		c.logger.Warn(msg)
+	}
 }

@@ -88,9 +88,12 @@ func (suite *TableOpsTestSuite) TestTableLimits() {
 		testCases = []*tableRequestTestCase{
 			{
 				req: &nosqldb.TableRequest{
-					TableName:   tableName,
-					TableLimits: &nosqldb.TableLimits{5, 5, 2},
-					Timeout:     test.OkTimeout,
+					TableName: tableName,
+					TableLimits: &nosqldb.TableLimits{
+						ReadUnits:  5,
+						WriteUnits: 5,
+						StorageGB:  2},
+					Timeout: test.OkTimeout,
 				},
 				expErr: nosqlerr.OperationNotSupported,
 			},
@@ -101,16 +104,22 @@ func (suite *TableOpsTestSuite) TestTableLimits() {
 			// Positive test cases.
 			{
 				req: &nosqldb.TableRequest{
-					TableName:   tableName,
-					TableLimits: &nosqldb.TableLimits{5, 5, 2},
-					Timeout:     test.OkTimeout,
+					TableName: tableName,
+					TableLimits: &nosqldb.TableLimits{
+						ReadUnits:  5,
+						WriteUnits: 5,
+						StorageGB:  2},
+					Timeout: test.OkTimeout,
 				},
 			},
 			{
 				req: &nosqldb.TableRequest{
-					TableName:   tableName,
-					TableLimits: &nosqldb.TableLimits{6, 4, 1},
-					Timeout:     test.OkTimeout,
+					TableName: tableName,
+					TableLimits: &nosqldb.TableLimits{
+						ReadUnits:  6,
+						WriteUnits: 4,
+						StorageGB:  1},
+					Timeout: test.OkTimeout,
 				},
 			},
 			// Negative test cases.

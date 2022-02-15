@@ -359,9 +359,25 @@ func (w *Writer) WriteTimeout(timeout time.Duration) (int, error) {
 	return w.WritePackedInt(timeoutMs)
 }
 
+// WriteDurability encodes and writes the Durability value to the buffer.
+func (w *Writer) WriteDurability(c types.Durability, serialVersion int16) (int, error) {
+	if serialVersion < 3 {
+		return 0, nil
+	}
+	return w.writeOneByte(w.getDurability(c))
+}
+
 // WriteConsistency encodes and writes the consistency value to the buffer.
 func (w *Writer) WriteConsistency(c types.Consistency) (int, error) {
 	return w.writeOneByte(w.getConsistency(c))
+}
+
+// WriteCapacityMode encodes and writes the limits mode value to the buffer.
+func (w *Writer) WriteCapacityMode(lm types.CapacityMode, serialVersion int16) (int, error) {
+	if serialVersion <= 2 {
+		return 0, nil
+	}
+	return w.writeOneByte(w.getCapacityMode(lm))
 }
 
 // WriteTTL encodes and writes the TTL value to the buffer.
@@ -610,6 +626,15 @@ func (w *Writer) writeBinaryValue(value []byte) (n int, err error) {
 	return
 }
 
+// getDurability returns the durability value accepted by server, which is
+// a single byte with 3 2-bit fields.
+func (w *Writer) getDurability(d types.Durability) byte {
+	var dur byte = byte(d.MasterSync)
+	dur |= byte(d.ReplicaSync << 2)
+	dur |= byte(d.ReplicaAck << 4)
+	return dur
+}
+
 // getConsistency returns the consistency value accepted by server, which is
 // types.Consistency minus one.
 func (w *Writer) getConsistency(c types.Consistency) byte {
@@ -617,6 +642,16 @@ func (w *Writer) getConsistency(c types.Consistency) byte {
 		return byte(c) - 1
 	}
 	return byte(c)
+}
+
+// getCapacityMode returns the capacity mode value accepted by the server,
+// which is 1 for provisioned and 2 for on demand.
+func (w *Writer) getCapacityMode(lm types.CapacityMode) byte {
+	if lm == types.OnDemand {
+		return 2
+	}
+	// the default is Provisioned
+	return 1
 }
 
 // writeOneByte is a wrapper for WriteByte. It writes a byte to the buffer and

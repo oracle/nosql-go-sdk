@@ -258,6 +258,17 @@ const (
 	// OperationNotSupported error represents the operation attempted is not supported.
 	// This may be related to on-premise vs cloud service configurations.
 	OperationNotSupported // 21
+
+	// EtagMismatch is used only by the cloud REST service.
+	EtagMismatch // 22
+
+	// CannotCancelWorkRequest is used only by the cloud REST service.
+	CannotCancelWorkRequest // 23
+
+	// UnsupportedProtocol error indicates the server does not support the
+	// given driver protocol version. The driver should decrement its internal
+	// protocol version (and accompanying logic) and try again.
+	UnsupportedProtocol // 24
 )
 
 const (

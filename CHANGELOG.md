@@ -3,10 +3,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## Unpublished
+## [Unpublished]
 
 ### Added
 - Added latest Oracle Cloud Infrastructure regions and region codes: LIN, MTZ, VCP, BRS, UKB, JNB, SIN, MRS, ARN, AUH, MCT, WGA.
+- Cloud only: Added support for creating on-demand tables
+- On-Prem only: Added support for setting Durability in put/delete operations
+- Added support for returning row modification time in get operations
+
+### Changed
+- TableLimits now includes a CapacityMode field, to allow for specifying OnDemand. The default is Provisioned. This may affect existing code if the TableLimits struct was created without using named fields.
+- Internal logic now detects differences in server protocol version, and decrements its internal serial version to match. This is to maintain compatibility when a new driver is used with an old server.
 
 ## 1.2.2 - 2021-06-08
 

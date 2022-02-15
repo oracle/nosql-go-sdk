@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	// SerialVersion represents the protocol version used to serialize requests
-	// and deserialize results between client and server.
-	SerialVersion int16 = 2
+	// DefaultSerialVersion represents the protocol version used to serialize requests
+	// and deserialize results between client and server. The client may reduce this
+	// value when connected to older servers.
+	DefaultSerialVersion int16 = 3
 
 	// QueryVersion represents the version used for query requests.
 	QueryVersion int16 = 3
@@ -224,6 +225,14 @@ type Writer interface {
 
 	// WriteConsistency writes a Consistency value.
 	WriteConsistency(c types.Consistency) (int, error)
+
+	// WriteDurability writes a Durability value, if the
+	// protocol version supports it.
+	WriteDurability(c types.Durability, serialVersion int16) (int, error)
+
+	// WriteCapacityMode writes a CapacityMode value, if the
+	// protocol version supports it.
+	WriteCapacityMode(lm types.CapacityMode, serialVersion int16) (int, error)
 
 	// WriteTTL writes a TimeToLive value.
 	WriteTTL(ttl *types.TimeToLive) (int, error)

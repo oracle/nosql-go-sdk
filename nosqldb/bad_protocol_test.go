@@ -53,6 +53,9 @@ func (suite *BadProtocolTestSuite) SetupSuite() {
 	suite.bpTestClient, err = nosqldb.NewClient(suite.Client.Config)
 	suite.Require().NoErrorf(err, "failed to create a client, got error %v", err)
 
+	// this will set the serial protocol version. Ignore errors from it.
+	suite.bpTestClient.VerifyConnection()
+
 	// Disable retry handling.
 	suite.bpTestClient.RetryHandler = nil
 	suite.bpTestClient.AuthorizationProvider = suite.Client.AuthorizationProvider
@@ -580,6 +583,7 @@ func (suite *BadProtocolTestSuite) TestBadPutRequest() {
 		3,              // RequestTimeout: packed int
 		suite.tableLen, // TableName: String
 		1,              // ReturnRow: boolean
+		1,              // Durability: 1 byte (serialVersion > 2)
 		1,              // ExactMatch: boolean
 		1,              // IdentityCacheSize: packed int
 		suite.valueLen, // Record: MapValue
@@ -629,7 +633,10 @@ func (suite *BadProtocolTestSuite) TestBadPutRequest() {
 	}
 
 	// Invalid TTL value/unit.
-	off = seekPos(lengths, 9)
+	off = seekPos(lengths, 10)
+	if suite.bpTestClient.GetSerialVersion() < 3 {
+		off -= 1 // Durability
+	}
 	desc = "invalid TTL value"
 	copy(data, origData)
 	suite.wr.Reset()
@@ -718,6 +725,7 @@ func (suite *BadProtocolTestSuite) TestBadWriteMultipleRequest() {
 		3,              // RequestTimeout: packed int
 		suite.tableLen, // TableName: string
 		1,              // OperationNum: packed int
+		1,              // Durability: 1 byte (serialVersion > 2)
 		1,              // abortOnFail: boolean
 		0,              // Sub requests: the size does not matter for this test.
 	}
@@ -744,7 +752,10 @@ func (suite *BadProtocolTestSuite) TestBadWriteMultipleRequest() {
 	}
 
 	// Invalid opcode for sub requests.
-	off = seekPos(lengths, 6)
+	off = seekPos(lengths, 7)
+	if suite.bpTestClient.GetSerialVersion() < 3 {
+		off -= 1 // Durability
+	}
 	testOpCodes := []proto.OpCode{proto.OpCode(-1), proto.Get}
 	for _, v := range testOpCodes {
 		desc = fmt.Sprintf("invalid opcode %v", v)
@@ -772,6 +783,7 @@ func (suite *BadProtocolTestSuite) TestBadMultiDeleteRequest() {
 		1,              // OpCode: byte
 		3,              // RequestTimeout: packed int
 		suite.tableLen, // TableName: string
+		1,              // Durability: 1 byte (serialVersion > 2)
 		suite.keyLen,   // Key: MapValue
 		1,              // HasFieldRange: boolean
 		3,              // MaxWriteKB: packed int
@@ -788,7 +800,10 @@ func (suite *BadProtocolTestSuite) TestBadMultiDeleteRequest() {
 	suite.doBadProtoTest(req, data, desc, 0)
 
 	// Invalid MaxWriteKB.
-	off = seekPos(lengths, 6)
+	off = seekPos(lengths, 7)
+	if suite.bpTestClient.GetSerialVersion() < 3 {
+		off -= 1 // Durability
+	}
 	var tests []int
 	if test.IsOnPrem() {
 		// There is no limit on MaxWriteKB for the on-premise server.
@@ -807,7 +822,10 @@ func (suite *BadProtocolTestSuite) TestBadMultiDeleteRequest() {
 	}
 
 	// Invalid length of ContinuationKey.
-	off = seekPos(lengths, 7)
+	off = seekPos(lengths, 8)
+	if suite.bpTestClient.GetSerialVersion() < 3 {
+		off -= 1 // Durability
+	}
 	tests = []int{-2, 100}
 	for _, v := range tests {
 		desc = fmt.Sprintf("invalid length of ContinuationKey %v", v)
@@ -823,9 +841,14 @@ func (suite *BadProtocolTestSuite) TestBadTableRequest() {
 	newTable := "ABCD"
 	stmt := "create table if not exists " + newTable + " (id integer, primary key(id))"
 	stmtLen, _ := suite.wr.WriteString(&stmt)
+	limits := &nosqldb.TableLimits{
+		ReadUnits:  50,
+		WriteUnits: 50,
+		StorageGB:  2,
+	}
 	req := &nosqldb.TableRequest{
 		Statement:   stmt,
-		TableLimits: &nosqldb.TableLimits{50, 50, 5},
+		TableLimits: limits,
 	}
 
 	var desc string
@@ -839,6 +862,7 @@ func (suite *BadProtocolTestSuite) TestBadTableRequest() {
 		4,       // ReadKB: int
 		4,       // WriteKB: int
 		4,       // StorageGB: int
+		1,       // LimitMode: byte (serialVersion > 2)
 		1,       // HasTableName: boolean
 	}
 

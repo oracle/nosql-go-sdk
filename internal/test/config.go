@@ -148,6 +148,10 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 		return nil, err
 	}
 
+	// this will set the protocol serial version according to the connected server.
+	// ignore errors here, they may be expected.
+	client.VerifyConnection()
+
 	if interceptor != nil {
 		err = interceptor.OnSetupClient(client)
 		if err != nil {

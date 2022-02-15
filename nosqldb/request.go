@@ -463,8 +463,8 @@ func (r *SystemStatusRequest) doesWrites() bool {
 //   change table limits of an existing table
 //
 // Operation that is used to create a table must specify a Statement to define
-// the table schema and a TableLimits to define the throughput and storage
-// desired for the table.
+// the table schema and a TableLimits to define the throughput, storage,
+// and mode (provisioned or on demand) desired for the table.
 //
 // Operations that are used to drop, modify a table, or create, drop an index
 // must specify a Statement.
@@ -494,8 +494,8 @@ type TableRequest struct {
 	// It should not be specified for other operations.
 	TableName string `json:"tableName,omitempty"`
 
-	// TableLimits specifies desired read/write throughput and storage limits
-	// for the table.
+	// TableLimits specifies desired read/write throughput, storage limits, and
+	// mode (provisioned or on demand) for the table.
 	//
 	// It is required for operations that create tables or change table limits.
 	// It should not be specified for other operations.
@@ -600,13 +600,51 @@ type TableLimits struct {
 	// StorageGB specifies the maximum amount of storage to be consumed by the
 	// table, in gigabytes.
 	StorageGB uint `json:"storageGB"`
+
+	// CapacityMode specifies if the table is provisioned (the default) or
+	// on demand.
+	CapacityMode types.CapacityMode `json:"limitsMode"`
+}
+
+// ProvisionedTableLimits returns a TableLimits struct set up for
+// provisioned (fixed maximum read/write limits) tables. This is the default.
+func ProvisionedTableLimits(RUs uint, WUs uint, GB uint) *TableLimits {
+	return &TableLimits{
+		ReadUnits:  RUs,
+		WriteUnits: WUs,
+		StorageGB:  GB,
+		CapacityMode: types.Provisioned,
+	}
+}
+
+// OnDemandTableLimits returns a TableLimits struct set up for
+// on demand (flexible read/write limits) tables.
+func OnDemandTableLimits(GB uint) *TableLimits {
+	return &TableLimits{
+		ReadUnits:  0,
+		WriteUnits: 0,
+		StorageGB:  GB,
+		CapacityMode: types.OnDemand,
+	}
 }
 
 func (l *TableLimits) validate() (err error) {
-	if l.ReadUnits == 0 || l.WriteUnits == 0 || l.StorageGB == 0 {
-		return nosqlerr.NewIllegalArgument("TableLimits values must be positive.")
+	if l.CapacityMode != types.Provisioned && l.CapacityMode != types.OnDemand {
+		return nosqlerr.NewIllegalArgument("TableLimits CapacityMode must be one of " +
+			"Provisioned or OnDemand")
 	}
-
+	if l.StorageGB == 0 {
+		return nosqlerr.NewIllegalArgument("TableLimits StorageGB must be positive")
+	}
+	if l.CapacityMode == types.Provisioned {
+		if l.ReadUnits == 0 || l.WriteUnits == 0 {
+			return nosqlerr.NewIllegalArgument("TableLimits read/write units must be positive")
+		}
+	} else {
+		if l.ReadUnits != 0 || l.WriteUnits != 0 {
+			return nosqlerr.NewIllegalArgument("TableLimits read/write units must be zero for OnDemand table")
+		}
+	}
 	return nil
 }
 
@@ -666,6 +704,9 @@ type DeleteRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Durability is currently only used in On-Prem installations.
+	Durability types.Durability `json:"durability"`
 
 	// isSubRequest specifies whether this is a sub request of a WriteMultiple
 	// operation.
@@ -808,6 +849,9 @@ type PutRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Durability is currently only used in On-Prem installations.
+	Durability types.Durability `json:"durability"`
 
 	// isSubRequest specifies whether this is a sub request of a WriteMultiple
 	// operation.
@@ -1493,6 +1537,9 @@ type WriteMultipleRequest struct {
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
+	// Durability is currently only used in On-Prem installations.
+	Durability types.Durability `json:"durability"`
+
 	// checkSubReqSize represents whether to check sub request size.
 	// This is for internal use, and is set automatically by client.
 	checkSubReqSize bool
@@ -1650,6 +1697,9 @@ type MultiDeleteRequest struct {
 	// If not set, the default timeout value configured for Client is used,
 	// which is determined by Client.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Durability is currently only used in On-Prem installations.
+	Durability types.Durability `json:"durability"`
 
 	common.InternalRequestData
 }
