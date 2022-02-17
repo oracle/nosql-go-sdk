@@ -20,6 +20,7 @@ import (
 // 1. Eventual consistency means that the values read may be very slightly out of date.
 //
 // 2. Absolute consistency may be specified to guarantee that current values are read.
+//
 // Absolute consistency results in higher cost, consuming twice the number of
 // read units for the same data relative to Eventual consistency, and should
 // only be used when required.
@@ -38,6 +39,105 @@ const (
 
 	// Eventual consistency.
 	Eventual // 2
+)
+
+// SyncPolicy represents policies to be used when committing a
+// transaction. High levels of synchronization offer a greater guarantee
+// that the transaction is persistent to disk, but trade that off for
+// lower performance.
+type SyncPolicy int
+
+const (
+	// SyncPolicySync writes and synchronously flushes the log on transaction commit.
+	// Transactions exhibit all the ACID (atomicity, consistency,
+	// isolation, and durability) properties.
+	SyncPolicySync = iota + 1 // 1
+
+	// SyncPolicyNoSync does not write or synchronously flush the log on transaction commit.
+	// Transactions exhibit the ACI (atomicity, consistency, and isolation)
+	// properties, but not D (durability); that is, database integrity will
+	// be maintained, but if the application or system fails, it is
+	// possible some number of the most recently committed transactions may
+	// be undone during recovery. The number of transactions at risk is
+	// governed by how many log updates can fit into the log buffer, how
+	// often the operating system flushes dirty buffers to disk, and how
+	// often log checkpoints occur.
+	SyncPolicyNoSync // 2
+
+	// SyncPolicyWriteNoSync writes but does not synchronously flush the log on transaction commit.
+	// Transactions exhibit the ACI (atomicity, consistency, and isolation)
+	// properties, but not D (durability); that is, database integrity will
+	// be maintained, but if the operating system fails, it is possible
+	// some number of the most recently committed transactions may be
+	// undone during recovery. The number of transactions at risk is
+	// governed by how often the operating system flushes dirty buffers to
+	// disk, and how often log checkpoints occur.
+	SyncPolicyWriteNoSync // 3
+)
+
+// ReplicaAckPolicy defines the policy for how replicated commits are handled.
+// A replicated environment makes it possible to increase an application's
+// transaction commit guarantees by committing changes to its replicas on
+// the network.
+type ReplicaAckPolicy int
+
+const (
+	// ReplicaAckPolicyAll defines that all replicas must acknowledge that they
+	// have committed the transaction. This policy should be selected only if
+	// your replication group has a small number of replicas, and those replicas are on
+	// extremely reliable networks and servers.
+	ReplicaAckPolicyAll = iota + 1 // 1
+
+	// ReplicaAckPolicyNone defines that no transaction commit acknowledgments
+	// are required and the master will never wait for replica acknowledgments.
+	// In this case, transaction durability is determined entirely by the type of commit
+	// that is being performed on the master.
+	ReplicaAckPolicyNone // 2
+
+	// ReplicaAckPolicySimpleMajority defines that a simple majority of replicas
+	// must acknowledge that they have committed the transaction. This
+	// acknowledgment policy, in conjunction with an election policy which
+	// requires at least a simple majority, ensures that the changes made by
+	// the transaction remains durable if a new election is held.
+	ReplicaAckPolicySimpleMajority // 3
+)
+
+// Durability defines the durability characteristics associated with a standalone write
+// (put or update) operation.
+//
+// This is currently only supported in On-Prem installations. It is ignored
+// in the cloud service.
+//
+// The overall durability is a function of the SyncPolicy and
+// ReplicaAckPolicy in effect for the Master, and the SyncPolicy in
+// effect for each Replica.
+type Durability struct {
+	// The sync policy in effect on the Master node.
+	MasterSync SyncPolicy `json:"masterSync"`
+
+	// The sync policy in effect on a replica.
+	ReplicaSync SyncPolicy `json:"replicaSync"`
+
+	// The replica acknowledgment policy to be used.
+	ReplicaAck ReplicaAckPolicy `json:"replicaAck"`
+}
+
+// IsSet returns true if any durability values are nonzero
+func (d *Durability) IsSet() bool {
+	return d.MasterSync != 0 || d.ReplicaSync != 0 || d.ReplicaAck != 0
+}
+
+// CapacityMode defines the type of limits for a table.
+type CapacityMode int
+
+const (
+	// Provisioned table: fixed maximum of read/write units.
+	// Note this value is purposefully zero as it is the default and
+	// this enables existing app code to work properly
+	Provisioned CapacityMode = iota // 0
+
+	// OnDemand table: table scales with usage
+	OnDemand // 1
 )
 
 // TableState represents current state of a table.

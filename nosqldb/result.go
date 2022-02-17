@@ -109,6 +109,10 @@ type GetResult struct {
 	// which means the returned Value is non-nil.
 	ExpirationTime time.Time `json:"expirationTime"`
 
+	// ModificationTime represents the modification time of an existing row.
+	// Its value is in milliseconds since January 1 1970.
+	ModificationTime int64 `json:"modificationTime"`
+
 	DelayInfo
 }
 
@@ -435,6 +439,10 @@ type WriteResult struct {
 
 	// ExistingValue represents the Value of an existing row.
 	ExistingValue *types.MapValue `json:"existingValue"`
+
+	// ExistingModificationTime represents the modification time of an existing row.
+	// Its value is in milliseconds since January 1 1970.
+	ExistingModificationTime int64 `json:"existingModificationTime"`
 }
 
 // String returns a JSON string representation of the WriteResult.

@@ -19,8 +19,8 @@ import (
 )
 
 type serializer interface {
-	serialize(w proto.Writer) error
-	deserialize(r proto.Reader) (Result, error)
+	serialize(w proto.Writer, serialVersion int16) error
+	deserialize(r proto.Reader, serialVersion int16) (Result, error)
 }
 
 // Request is an interface that defines common functions for operation requests.
@@ -46,7 +46,7 @@ type Request interface {
 //   Consistency
 //   Key
 //
-func (req *GetRequest) serialize(w proto.Writer) (err error) {
+func (req *GetRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeTableOp(w, proto.Get, req.Timeout, req.TableName); err != nil {
 		return
 	}
@@ -62,7 +62,7 @@ func (req *GetRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *GetRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	c, err := deserializeConsumedCapacity(r)
 	if err != nil {
 		return nil, err
@@ -103,6 +103,15 @@ func (req *GetRequest) deserialize(r proto.Reader) (Result, error) {
 		return nil, err
 	}
 
+	if serialVersion > 2 {
+		res.ModificationTime, err = r.ReadPackedLong()
+		if err != nil {
+			return res, err
+		}
+	} else {
+		res.ModificationTime = 0
+	}
+
 	return res, nil
 }
 
@@ -115,7 +124,7 @@ func (req *GetRequest) deserialize(r proto.Reader) (Result, error) {
 //   TableName
 //   OperationID
 //
-func (req *GetTableRequest) serialize(w proto.Writer) (err error) {
+func (req *GetTableRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeTableOp(w, proto.GetTable, req.Timeout, req.TableName); err != nil {
 		return
 	}
@@ -127,11 +136,11 @@ func (req *GetTableRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *GetTableRequest) deserialize(r proto.Reader) (Result, error) {
-	return deserializeTableResult(r)
+func (req *GetTableRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
+	return deserializeTableResult(r, serialVersion)
 }
 
-func (req *SystemRequest) serialize(w proto.Writer) (err error) {
+func (req *SystemRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeOp(w, proto.SystemRequest, req.Timeout); err != nil {
 		return
 	}
@@ -143,11 +152,11 @@ func (req *SystemRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *SystemRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *SystemRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	return deserializeSystemResult(r)
 }
 
-func (req *SystemStatusRequest) serialize(w proto.Writer) (err error) {
+func (req *SystemStatusRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeOp(w, proto.SystemStatusRequest, req.Timeout); err != nil {
 		return
 	}
@@ -163,7 +172,7 @@ func (req *SystemStatusRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *SystemStatusRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *SystemStatusRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	return deserializeSystemResult(r)
 }
 
@@ -179,7 +188,7 @@ func (req *SystemStatusRequest) deserialize(r proto.Reader) (Result, error) {
 //   A bool flag: indicates if table name is set.
 //   TableName: skip if it is not set.
 //
-func (req *TableRequest) serialize(w proto.Writer) (err error) {
+func (req *TableRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeOp(w, proto.TableRequest, req.Timeout); err != nil {
 		return
 	}
@@ -210,6 +219,10 @@ func (req *TableRequest) serialize(w proto.Writer) (err error) {
 		return
 	}
 
+	if _, err = w.WriteCapacityMode(req.TableLimits.CapacityMode, serialVersion); err != nil {
+		return
+	}
+
 	// Table name is not set.
 	if req.TableName == "" {
 		_, err = w.WriteBoolean(false)
@@ -228,8 +241,8 @@ func (req *TableRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *TableRequest) deserialize(r proto.Reader) (Result, error) {
-	return deserializeTableResult(r)
+func (req *TableRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
+	return deserializeTableResult(r, serialVersion)
 }
 
 // serialize writes the ListTablesRequest to data stream using the specified protocol writer.
@@ -242,7 +255,7 @@ func (req *TableRequest) deserialize(r proto.Reader) (Result, error) {
 //   Limit
 //   Namespace
 //
-func (req *ListTablesRequest) serialize(w proto.Writer) (err error) {
+func (req *ListTablesRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeOp(w, proto.ListTables, req.Timeout); err != nil {
 		return
 	}
@@ -262,7 +275,7 @@ func (req *ListTablesRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *ListTablesRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *ListTablesRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	n, err := r.ReadPackedInt()
 	if err != nil {
 		return nil, err
@@ -300,7 +313,7 @@ func (req *ListTablesRequest) deserialize(r proto.Reader) (Result, error) {
 //   A bool flag: indicates if index name is set.
 //   IndexName: skip if index name is not set.
 //
-func (req *GetIndexesRequest) serialize(w proto.Writer) (err error) {
+func (req *GetIndexesRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeTableOp(w, proto.GetIndexes, req.Timeout, req.TableName); err != nil {
 		return
 	}
@@ -322,7 +335,7 @@ func (req *GetIndexesRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *GetIndexesRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	n, err := r.ReadPackedInt()
 	if err != nil {
 		return nil, err
@@ -354,7 +367,7 @@ func (req *GetIndexesRequest) deserialize(r proto.Reader) (Result, error) {
 //   Key
 //   MatchVersion: skip if it is nil
 //
-func (req *DeleteRequest) serialize(w proto.Writer) (err error) {
+func (req *DeleteRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	op := proto.Delete
 	hasVersion := req.MatchVersion != nil
 	if hasVersion {
@@ -375,6 +388,12 @@ func (req *DeleteRequest) serialize(w proto.Writer) (err error) {
 		return
 	}
 
+	if !req.isSubRequest {
+		if _, err = w.WriteDurability(req.Durability, serialVersion); err != nil {
+			return
+		}
+	}
+
 	if _, err = w.WriteFieldValue(req.Key); err != nil {
 		return
 	}
@@ -387,7 +406,7 @@ func (req *DeleteRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *DeleteRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	c, err := deserializeConsumedCapacity(r)
 	if err != nil {
 		return nil, err
@@ -398,7 +417,7 @@ func (req *DeleteRequest) deserialize(r proto.Reader) (Result, error) {
 		return nil, err
 	}
 
-	wrRes, err := deserializeWriteResult(r)
+	wrRes, err := deserializeWriteResult(r, serialVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -425,7 +444,7 @@ func (req *DeleteRequest) deserialize(r proto.Reader) (Result, error) {
 //   TTL
 //   MatchVersion: skip if it is nil.
 //
-func (req *PutRequest) serialize(w proto.Writer) (err error) {
+func (req *PutRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	var op proto.OpCode
 	switch req.PutOption {
 	case types.PutIfAbsent, types.PutIfPresent, types.PutIfVersion:
@@ -447,6 +466,12 @@ func (req *PutRequest) serialize(w proto.Writer) (err error) {
 
 	if _, err = w.WriteBoolean(req.ReturnRow); err != nil {
 		return
+	}
+
+	if !req.isSubRequest {
+		if _, err = w.WriteDurability(req.Durability, serialVersion); err != nil {
+			return
+		}
 	}
 
 	if _, err = w.WriteBoolean(req.ExactMatch); err != nil {
@@ -477,7 +502,7 @@ func (req *PutRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *PutRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	c, err := deserializeConsumedCapacity(r)
 	success, err := r.ReadBoolean()
 	if err != nil {
@@ -492,7 +517,7 @@ func (req *PutRequest) deserialize(r proto.Reader) (Result, error) {
 		}
 	}
 
-	wrRes, err := deserializeWriteResult(r)
+	wrRes, err := deserializeWriteResult(r, serialVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +555,7 @@ func (req *PutRequest) deserialize(r proto.Reader) (Result, error) {
 //   EndTime
 //   Limit
 //
-func (req *TableUsageRequest) serialize(w proto.Writer) (err error) {
+func (req *TableUsageRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeTableOp(w, proto.GetTableUsage, req.Timeout, req.TableName); err != nil {
 		return
 	}
@@ -550,7 +575,7 @@ func (req *TableUsageRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *TableUsageRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	res := &TableUsageResult{}
 	// Read in the tenant id but discard it.
 	_, err := r.ReadString()
@@ -593,8 +618,12 @@ func (req *TableUsageRequest) deserialize(r proto.Reader) (Result, error) {
 //   MaxWriteKB
 //   ContinuationKey
 //
-func (req *MultiDeleteRequest) serialize(w proto.Writer) (err error) {
+func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeTableOp(w, proto.MultiDelete, req.Timeout, req.TableName); err != nil {
+		return
+	}
+
+	if _, err = w.WriteDurability(req.Durability, serialVersion); err != nil {
 		return
 	}
 
@@ -617,7 +646,7 @@ func (req *MultiDeleteRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *MultiDeleteRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	c, err := deserializeConsumedCapacity(r)
 	if err != nil {
 		return nil, err
@@ -650,13 +679,17 @@ func (req *MultiDeleteRequest) deserialize(r proto.Reader) (Result, error) {
 //   Number of operations
 //   All sub operations: either put or delete operation
 //
-func (req *WriteMultipleRequest) serialize(w proto.Writer) (err error) {
+func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeTableOp(w, proto.WriteMultiple, req.Timeout, req.TableName); err != nil {
 		return
 	}
 
 	numOps := len(req.Operations)
 	if _, err = w.WritePackedInt(numOps); err != nil {
+		return
+	}
+
+	if _, err = w.WriteDurability(req.Durability, serialVersion); err != nil {
 		return
 	}
 
@@ -669,10 +702,10 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer) (err error) {
 
 		if operation.DeleteRequest != nil {
 			subReq = operation.DeleteRequest
-			err = operation.DeleteRequest.serialize(w)
+			err = operation.DeleteRequest.serialize(w, serialVersion)
 		} else if operation.PutRequest != nil {
 			subReq = operation.PutRequest
-			err = operation.PutRequest.serialize(w)
+			err = operation.PutRequest.serialize(w, serialVersion)
 		}
 
 		if err != nil {
@@ -693,7 +726,7 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *WriteMultipleRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	succeed, err := r.ReadBoolean()
 	if err != nil {
 		return nil, err
@@ -716,7 +749,7 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader) (Result, error) {
 
 		res.ResultSet = make([]OperationResult, 0, n)
 		for i := 0; i < n; i++ {
-			opRes, err := deserializeOperationResult(r)
+			opRes, err := deserializeOperationResult(r, serialVersion)
 			if err != nil {
 				return nil, err
 			}
@@ -734,7 +767,7 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader) (Result, error) {
 	}
 
 	res.FailedOperationIndex = int(idx)
-	opRes, err := deserializeOperationResult(r)
+	opRes, err := deserializeOperationResult(r, serialVersion)
 	res.ResultSet = make([]OperationResult, 1)
 	res.ResultSet[0] = *opRes
 	return res, nil
@@ -750,7 +783,7 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader) (Result, error) {
 //   QueryVersion
 //   GetQueryPlan
 //
-func (req *PrepareRequest) serialize(w proto.Writer) (err error) {
+func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeOp(w, proto.Prepare, req.Timeout); err != nil {
 		return
 	}
@@ -771,7 +804,7 @@ func (req *PrepareRequest) serialize(w proto.Writer) (err error) {
 	return
 }
 
-func (req *PrepareRequest) deserialize(r proto.Reader) (res Result, err error) {
+func (req *PrepareRequest) deserialize(r proto.Reader, serialVersion int16) (res Result, err error) {
 	c, err := deserializeConsumedCapacity(r)
 	if err != nil {
 		return
@@ -918,7 +951,7 @@ func readPackedIntArray(r proto.Reader) ([]int, error) {
 	return array, nil
 }
 
-func (req *QueryRequest) serialize(w proto.Writer) (err error) {
+func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeOp(w, proto.Query, req.Timeout); err != nil {
 		return
 	}
@@ -1073,7 +1106,7 @@ func serializeMathContext(w proto.Writer, mathCtx *FPArithSpec) (n int, err erro
 	}
 }
 
-func (req *QueryRequest) deserialize(r proto.Reader) (Result, error) {
+func (req *QueryRequest) deserialize(r proto.Reader, serialVersion int16) (Result, error) {
 	n, err := r.ReadInt()
 	if err != nil {
 		return nil, err
@@ -1271,7 +1304,7 @@ func deserializeConsumedCapacity(r proto.Reader) (c *Capacity, err error) {
 	return c, nil
 }
 
-func deserializeWriteResult(r proto.Reader) (*WriteResult, error) {
+func deserializeWriteResult(r proto.Reader, serialVersion int16) (*WriteResult, error) {
 	res := &WriteResult{}
 	returnInfo, err := r.ReadBoolean()
 	if !returnInfo || err != nil {
@@ -1295,6 +1328,16 @@ func deserializeWriteResult(r proto.Reader) (*WriteResult, error) {
 	}
 
 	res.ExistingVersion = version
+
+	if serialVersion > 2 {
+		res.ExistingModificationTime, err = r.ReadPackedLong()
+		if err != nil {
+			return res, err
+		}
+	} else {
+		res.ExistingModificationTime = 0
+	}
+
 	return res, nil
 }
 
@@ -1343,7 +1386,21 @@ func deserializeSystemResult(r proto.Reader) (*SystemResult, error) {
 	return res, nil
 }
 
-func deserializeTableResult(r proto.Reader) (*TableResult, error) {
+func readCapacityMode(r proto.Reader, serialVersion int16) (types.CapacityMode, error) {
+	if serialVersion <= 2 {
+		return types.Provisioned, nil
+	}
+	m, err := r.ReadByte()
+	if err != nil {
+		return types.Provisioned, err
+	}
+	if m == 2 {
+		return types.OnDemand, nil
+	}
+	return types.Provisioned, nil
+}
+
+func deserializeTableResult(r proto.Reader, serialVersion int16) (*TableResult, error) {
 	hasInfo, err := r.ReadBoolean()
 	if err != nil {
 		return nil, err
@@ -1397,10 +1454,16 @@ func deserializeTableResult(r proto.Reader) (*TableResult, error) {
 			return res, err
 		}
 
+		mode, err := readCapacityMode(r, serialVersion)
+		if err != nil {
+			return res, err
+		}
+
 		res.Limits = TableLimits{
 			ReadUnits:  uint(readKB),
 			WriteUnits: uint(writeKB),
 			StorageGB:  uint(storageGB),
+			CapacityMode: mode,
 		}
 
 		p, err = r.ReadString()
@@ -1512,7 +1575,7 @@ func deserializeUsage(r proto.Reader) (usage *TableUsage, err error) {
 	return
 }
 
-func deserializeOperationResult(r proto.Reader) (res *OperationResult, err error) {
+func deserializeOperationResult(r proto.Reader, serialVersion int16) (res *OperationResult, err error) {
 	success, err := r.ReadBoolean()
 	if err != nil {
 		return
@@ -1531,7 +1594,7 @@ func deserializeOperationResult(r proto.Reader) (res *OperationResult, err error
 		}
 	}
 
-	wrRes, err := deserializeWriteResult(r)
+	wrRes, err := deserializeWriteResult(r, serialVersion)
 	if err != nil {
 		return
 	}
