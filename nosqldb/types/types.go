@@ -105,6 +105,8 @@ const (
 // Durability defines the durability characteristics associated with a standalone write
 // (put or update) operation.
 //
+// Added in SDK Version 5.3.0
+//
 // This is currently only supported in On-Prem installations. It is ignored
 // in the cloud service.
 //
@@ -137,6 +139,7 @@ const (
 	Provisioned CapacityMode = iota // 0
 
 	// OnDemand table: table scales with usage
+	// Added in SDK Version 5.3.0
 	OnDemand // 1
 )
 
