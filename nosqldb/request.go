@@ -619,7 +619,7 @@ func ProvisionedTableLimits(RUs uint, WUs uint, GB uint) *TableLimits {
 
 // OnDemandTableLimits returns a TableLimits struct set up for
 // on demand (flexible read/write limits) tables.
-// Added in SDK Version 5.3.0
+// Added in SDK Version 1.3.0
 func OnDemandTableLimits(GB uint) *TableLimits {
 	return &TableLimits{
 		ReadUnits:  0,
@@ -707,7 +707,7 @@ type DeleteRequest struct {
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
-	// Added in SDK Version 5.3.0
+	// Added in SDK Version 1.3.0
 	Durability types.Durability `json:"durability"`
 
 	// isSubRequest specifies whether this is a sub request of a WriteMultiple
@@ -853,7 +853,7 @@ type PutRequest struct {
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
-	// Added in SDK Version 5.3.0
+	// Added in SDK Version 1.3.0
 	Durability types.Durability `json:"durability"`
 
 	// isSubRequest specifies whether this is a sub request of a WriteMultiple
@@ -1541,7 +1541,7 @@ type WriteMultipleRequest struct {
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
-	// Added in SDK Version 5.3.0
+	// Added in SDK Version 1.3.0
 	Durability types.Durability `json:"durability"`
 
 	// checkSubReqSize represents whether to check sub request size.
@@ -1703,7 +1703,7 @@ type MultiDeleteRequest struct {
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
-	// Added in SDK Version 5.3.0
+	// Added in SDK Version 1.3.0
 	Durability types.Durability `json:"durability"`
 
 	common.InternalRequestData

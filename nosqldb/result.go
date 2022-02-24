@@ -111,7 +111,7 @@ type GetResult struct {
 
 	// ModificationTime represents the modification time of an existing row.
 	// Its value is in milliseconds since January 1 1970.
-	// Added in SDK Version 5.3.0
+	// Added in SDK Version 1.3.0
 	ModificationTime int64 `json:"modificationTime"`
 
 	DelayInfo
@@ -443,7 +443,7 @@ type WriteResult struct {
 
 	// ExistingModificationTime represents the modification time of an existing row.
 	// Its value is in milliseconds since January 1 1970.
-	// Added in SDK Version 5.3.0
+	// Added in SDK Version 1.3.0
 	ExistingModificationTime int64 `json:"existingModificationTime"`
 }
 
