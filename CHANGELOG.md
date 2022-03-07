@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+###
+- Cloud only: Support session cookies.
+
 ## 1.3.0 - 2022-02-24
 
 ### Added

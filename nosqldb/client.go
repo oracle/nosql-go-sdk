@@ -86,6 +86,12 @@ type Client struct {
 
 	// for managing one-time messaging
 	oneTimeMessages map[string]struct{}
+
+	// sessionStr represents a session cookie to use, if non-nil
+	sessionStr string
+
+	// for generic locking
+	lockMux sync.Mutex
 }
 
 var (
@@ -97,6 +103,8 @@ var (
 const (
 	// LimiterRefreshNanos is used to update table limits once every 10 minutes
 	LimiterRefreshNanos int64 = 600 * 1000 * 1000 * 1000
+	// SessionCookieField is used to check for persistent session cookies
+	SessionCookieField string = "session="
 )
 
 // NewClient creates a Client instance with the specified Config.
@@ -794,9 +802,9 @@ func (c *Client) nextRequestID() int32 {
 // processRequest processes the specified request before it is sent to server.
 // This method applies default configurations such as timeout and consistency
 // values for the request if they are not specified for the request.
-func (c *Client) processRequest(req Request) (data []byte, err error) {
+func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, err error) {
 	if req == nil {
-		return nil, errNilRequest
+		return nil, 0, errNilRequest
 	}
 
 	// Set default values for the request with the global request configurations
@@ -806,17 +814,17 @@ func (c *Client) processRequest(req Request) (data []byte, err error) {
 
 	// Validates the request, returns immediately if validation fails.
 	if err = req.validate(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	data, err = c.serializeRequest(req)
+	data, serialVerUsed, err = c.serializeRequest(req)
 	if err != nil || !c.isCloud {
 		return
 	}
 
 	// check request size for cloud
 	if err = checkRequestSizeLimit(req, len(data)); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	return
@@ -831,15 +839,15 @@ func (c *Client) execute(req Request) (Result, error) {
 }
 
 func (c *Client) executeWithContext(ctx context.Context, req Request) (Result, error) {
-	data, err := c.processRequest(req)
+	data, serialVerUsed, err := c.processRequest(req)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.doExecute(ctx, req, data)
+	return c.doExecute(ctx, req, data, serialVerUsed)
 }
 
-func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (result Result, err error) {
+func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16) (result Result, err error) {
 	if req == nil {
 		return nil, errNilRequest
 	}
@@ -962,11 +970,11 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 			}
 
 			if nosqlerr.Is(err, nosqlerr.UnsupportedProtocol) {
-				if c.decrementSerialVersion() == false {
+				if c.decrementSerialVersion(serialVerUsed) == false {
 					return nil, err
 				}
 				// if serial version mismatch, we must re-serialize the request
-				data, err = c.serializeRequest(req)
+				data, serialVerUsed, err = c.serializeRequest(req)
 				if err != nil {
 					return nil, err
 				}
@@ -1048,6 +1056,11 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 			httpReq.Header.Set("Authorization", authStr)
 		}
 
+		// Allow for session persistence, if available
+		if c.sessionStr != "" {
+			httpReq.Header.Set("Cookie", c.sessionStr)
+		}
+
 		err = c.signHTTPRequest(httpReq)
 		if err != nil {
 			return nil, err
@@ -1055,7 +1068,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 
 		// warn if using features not implemented at the connected server
 		// currently cloud does not support Durability
-		if c.serialVersion < 3 || c.isCloud {
+		if serialVerUsed < 3 || c.isCloud {
 			needMsg := false
 			if pReq, ok := req.(*PutRequest); ok && pReq.Durability.IsSet() {
 				needMsg = true
@@ -1073,7 +1086,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte) (resul
 		}
 
 		// OnDemand is not available in V2
-		if c.serialVersion < 3 {
+		if serialVerUsed < 3 {
 			if tReq, ok := req.(*TableRequest); ok && tReq.TableLimits != nil {
 				if tReq.TableLimits.CapacityMode == types.OnDemand {
 					c.oneTimeMessage("The requested feature is not supported " +
@@ -1334,17 +1347,18 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 // serializeRequest serializes the specified request into a slice of bytes that
 // will be sent to the server. The serial version is always written followed by
 // the actual request payload.
-func (c *Client) serializeRequest(req Request) (data []byte, err error) {
+func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16, err error) {
 	wr := binary.NewWriter()
-	if _, err = wr.WriteSerialVersion(c.serialVersion); err != nil {
-		return
+	serialVerUsed = c.serialVersion
+	if _, err = wr.WriteSerialVersion(serialVerUsed); err != nil {
+		return nil, 0, err
 	}
 
-	if err = req.serialize(wr, c.serialVersion); err != nil {
-		return
+	if err = req.serialize(wr, serialVerUsed); err != nil {
+		return nil, 0, err
 	}
 
-	return wr.Bytes(), nil
+	return wr.Bytes(), serialVerUsed, nil
 }
 
 // processResponse processes the http response returned from server.
@@ -1360,6 +1374,7 @@ func (c *Client) processResponse(httpResp *http.Response, req Request) (Result, 
 	}
 
 	if httpResp.StatusCode == http.StatusOK {
+		c.setSessionCookie(httpResp.Header)
 		return c.processOKResponse(data, req)
 	}
 
@@ -1400,6 +1415,29 @@ func (c *Client) processOKResponse(data []byte, req Request) (Result, error) {
 	}
 
 	return nil, wrapResponseErrors(int(code), msg)
+}
+
+// setSessionCookie sets a persistent session cookie value to use for
+// following requests, if present in the response header.
+func (c *Client) setSessionCookie(header http.Header) {
+	if header == nil {
+		return
+	}
+	// NOTE: this code assumes there will always be at most
+	// one Set-Cookie header in the response. If the load balancer
+	// settings change, or the proxy changes to add Set-Cookie
+	// headers, this code may need to be changed to look for
+	// multiple Set-Cookie headers.
+	v := header.Get("Set-Cookie")
+	if strings.HasPrefix(v, SessionCookieField) == false {
+		return
+	}
+	c.lockMux.Lock()
+	defer c.lockMux.Unlock()
+	c.sessionStr = strings.Split(v, ";")[0]
+	c.logger.LogWithFn(logger.Fine, func() string {
+		return fmt.Sprintf("Set session cookie to \"%s\"", c.sessionStr)
+	})
 }
 
 // processNotOKResponse processes the http response whose status code is not 200.
@@ -1502,7 +1540,12 @@ func (c *Client) VerifyConnection() error {
 // decrementSerialVersion attempts to reduce the serial version used for
 // communicating with the server. If the version is already at its lowest
 // value, it will not be decremented and false will be returned.
-func (c *Client) decrementSerialVersion() bool {
+func (c *Client) decrementSerialVersion(serialVerUsed int16) bool {
+	c.lockMux.Lock()
+	defer c.lockMux.Unlock()
+	if c.serialVersion != serialVerUsed {
+		return true
+	}
 	if c.serialVersion > 2 {
 		c.serialVersion--
 		return true
