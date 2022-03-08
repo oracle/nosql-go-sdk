@@ -43,6 +43,13 @@ func PrivateKeyFromBytesWithPassword(pemData, password []byte) (key *rsa.Private
 		}
 
 		key, e = x509.ParsePKCS1PrivateKey(decrypted)
+		if e != nil {
+			e = nil
+			parseResult, e := x509.ParsePKCS8PrivateKey(decrypted)
+			if e == nil {
+				key = parseResult.(*rsa.PrivateKey)
+			}
+		}
 
 	} else {
 		e = fmt.Errorf("PEM data was not found in buffer")
