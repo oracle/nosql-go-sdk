@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ## Unreleased
 
 ###
-- Cloud only: Support session cookies.
+- Support for session persistence. If a Set-Cookie HTTP header is present the SDK will now set a Cookie header using the requested session value.
 
 ## 1.3.0 - 2022-02-24
 
