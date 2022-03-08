@@ -20,12 +20,12 @@ func (c *Client) SetResponseHandler(fn HandleResponse) {
 	c.handleResponse = fn
 }
 
-func (c *Client) ProcessRequest(req Request) (data []byte, err error) {
+func (c *Client) ProcessRequest(req Request) (data []byte, serialVerUsed int16, err error) {
 	return c.processRequest(req)
 }
 
-func (c *Client) DoExecute(ctx context.Context, req Request, data []byte) (Result, error) {
-	return c.doExecute(ctx, req, data)
+func (c *Client) DoExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16) (Result, error) {
+	return c.doExecute(ctx, req, data, serialVerUsed)
 }
 
 func (p *PreparedStatement) GetStatement() []byte {

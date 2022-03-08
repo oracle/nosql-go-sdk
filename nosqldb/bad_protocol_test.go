@@ -162,7 +162,8 @@ func seekPos(lengths []int, fieldOff int) (off int) {
 }
 
 func (suite *BadProtocolTestSuite) doBadProtoTest(req nosqldb.Request, data []byte, desc string, expectErrCode nosqlerr.ErrorCode) {
-	_, err := suite.bpTestClient.DoExecute(context.Background(), req, data)
+	serialVerUsed := suite.bpTestClient.GetSerialVersion()
+	_, err := suite.bpTestClient.DoExecute(context.Background(), req, data, serialVerUsed)
 	switch expectErrCode {
 	case nosqlerr.NoError:
 		suite.NoErrorf(err, "%q should have succeeded, got error %v", desc, err)
@@ -173,7 +174,8 @@ func (suite *BadProtocolTestSuite) doBadProtoTest(req nosqldb.Request, data []by
 }
 
 func (suite *BadProtocolTestSuite) doBadProtoTest2(req nosqldb.Request, data []byte, desc string, expectErrCode1 nosqlerr.ErrorCode, expectErrCode2 nosqlerr.ErrorCode) {
-	_, err := suite.bpTestClient.DoExecute(context.Background(), req, data)
+	serialVerUsed := suite.bpTestClient.GetSerialVersion()
+	_, err := suite.bpTestClient.DoExecute(context.Background(), req, data, serialVerUsed)
 	suite.Truef((nosqlerr.Is(err, expectErrCode1) || nosqlerr.Is(err, expectErrCode2)),
 		"%q failed, got error %v, want error %s or %s", desc, err, expectErrCode1, expectErrCode2)
 }
@@ -185,7 +187,7 @@ func (suite *BadProtocolTestSuite) TestBadGetRequest() {
 		Key:         suite.key,
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -259,7 +261,7 @@ func (suite *BadProtocolTestSuite) TestBadGetIndexesRequest() {
 		IndexName: suite.index,
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -300,7 +302,7 @@ func (suite *BadProtocolTestSuite) TestBadGetTableRequest() {
 		TableName: suite.table,
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -336,7 +338,7 @@ func (suite *BadProtocolTestSuite) TestBadListTablesRequest() {
 		Namespace: ns,
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -387,7 +389,7 @@ func (suite *BadProtocolTestSuite) TestBadListTablesRequest() {
 func (suite *BadProtocolTestSuite) TestBadPrepareRequest() {
 	stmt := "select * from " + suite.table
 	req := &nosqldb.PrepareRequest{Statement: stmt}
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -495,7 +497,7 @@ func (suite *BadProtocolTestSuite) TestBadQueryRequest() {
 		2,           // VariableValue: INT_TYPE + packed int
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -591,7 +593,7 @@ func (suite *BadProtocolTestSuite) TestBadPutRequest() {
 		ttlLen,         // TTL: value(packed long) + unit(byte)
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -673,7 +675,7 @@ func (suite *BadProtocolTestSuite) TestBadDeleteRequest() {
 		0,              // MatchVersion: bytes
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -730,7 +732,7 @@ func (suite *BadProtocolTestSuite) TestBadWriteMultipleRequest() {
 		0,              // Sub requests: the size does not matter for this test.
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -790,7 +792,7 @@ func (suite *BadProtocolTestSuite) TestBadMultiDeleteRequest() {
 		21,             // ContinuationKey: byte array
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -866,7 +868,7 @@ func (suite *BadProtocolTestSuite) TestBadTableRequest() {
 		1,       // HasTableName: boolean
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	suite.AddToTables(newTable)
 	origData := make([]byte, len(data))
@@ -926,7 +928,7 @@ func (suite *BadProtocolTestSuite) TestBadSystemRequest() {
 		stmtLen, // Statement: string
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)
@@ -976,7 +978,7 @@ func (suite *BadProtocolTestSuite) TestBadSystemStatusRequest() {
 		stmtLen, // Statement: string
 	}
 
-	data, err := suite.bpTestClient.ProcessRequest(req)
+	data, _, err := suite.bpTestClient.ProcessRequest(req)
 	suite.Require().NoError(err)
 	origData := make([]byte, len(data))
 	copy(origData, data)

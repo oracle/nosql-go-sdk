@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- Support for session persistence. If a Set-Cookie HTTP header is present the SDK will now set a Cookie header using the requested session value.
+- Support for PKCS8 format private keys.
+
 ## 1.3.0 - 2022-02-24
 
 ### Added
