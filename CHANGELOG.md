@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ### Added
 - Support for session persistence. If a Set-Cookie HTTP header is present the SDK will now set a Cookie header using the requested session value.
 - Support for PKCS8 format private keys.
+- Added latest Oracle Cloud Infrastructure regions and region codes: CDG, MAD, QRO.
 
 ## 1.3.0 - 2022-02-24
 

@@ -35,8 +35,12 @@ const (
 	RegionUKCardiff1 Region = "uk-cardiff-1"
 	// RegionEUAmsterdam1 represents the region for Netherlands Northwest (Amsterdam).
 	RegionEUAmsterdam1 Region = "eu-amsterdam-1"
+	// RegionEUMadrid1 represents the region for Spain (Madrid).
+	RegionEUMadrid1 Region = "eu-madrid-1"
 	// RegionEUMilan1 represents the region for Italy (Milan).
 	RegionEUMilan1 Region = "eu-milan-1"
+	// RegionEUParis1 represents the region for France (Paris).
+	RegionEUParis1 Region = "eu-paris-1"
 	// RegionFRA represents the region for Germany Central (Frankfurt).
 	RegionFRA Region = "eu-frankfurt-1"
 	// RegionEUZurich1 represents the region for Switzerland North (Zurich).
@@ -67,6 +71,8 @@ const (
 	RegionMEJeddah1 Region = "me-jeddah-1"
 	// RegionMEDubai1 represents the region for Saudi Arabia East (Dubai).
 	RegionMEDubai1 Region = "me-dubai-1"
+	// RegionMXQueretaro represents the region for Mexico (Queretaro).
+	RegionMXQueretaro1 Region = "mx-queretaro-1"
 	// RegionILJerusalem1 represents the region for Israel (Jerusalem).
 	RegionILJerusalem1 Region = "il-jerusalem-1"
 	// RegionAFJohannesburg represents the region for Johannesburg
@@ -150,10 +156,13 @@ var regionRealm = map[Region]string{
 	RegionAPMelbourne1: "oc1",
 	RegionMEJeddah1:    "oc1",
 	RegionMEDubai1:     "oc1",
+	RegionMXQueretaro1: "oc1",
 	RegionILJerusalem1: "oc1",
 	RegionEUZurich1:    "oc1",
 	RegionEUAmsterdam1: "oc1",
+	RegionEUMadrid1:    "oc1",
 	RegionEUMilan1:     "oc1",
+	RegionEUParis1:     "oc1",
 	RegionSASaopaulo1:  "oc1",
 	RegionSASantiago1:  "oc1",
 	RegionSAVinhedo1:   "oc1",
@@ -190,6 +199,8 @@ var shortNameRegion = map[string]Region{
 	"cwl": RegionUKCardiff1,
 	"ams": RegionEUAmsterdam1,
 	"lin": RegionEUMilan1,
+	"cdg": RegionEUParis1,
+	"mad": RegionEUMadrid1,
 	"zrh": RegionEUZurich1,
 	"mel": RegionAPMelbourne1,
 	"bom": RegionAPMumbai1,
@@ -209,6 +220,7 @@ var shortNameRegion = map[string]Region{
 	"yyz": RegionCAToronto1,
 	"jed": RegionMEJeddah1,
 	"dxb": RegionMEDubai1,
+	"qro": RegionMXQueretaro1,
 	"mtz": RegionILJerusalem1,
 	"syd": RegionAPSydney1,
     "jnb": RegionAFJohannesburg,
