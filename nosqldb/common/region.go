@@ -71,7 +71,7 @@ const (
 	RegionMEJeddah1 Region = "me-jeddah-1"
 	// RegionMEDubai1 represents the region for Saudi Arabia East (Dubai).
 	RegionMEDubai1 Region = "me-dubai-1"
-	// RegionMXQueretaro represents the region for Mexico (Queretaro).
+	// RegionMXQueretaro1 represents the region for Mexico (Queretaro).
 	RegionMXQueretaro1 Region = "mx-queretaro-1"
 	// RegionILJerusalem1 represents the region for Israel (Jerusalem).
 	RegionILJerusalem1 Region = "il-jerusalem-1"

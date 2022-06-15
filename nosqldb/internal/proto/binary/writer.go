@@ -426,7 +426,7 @@ func (w *Writer) WriteFieldValue(value types.FieldValue) (int, error) {
 		if v <= math.MaxInt32 {
 			return w.writeIntegerValue(int(v))
 		}
-		if v <= math.MaxInt64 {
+		if uint64(v) <= math.MaxInt64 {
 			return w.writeLongValue(int64(v))
 		}
 		s := strconv.FormatUint(uint64(v), 10)
