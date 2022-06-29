@@ -16,7 +16,7 @@ Th Go SDK requires:
   - See [Download Oracle NoSQL Cloud Simulator](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/downloading-oracle-nosql-cloud-simulator.html) to download and start the Cloud Simulator.
 * For the on-premise Oracle NoSQL Database:
   - An instance of the database, see [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html).
-  - A running proxy server, see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/19.3/admin/proxy-and-driver.html) for proxy configuration information.
+  - A running proxy server, see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/22.1/admin/proxy-and-driver.html) for proxy configuration information.
 
 ## Downloading and Installing the SDK
 
@@ -170,8 +170,8 @@ The `iam.NewSignatureProviderFromFile` function requires a `compartmentID`
 parameter. If *compartmentID* is set to an empty string, the default compartment
 which is the root compartment of the tenancy is used. If you would like to use
 a nested compartment, specify the full compartment path relative to the root
-compartment as *compartmentID*. For example, if the nested compartment 
-`rootCompartment.compartmentA.compartmentB` is used, the *compartmentID* should 
+compartment as *compartmentID*. For example, if the nested compartment
+`rootCompartment.compartmentA.compartmentB` is used, the *compartmentID* should
 be set to `compartmentA.compartmentB`.
 
 There are several ways to supply credentials and create a `nosqldb.Config` for cloud service:
@@ -182,7 +182,7 @@ the default profile and default compartment:
 cfg := nosqldb.Config{
     // This is only required if the "region" property is not specified in ~/.oci/config.
     // This takes precedence over the "region" property when both are specified.
-    Region: "us-ashburn-1", 
+    Region: "us-ashburn-1",
 }
 client, err := nosqldb.NewClient(cfg)
 ...
@@ -213,7 +213,7 @@ sp, err := iam.NewRawSignatureProvider("ocid1.tenancy.oc1..tenancy", /* Tenancy 
                                        "us-ashburn-1", /* service region */,
                                        "fingerprint", /* fingerprint of public key */
                                        "compartmentID", /* compartment ID or name/path */
-                                       privateKeyFile , /* private key file */ 
+                                       privateKeyFile , /* private key file */
                                        &passphrase /* pass phrase for the private key*/)
 if err != nil {
     return
@@ -301,7 +301,7 @@ client, err := nosqldb.NewClient(cfg)
 The on-premise configuration requires a running instance of the Oracle NoSQL
 database. In addition a running proxy service is required. See [Oracle NoSQL
 Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads,
-and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/19.3/admin/proxy-and-driver.html) for proxy configuration information.
+and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.1/admin/proxy-and-driver.html) for proxy configuration information.
 
 #### Configure for non-secure on-premise Oracle NoSQL Database
 
@@ -339,7 +339,7 @@ cfg := nosqldb.Config{
 client, err := nosqldb.NewClient(cfg)
 ```
 
-Or if you run applications with the secure NoSQL database in a test environment, 
+Or if you run applications with the secure NoSQL database in a test environment,
 you may not want to verify the certificate presented by server, you can specify the
 *InsecureSkipVerify* paramater.
 
