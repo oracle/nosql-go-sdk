@@ -303,6 +303,44 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			recordKB)
 	}
 
+	// Get the version of the row using a query. Validate that the
+	// version returned matches the version returned from the previous get.
+	stmt = fmt.Sprintf("select row_version($t) as version from %s $t where id = 10", table)
+	qReq := &nosqldb.QueryRequest{
+		Statement:   stmt,
+		Consistency: types.Absolute,
+	}
+	qRes, err := suite.Client.Query(qReq)
+	results, rerr := qRes.GetResults()
+	ver, _ := results[0].GetBinary("version")
+	if suite.NoError(err) && suite.NoError(rerr) {
+		suite.checkGetResult(getReq, getRes,
+			true,               // rowPresent
+			true,               // checkFieldOrder
+			nil,                // expected value
+			types.Version(ver), // expected version
+			recordKB)
+	}
+
+	// Update the row with a PutIfVersion using the version returned by the
+	// row_version query. This should succeed.
+	putReq = &nosqldb.PutRequest{
+		TableName:    table,
+		Value:        value,
+		PutOption:    types.PutIfVersion,
+		MatchVersion: types.Version(ver),
+	}
+	putRes, err = suite.Client.Put(putReq)
+	if suite.NoError(err) {
+		suite.checkPutResult(putReq, putRes,
+			true,  // shouldSucceed
+			false, // rowPresent
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
+			recordKB)
+	}
+
+
 	// Get non-existing row
 	key.Put("id", 100)
 	getReq = &nosqldb.GetRequest{

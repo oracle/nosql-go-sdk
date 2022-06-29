@@ -362,6 +362,19 @@ func (m *MapValue) GetString(k string) (s string, ok bool) {
 	return
 }
 
+// GetBinary returns the binary value b associated with the specified key k.
+// If the value does not exist, or is not a binary value, this method returns
+// an empty byte array and sets ok to false.
+func (m *MapValue) GetBinary(k string) (b []byte, ok bool) {
+	v, ok := m.Get(k)
+	if !ok {
+		return
+	}
+
+	b, ok = v.([]byte)
+	return
+}
+
 // GetInt returns the int value i associated with the specified key k.
 // If the value does not exist, or is not an int value, this method returns 0
 // and sets ok to false.
