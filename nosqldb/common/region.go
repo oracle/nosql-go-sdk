@@ -25,6 +25,8 @@ const (
 	RegionPHX Region = "us-phoenix-1"
 	// RegionUSSanJose1 represents the region for US West (San Jose).
 	RegionUSSanJose1 Region = "us-sanjose-1"
+	// RegionUSChicago1 represents the region for US Central (Chicago).
+	RegionUSChicago1 Region = "us-chicago-1"
 	// RegionCAMontreal1 represents the region for Canada Southeast (Montreal).
 	RegionCAMontreal1 Region = "ca-montreal-1"
 	// RegionCAToronto1 represents the region for Canada Southeast (Toronto).
@@ -142,7 +144,7 @@ var realm = map[string]string{
 	"oc2":  "oraclegovcloud.com",
 	"oc3":  "oraclegovcloud.com",
 	"oc4":  "oraclegovcloud.uk",
-	"oc5":  "oraclerealm5.com",
+	"oc5":  "oraclecloud5.com",
 	"oc8":  "oraclecloud8.com",
 	"oc9":  "oraclecloud9.com",
 	"oc10": "oraclecloud10.com",
@@ -155,6 +157,7 @@ var regionRealm = map[Region]string{
 	RegionFRA:            "oc1",
 	RegionLHR:            "oc1",
 	RegionUSSanJose1:     "oc1",
+	RegionUSChicago1:     "oc1",
 	RegionUKCardiff1:     "oc1",
 	RegionCAToronto1:     "oc1",
 	RegionCAMontreal1:    "oc1",
@@ -210,6 +213,7 @@ var shortNameRegion = map[string]Region{
 	"phx": RegionPHX,
 	"iad": RegionIAD,
 	"sjc": RegionUSSanJose1,
+	"ord": RegionUSChicago1,
 	"fra": RegionFRA,
 	"lhr": RegionLHR,
 	"cwl": RegionUKCardiff1,

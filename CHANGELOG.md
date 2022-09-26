@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ### Added
 - New GetBinary() convenience function
-- Latest Oracle Cloud Infrastructure regions and region codes: TIW, BYG
+- Latest Oracle Cloud Infrastructure regions and region codes: TIW, BYG, ORD
 
 ### Fixed
 - Fix for ARM64 compatibility issue #8
