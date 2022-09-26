@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- New GetBinary() convenience function
+- Latest Oracle Cloud Infrastructure regions and region codes: TIW, BYG
+
+### Fixed
+- Fix for ARM64 compatibility issue #8
+
 ## 1.3.1 - 2022-06-13
 
 ### Added

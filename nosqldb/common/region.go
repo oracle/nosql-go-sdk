@@ -109,6 +109,11 @@ const (
 	// RegionUKGovCardiff1 represents the government region for Cardiff.
 	RegionUKGovCardiff1 Region = "uk-gov-cardiff-1"
 
+	// OC5 REGIONS
+
+	// RegionUSTacoma1 represents the Tacoma US region
+	RegionUSTacoma1 Region = "us-tacoma-1"
+
 	// OC8 REGIONS
 
 	// RegionAPChiyoda1 represents the region for Japan East (Chiyoda).
@@ -125,52 +130,59 @@ const (
 
 	// RegionAPDCCCanberra represents the dedicated region for canberra
 	RegionAPDCCCanberra Region = "ap-dcc-canberra-1"
+
+	// OC14 REGIONS
+
+	// RegionEUDCCMilan represents the dedicated region for Milan
+	RegionEUDCCMilan Region = "eu-dcc-milan-1"
 )
 
 var realm = map[string]string{
-	"oc1": "oraclecloud.com",
-	"oc2": "oraclegovcloud.com",
-	"oc3": "oraclegovcloud.com",
-	"oc4": "oraclegovcloud.uk",
-	"oc8": "oraclecloud8.com",
-	"oc9": "oraclecloud9.com",
+	"oc1":  "oraclecloud.com",
+	"oc2":  "oraclegovcloud.com",
+	"oc3":  "oraclegovcloud.com",
+	"oc4":  "oraclegovcloud.uk",
+	"oc5":  "oraclerealm5.com",
+	"oc8":  "oraclecloud8.com",
+	"oc9":  "oraclecloud9.com",
 	"oc10": "oraclecloud10.com",
+	"oc14": "oraclecloud14.com",
 }
 
 var regionRealm = map[Region]string{
-	RegionPHX:          "oc1",
-	RegionIAD:          "oc1",
-	RegionFRA:          "oc1",
-	RegionLHR:          "oc1",
-	RegionUSSanJose1:   "oc1",
-	RegionUKCardiff1:   "oc1",
-	RegionCAToronto1:   "oc1",
-	RegionCAMontreal1:  "oc1",
-	RegionAPTokyo1:     "oc1",
-	RegionAPOsaka1:     "oc1",
-	RegionAPSeoul1:     "oc1",
-	RegionAPChuncheon1: "oc1",
-	RegionAPSydney1:    "oc1",
-	RegionAPMumbai1:    "oc1",
-	RegionAPHyderabad1: "oc1",
-	RegionAPMelbourne1: "oc1",
-	RegionMEJeddah1:    "oc1",
-	RegionMEDubai1:     "oc1",
-	RegionMXQueretaro1: "oc1",
-	RegionILJerusalem1: "oc1",
-	RegionEUZurich1:    "oc1",
-	RegionEUAmsterdam1: "oc1",
-	RegionEUMadrid1:    "oc1",
-	RegionEUMilan1:     "oc1",
-	RegionEUParis1:     "oc1",
-	RegionSASaopaulo1:  "oc1",
-	RegionSASantiago1:  "oc1",
-	RegionSAVinhedo1:   "oc1",
+	RegionPHX:            "oc1",
+	RegionIAD:            "oc1",
+	RegionFRA:            "oc1",
+	RegionLHR:            "oc1",
+	RegionUSSanJose1:     "oc1",
+	RegionUKCardiff1:     "oc1",
+	RegionCAToronto1:     "oc1",
+	RegionCAMontreal1:    "oc1",
+	RegionAPTokyo1:       "oc1",
+	RegionAPOsaka1:       "oc1",
+	RegionAPSeoul1:       "oc1",
+	RegionAPChuncheon1:   "oc1",
+	RegionAPSydney1:      "oc1",
+	RegionAPMumbai1:      "oc1",
+	RegionAPHyderabad1:   "oc1",
+	RegionAPMelbourne1:   "oc1",
+	RegionMEJeddah1:      "oc1",
+	RegionMEDubai1:       "oc1",
+	RegionMXQueretaro1:   "oc1",
+	RegionILJerusalem1:   "oc1",
+	RegionEUZurich1:      "oc1",
+	RegionEUAmsterdam1:   "oc1",
+	RegionEUMadrid1:      "oc1",
+	RegionEUMilan1:       "oc1",
+	RegionEUParis1:       "oc1",
+	RegionSASaopaulo1:    "oc1",
+	RegionSASantiago1:    "oc1",
+	RegionSAVinhedo1:     "oc1",
 	RegionAFJohannesburg: "oc1",
-	RegionAPSignapore:  "oc1",
-	RegionEUMarseille:  "oc1",
-	RegionMEAbudhabi:   "oc1",
-	RegionEUStockholm:  "oc1",
+	RegionAPSignapore:    "oc1",
+	RegionEUMarseille:    "oc1",
+	RegionMEAbudhabi:     "oc1",
+	RegionEUStockholm:    "oc1",
 
 	RegionUSLangley1: "oc2",
 	RegionUSLuke1:    "oc2",
@@ -182,12 +194,16 @@ var regionRealm = map[Region]string{
 	RegionUKGovLondon1:  "oc4",
 	RegionUKGovCardiff1: "oc4",
 
+	RegionUSTacoma1: "oc5",
+
 	RegionAPChiyoda1: "oc8",
 	RegionAPIbaraki1: "oc8",
 
 	RegionMEDCCMuscat: "oc9",
 
 	RegionAPDCCCanberra: "oc10",
+
+	RegionEUDCCMilan: "oc14",
 }
 
 var shortNameRegion = map[string]Region{
@@ -198,9 +214,9 @@ var shortNameRegion = map[string]Region{
 	"lhr": RegionLHR,
 	"cwl": RegionUKCardiff1,
 	"ams": RegionEUAmsterdam1,
+	"mad": RegionEUMadrid1,
 	"lin": RegionEUMilan1,
 	"cdg": RegionEUParis1,
-	"mad": RegionEUMadrid1,
 	"zrh": RegionEUZurich1,
 	"mel": RegionAPMelbourne1,
 	"bom": RegionAPMumbai1,
@@ -223,20 +239,22 @@ var shortNameRegion = map[string]Region{
 	"qro": RegionMXQueretaro1,
 	"mtz": RegionILJerusalem1,
 	"syd": RegionAPSydney1,
-    "jnb": RegionAFJohannesburg,
-    "sin": RegionAPSignapore,
-    "mrs": RegionEUMarseille,
-    "auh": RegionMEAbudhabi,
-    "arn": RegionEUStockholm,
+	"jnb": RegionAFJohannesburg,
+	"sin": RegionAPSignapore,
+	"mrs": RegionEUMarseille,
+	"auh": RegionMEAbudhabi,
+	"arn": RegionEUStockholm,
 	"ltn": RegionUKGovLondon1,
 	"brs": RegionUKGovCardiff1,
 	"lfi": RegionUSLangley1,
 	"luf": RegionUSLuke1,
+	"tiw": RegionUSTacoma1,
 	"ric": RegionUSGovAshburn1,
 	"pia": RegionUSGovChicago1,
 	"tus": RegionUSGovPhoenix1,
 	"mct": RegionMEDCCMuscat,
 	"wga": RegionAPDCCCanberra,
+	"bgy": RegionEUDCCMilan,
 }
 
 func (region Region) secondLevelDomain() string {
