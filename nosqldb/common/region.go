@@ -135,8 +135,18 @@ const (
 
 	// OC14 REGIONS
 
-	// RegionEUDCCMilan represents the dedicated region for Milan
-	RegionEUDCCMilan Region = "eu-dcc-milan-1"
+	// RegionEUDCCDublin1 represents the dedicated region for Dublin1
+	RegionEUDCCDublin1 Region = "eu-dcc-dublin-1"
+	// RegionEUDCCDublin2 represents the dedicated region for Dublin2
+	RegionEUDCCDublin2 Region = "eu-dcc-dublin-2"
+	// RegionEUDCCMilan1 represents the dedicated region for Milan1
+	RegionEUDCCMilan1 Region = "eu-dcc-milan-1"
+	// RegionEUDCCMilan2 represents the dedicated region for Milan2
+	RegionEUDCCMilan2 Region = "eu-dcc-milan-2"
+	// RegionEUDCCRating1 represents the dedicated region for Rating1
+	RegionEUDCCRating1 Region = "eu-dcc-rating-1"
+	// RegionEUDCCRating2 represents the dedicated region for Rating2
+	RegionEUDCCRating2 Region = "eu-dcc-rating-2"
 )
 
 var realm = map[string]string{
@@ -206,7 +216,12 @@ var regionRealm = map[Region]string{
 
 	RegionAPDCCCanberra: "oc10",
 
-	RegionEUDCCMilan: "oc14",
+	RegionEUDCCDublin1: "oc14",
+	RegionEUDCCDublin2: "oc14",
+	RegionEUDCCMilan1:  "oc14",
+	RegionEUDCCMilan2:  "oc14",
+	RegionEUDCCRating1: "oc14",
+	RegionEUDCCRating2: "oc14",
 }
 
 var shortNameRegion = map[string]Region{
@@ -258,7 +273,12 @@ var shortNameRegion = map[string]Region{
 	"tus": RegionUSGovPhoenix1,
 	"mct": RegionMEDCCMuscat,
 	"wga": RegionAPDCCCanberra,
-	"bgy": RegionEUDCCMilan,
+	"ork": RegionEUDCCDublin1,
+	"snn": RegionEUDCCDublin2,
+	"bgy": RegionEUDCCMilan1,
+	"mxp": RegionEUDCCMilan2,
+	"dus": RegionEUDCCRating1,
+	"dtm": RegionEUDCCRating2,
 }
 
 func (region Region) secondLevelDomain() string {
