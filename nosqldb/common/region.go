@@ -147,6 +147,18 @@ const (
 	RegionEUDCCRating1 Region = "eu-dcc-rating-1"
 	// RegionEUDCCRating2 represents the dedicated region for Rating2
 	RegionEUDCCRating2 Region = "eu-dcc-rating-2"
+
+	// OC16 REGIONS
+
+	// RegionUSWestJordan1 represents the region for west jordan (Utah)
+	RegionUSWestJordan1 Region = "us-westjordan-1"
+
+	// OC17 REGIONS
+
+	// RegionUSDCCPhoenix1 represents dedicated region 1 for Phoenix
+	RegionDCCPhoenix1 Region = "us-dcc-phoenix-1"
+	// RegionUSDCCPhoenix2 represents dedicated region 2 for Phoenix
+	RegionDCCPhoenix2 Region = "us-dcc-phoenix-2"
 )
 
 var realm = map[string]string{
@@ -159,6 +171,8 @@ var realm = map[string]string{
 	"oc9":  "oraclecloud9.com",
 	"oc10": "oraclecloud10.com",
 	"oc14": "oraclecloud14.com",
+	"oc16": "oraclecloud16.com",
+	"oc17": "oraclecloud17.com",
 }
 
 var regionRealm = map[Region]string{
@@ -222,6 +236,11 @@ var regionRealm = map[Region]string{
 	RegionEUDCCMilan2:  "oc14",
 	RegionEUDCCRating1: "oc14",
 	RegionEUDCCRating2: "oc14",
+
+	RegionUSWestJordan1: "oc16",
+
+	RegionDCCPhoenix1: "oc17",
+	RegionDCCPhoenix2: "oc17",
 }
 
 var shortNameRegion = map[string]Region{
@@ -279,6 +298,9 @@ var shortNameRegion = map[string]Region{
 	"mxp": RegionEUDCCMilan2,
 	"dus": RegionEUDCCRating1,
 	"dtm": RegionEUDCCRating2,
+	"sgu": RegionUSWestJordan1,
+	"ifp": RegionDCCPhoenix1,
+	"gcn": RegionDCCPhoenix2,
 }
 
 func (region Region) secondLevelDomain() string {

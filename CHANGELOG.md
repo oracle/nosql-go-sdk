@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- Latest Oracle Cloud Infrastructure regions and region codes: SGU, IFP, GCN
+
 ## 1.3.2 - 2022-10-18
 
 ### Added
