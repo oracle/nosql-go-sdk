@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	//"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -68,7 +69,7 @@ type Client struct {
 	// handleResponse specifies a function that is used to handle the response
 	// returned from server.
 	// This is used internally by tests for customizing response processing.
-	handleResponse func(httpResp *http.Response, req Request) (Result, error)
+	handleResponse func(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error)
 
 	// isCloud represents whether the client connects to the cloud service or
 	// cloud simulator.
@@ -1103,7 +1104,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			continue
 		}
 
-		result, err = c.handleResponse(httpResp, req)
+		result, err = c.handleResponse(httpResp, req, serialVerUsed)
 		// Cancel request context after response body has been read.
 		reqCancel()
 		if err != nil {
@@ -1348,14 +1349,20 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 // will be sent to the server. The serial version is always written followed by
 // the actual request payload.
 func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16, err error) {
-	wr := binary.NewWriter()
 	serialVerUsed = c.serialVersion
+	wr := binary.NewWriter()
 	if _, err = wr.WriteSerialVersion(serialVerUsed); err != nil {
 		return nil, 0, err
 	}
 
-	if err = req.serialize(wr, serialVerUsed); err != nil {
-		return nil, 0, err
+	if serialVerUsed >= 4 {
+		if err = req.serialize(wr, serialVerUsed); err != nil {
+			return nil, 0, err
+		}
+	} else {
+		if err = req.serializeV3(wr, serialVerUsed); err != nil {
+			return nil, 0, err
+		}
 	}
 
 	return wr.Bytes(), serialVerUsed, nil
@@ -1366,7 +1373,7 @@ func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16
 // If the http response status code is 200, this method reads in response
 // content and parses them as an appropriate result suitable for the request.
 // Otherwise, it returns the http error.
-func (c *Client) processResponse(httpResp *http.Response, req Request) (Result, error) {
+func (c *Client) processResponse(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error) {
 	data, err := ioutil.ReadAll(httpResp.Body)
 	httpResp.Body.Close()
 	if err != nil {
@@ -1375,31 +1382,41 @@ func (c *Client) processResponse(httpResp *http.Response, req Request) (Result, 
 
 	if httpResp.StatusCode == http.StatusOK {
 		c.setSessionCookie(httpResp.Header)
-		return c.processOKResponse(data, req)
+		return c.processOKResponse(data, req, serialVerUsed)
 	}
 
 	return nil, c.processNotOKResponse(data, httpResp.StatusCode)
 }
 
-func (c *Client) processOKResponse(data []byte, req Request) (Result, error) {
+func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16) (res Result, err error) {
 	buf := bytes.NewBuffer(data)
 	rd := binary.NewReader(buf)
-	code, err := rd.ReadByte()
-	if err != nil {
-		return nil, err
-	}
 
-	// A zero byte represents the operation succeeded.
-	if code == 0 {
-		res, err := req.deserialize(rd, c.serialVersion)
-		if err != nil {
-			return nil, err
+	var code int
+	if serialVerUsed >= 4 {
+		if res, code, err = req.deserialize(rd, serialVerUsed); err != nil {
+			return nil, wrapResponseErrors(int(code), err.Error())
 		}
-
 		if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isSimpleQuery() {
 			queryReq.driver.client = c
 		}
+		return res, nil
+	}
 
+	// V3
+	bcode, err := rd.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	code = int(bcode)
+	// A zero byte represents the operation succeeded.
+	if code == 0 {
+		if res, err = req.deserializeV3(rd, serialVerUsed); err != nil {
+			return nil, err
+		}
+		if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isSimpleQuery() {
+			queryReq.driver.client = c
+		}
 		return res, nil
 	}
 
@@ -1548,6 +1565,7 @@ func (c *Client) decrementSerialVersion(serialVerUsed int16) bool {
 	}
 	if c.serialVersion > 2 {
 		c.serialVersion--
+		c.logger.Fine("Decremented serial version to %d\n", c.serialVersion)
 		return true
 	}
 	return false
@@ -1556,6 +1574,11 @@ func (c *Client) decrementSerialVersion(serialVerUsed int16) bool {
 // GetSerialVersion is used for tests.
 func (c *Client) GetSerialVersion() int16 {
 	return c.serialVersion
+}
+
+// SetSerialVersion is used for tests. Do not use this in regular client code.
+func (c *Client) SetSerialVersion(sVer int16) {
+	c.serialVersion = sVer
 }
 
 func (c *Client) oneTimeMessage(msg string) {

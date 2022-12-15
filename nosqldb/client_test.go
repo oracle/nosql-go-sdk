@@ -26,6 +26,11 @@ import (
 func TestExecuteErrorHandling(t *testing.T) {
 	client, err := newMockClient()
 	require.NoErrorf(t, err, "failed to create client, got error %v.", err)
+
+	// This test is very specific to V2/3 protocol.
+	// TODO: V4 protocol error tests
+	client.SetSerialVersion(3)
+
 	// GetRequest is a retryable request.
 	getReq := &GetRequest{
 		TableName: "T1",

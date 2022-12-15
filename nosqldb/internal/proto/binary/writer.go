@@ -108,6 +108,18 @@ func (w *Writer) WriteInt(value int) (int, error) {
 	return 4, nil
 }
 
+// WriteIntAtOffset encodes and writes the int value to the buffer
+// at a specific offset.
+// It assumes the provided value fits into a signed 32-bit integer.
+func (w *Writer) WriteIntAtOffset(value int, offset int) (int, error) {
+	len := len(w.buf)
+	if len < offset-4 {
+		return 0, errors.New("invalid offset")
+	}
+	binary.BigEndian.PutUint32(w.buf[offset:offset+4], uint32(value))
+	return 4, nil
+}
+
 // WritePackedInt encodes the int value using packed integer encoding
 // and writes to the buffer.
 // It assumes the provided value fits into a signed 32-bit integer.

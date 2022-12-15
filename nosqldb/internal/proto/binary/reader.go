@@ -8,6 +8,7 @@
 package binary
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -28,23 +29,23 @@ import (
 // Reader implements the io.Reader and io.ByteReader interfaces.
 type Reader struct {
 	// The underlying io.Reader.
-	rd io.Reader
+	rd *bytes.Buffer
 
 	// A buffer that holds the bytes for decoding.
 	buf []byte
 }
 
 // NewReader creates a reader for the binary protocol.
-// If the provided io.Reader is already a binary protocol Reader, it returns
-// the provided one without creating a new Reader.
-func NewReader(r io.Reader) *Reader {
-	if r, ok := r.(*Reader); ok {
-		return r
-	}
+func NewReader(r *bytes.Buffer) *Reader {
 	return &Reader{
 		rd:  r,
 		buf: make([]byte, 64, 256),
 	}
+}
+
+// GetBuffer returns the underlying bytes Buffer.
+func (r *Reader) GetBuffer() *bytes.Buffer {
+	return r.rd
 }
 
 // Read reads up to len(p) bytes into p.
@@ -179,6 +180,16 @@ func (r *Reader) ReadString() (*string, error) {
 	}
 	s := string(runeBuf)
 	return &s, nil
+}
+
+// ReadNonNilString reads a string. If there is an error, it will return
+// an empty string and the error.
+func (r *Reader) ReadNonNilString() (string, error) {
+	str, err := r.ReadString()
+	if str == nil || err != nil {
+		return "", err
+	}
+	return *str, nil
 }
 
 // ReadVersion reads byte sequences and decodes as a types.Version.

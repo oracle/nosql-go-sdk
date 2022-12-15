@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
@@ -478,6 +479,11 @@ func (r *SystemStatusRequest) doesWrites() bool {
 // the TableName and a TableLimits to define the throughput and storage desired
 // for the table.
 //
+// This request is also used to modify tags associated with an existing table.
+// This use is mutually exclusive with respect to changing a table schema or
+// its limits. To modify tags, specify only tags and the table name without
+// a statement.
+//
 // Execution of operations specified by TableRequest is implicitly asynchronous.
 // These are potentially long-running operations.
 // This request is used as the input of a Client.DoTableRequest() operation,
@@ -503,6 +509,31 @@ type TableRequest struct {
 	// TableLimits is used for cloud service only.
 	// It will be ignored if used for on-premise.
 	TableLimits *TableLimits `json:"tableLimits,omitempty"`
+
+	// FreeFormTags define the free-form tags to use for the operation.
+	// FreeFormTags are used in only 2 cases: table creation statements and tag
+	// modification operations.
+	// They are not used for other DDL operations.
+	// If tags are set for an on-premise service they are silently ignored.
+	// Added in SDK version 1.4.0
+	FreeFormTags *types.FreeFormTags
+
+	// DefinedTags define the tags to use for the operation.
+	// DefinedTags are used in only 2 cases: table creation statements and tag
+	// modification operations.
+	// They are not used for other DDL operations.
+	// If tags are set for an on-premise service they are silently ignored.
+	// Added in SDK version 1.4.0
+	DefinedTags *types.DefinedTags
+
+	// MatchETag defines an ETag in the request that must be matched for the operation
+	// to proceed. The ETag must be non-null and have been returned in a
+	// previous TableResult. This is a form of optimistic concurrency
+	// control allowing an application to ensure no unexpected modifications
+	// have been made to the table.
+	// If set for an on-premise service the ETag is silently ignored.
+	// Added in SDK version 1.4.0
+	MatchETag string
 
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
@@ -610,9 +641,9 @@ type TableLimits struct {
 // provisioned (fixed maximum read/write limits) tables. This is the default.
 func ProvisionedTableLimits(RUs uint, WUs uint, GB uint) *TableLimits {
 	return &TableLimits{
-		ReadUnits:  RUs,
-		WriteUnits: WUs,
-		StorageGB:  GB,
+		ReadUnits:    RUs,
+		WriteUnits:   WUs,
+		StorageGB:    GB,
 		CapacityMode: types.Provisioned,
 	}
 }
@@ -622,9 +653,9 @@ func ProvisionedTableLimits(RUs uint, WUs uint, GB uint) *TableLimits {
 // Added in SDK Version 1.3.0
 func OnDemandTableLimits(GB uint) *TableLimits {
 	return &TableLimits{
-		ReadUnits:  0,
-		WriteUnits: 0,
-		StorageGB:  GB,
+		ReadUnits:    0,
+		WriteUnits:   0,
+		StorageGB:    GB,
 		CapacityMode: types.OnDemand,
 	}
 }
@@ -715,6 +746,11 @@ type DeleteRequest struct {
 	// It is for internal use only.
 	isSubRequest bool
 
+	// abortOnFail specifies whether a failure of this operation during a WriteMultiple
+	// operation should cause the whole operation to fail.
+	// It is copied from the parent WriteOperation, and is for internal use only.
+	abortOnFail bool
+
 	common.InternalRequestData
 }
 
@@ -727,8 +763,10 @@ func (r *DeleteRequest) validate() (err error) {
 		return
 	}
 
-	if err = validateTimeout(r.Timeout); err != nil {
-		return
+	if r.isSubRequest == false {
+		if err = validateTimeout(r.Timeout); err != nil {
+			return
+		}
 	}
 
 	return
@@ -861,6 +899,11 @@ type PutRequest struct {
 	// It is for internal use only.
 	isSubRequest bool
 
+	// abortOnFail specifies whether a failure of this operation during a WriteMultiple
+	// operation should cause the whole operation to fail.
+	// It is copied from the parent WriteOperation, and is for internal use only.
+	abortOnFail bool
+
 	common.InternalRequestData
 }
 
@@ -869,8 +912,10 @@ func (r *PutRequest) validate() (err error) {
 		return
 	}
 
-	if err = validateTimeout(r.Timeout); err != nil {
-		return
+	if r.isSubRequest == false {
+		if err = validateTimeout(r.Timeout); err != nil {
+			return
+		}
 	}
 
 	if r.PutOption == types.PutIfVersion && r.MatchVersion == nil {
@@ -956,6 +1001,13 @@ type TableUsageRequest struct {
 	// be returned in a single request due to size limitations.
 	Limit uint `json:"limit,omitempty"`
 
+	// StartIndex sets the index to use to start returning usage records.
+	// This is related to the TableUsageResult.LastReturnedIndex from a previous
+	// request and can be used to page usage records.
+	// If not set, the list starts at index 0.
+	// Added in SDK version 1.4.0
+	StartIndex int `json:"startIndex,omitempty"`
+
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
@@ -1025,6 +1077,11 @@ type PrepareRequest struct {
 	// GetQueryPlan specifies whether to include the query execution plan in
 	// the PrepareResult returned for this request.
 	GetQueryPlan bool `json:"getQueryPlan"`
+
+	// GetQuerySchema specifies whether the JSON value of the query result schema
+	// for the query should be included in the PrepareResult returned for this request.
+	// Added in SDK Version 1.4.0
+	GetQuerySchema bool `json:"getQuerySchema"`
 
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
@@ -1182,6 +1239,13 @@ type QueryRequest struct {
 	// which is determined by Client.DefaultConsistency().
 	Consistency types.Consistency `json:"consistency,omitempty"`
 
+	// Durability is currently only used in On-Prem installations.
+	// This setting only applies if the query modifies
+	// a row using an INSERT, UPSERT, or DELETE statement. If the query is
+	// read-only it is ignored.
+	// Added in SDK Version 1.4.0
+	Durability types.Durability `json:"durability"`
+
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
@@ -1273,6 +1337,7 @@ func (r *QueryRequest) copyInternal() *QueryRequest {
 		MaxWriteKB:           r.MaxWriteKB,
 		MaxMemoryConsumption: r.MaxMemoryConsumption,
 		Consistency:          r.Consistency,
+		Durability:           r.Durability,
 		PreparedStatement:    r.PreparedStatement,
 		driver:               r.driver,
 		traceLevel:           r.traceLevel,
@@ -1391,6 +1456,18 @@ type PreparedStatement struct {
 	// queryPlan is the string representation of query plan.
 	queryPlan string
 
+	// querySchema is the string representation of query schema.
+	querySchema string
+
+	// tableName is the table name returned from a prepared query result, if any.
+	tableName string
+
+	// namespace is the namespace returned from a prepared query result, if any.
+	namespace string
+
+	// operation is the operation code for the query.
+	operation byte
+
 	// driverQueryPlan represents the part of query plan that must be executed at the driver.
 	// It is received from the NoSQL database proxy when the query is prepared there.
 	// It is deserialized by the driver and not sent back to the database proxy.
@@ -1508,6 +1585,21 @@ func (p *PreparedStatement) getBoundVarValues() []types.FieldValue {
 	return values
 }
 
+// GetQueryPlan returns the string (JSON) representation of the
+// query execution plan, if it was requested in the PrepareRequest; empty otherwise.
+// Added in SDK Version 1.4.0
+func (p *PreparedStatement) GetQueryPlan() string {
+	return p.queryPlan
+}
+
+// GetQuerySchema returns the string (JSON) representation of the
+// schema of the query result for this query, if it was requested in
+// the PrepareRequest; empty otherwise.
+// Added in SDK Version 1.4.0
+func (p *PreparedStatement) GetQuerySchema() string {
+	return p.querySchema
+}
+
 // WriteMultipleRequest represents the input to a Client.WriteMultiple() operation.
 //
 // This request can be used to perform a sequence of PutRequest or DeleteRequest
@@ -1524,7 +1616,7 @@ func (p *PreparedStatement) getBoundVarValues() []types.FieldValue {
 // WriteMultipleResult.FailedOperationIndex.
 type WriteMultipleRequest struct {
 	// TableName specifies the name of table for the request.
-	// It is required and must be non-empty.
+	// This is now ignored: table name(s) are derived from sub-requests.
 	TableName string `json:"tableName"`
 
 	// Operations specifies a list of operations for the request.
@@ -1552,10 +1644,6 @@ type WriteMultipleRequest struct {
 }
 
 func (r *WriteMultipleRequest) validate() (err error) {
-	if err = validateTableName(r.TableName); err != nil {
-		return
-	}
-
 	if err = validateTimeout(r.Timeout); err != nil {
 		return
 	}
@@ -1564,18 +1652,34 @@ func (r *WriteMultipleRequest) validate() (err error) {
 		return nosqlerr.NewIllegalArgument("WriteMultipleRequest: must specify at least one operation")
 	}
 
+	if len(r.Operations) == 1 {
+		return nil
+	}
+
+	return r.validateTables()
+}
+
+func (r *WriteMultipleRequest) validateTables() (err error) {
+	topTableName := ""
 	for i, op := range r.Operations {
 		if op == nil {
 			return nosqlerr.NewIllegalArgument("WriteMultipleRequest: the %s operation is nil", ordinal(i))
 		}
-
 		if err = op.validate(); err != nil {
 			return
 		}
-
-		if op.tableName() != r.TableName {
-			return nosqlerr.NewIllegalArgument("WriteMultipleRequest: table name %q used for the %s operation "+
-				"is different from that of others %q", op.tableName(), ordinal(i), r.TableName)
+		if topTableName == "" {
+			topTableName = r.getTopTableName(op.tableName())
+		} else {
+			// check for parent/child table names
+			opTopTable := r.getTopTableName(op.tableName())
+			if strings.EqualFold(topTableName, opTopTable) == false {
+				return nosqlerr.NewIllegalArgument("WriteMultipleRequest: " +
+					"All sub requests should operate on the same table or " +
+					"descendant tables belonging to the same top level " +
+					"table. The table '%s' is different from the table of " +
+					"other requests: '%s'", opTopTable, topTableName)
+			}
 		}
 	}
 
@@ -1618,38 +1722,50 @@ func (r *WriteMultipleRequest) Clear() {
 	r.Operations = nil
 }
 
+// return the top table name based on dot (".") separators
+func (r *WriteMultipleRequest) getTopTableName(tableName string) string {
+	if tableName == "" {
+		return tableName
+	}
+	return strings.Split(tableName, ".")[0]
+}
+
 // AddPutRequest adds a Put request as a sub request of the WriteMultiple request.
 // If abortOnFail is set to true, the WriteMultiple request will fail if any of
 // the sub requests fail.
-func (r *WriteMultipleRequest) AddPutRequest(p *PutRequest, abortOnFail bool) error {
+func (r *WriteMultipleRequest) AddPutRequest(p *PutRequest, abortOnFail bool) (err error) {
 	if p == nil {
 		return nosqlerr.NewIllegalArgument("PutRequest must be non-nil")
 	}
-
 	p.isSubRequest = true
+	if err = p.validate(); err != nil {
+		return
+	}
 	op := &WriteOperation{
 		PutRequest:  p,
 		AbortOnFail: abortOnFail,
 	}
 	r.Operations = append(r.Operations, op)
-	return nil
+	return r.validateTables()
 }
 
 // AddDeleteRequest adds a Delete request as a sub request of the WriteMultiple request.
 // If abortOnFail is set to true, the WriteMultiple request will fail if any of
 // the sub requests fail.
-func (r *WriteMultipleRequest) AddDeleteRequest(d *DeleteRequest, abortOnFail bool) error {
+func (r *WriteMultipleRequest) AddDeleteRequest(d *DeleteRequest, abortOnFail bool) (err error) {
 	if d == nil {
 		return nosqlerr.NewIllegalArgument("DeleteRequest must be non-nil")
 	}
-
 	d.isSubRequest = true
+	if err = d.validate(); err != nil {
+		return
+	}
 	op := &WriteOperation{
 		DeleteRequest: d,
 		AbortOnFail:   abortOnFail,
 	}
 	r.Operations = append(r.Operations, op)
-	return nil
+	return r.validateTables()
 }
 
 // MultiDeleteRequest represents the input to a Client.MultiDelete operation

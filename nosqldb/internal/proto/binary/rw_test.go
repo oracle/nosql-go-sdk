@@ -119,7 +119,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteByte() {
 		w.WriteByte(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadByte()
 		if suite.NoErrorf(err, "ReadByte() got error %v", err) {
@@ -138,7 +138,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteInt16() {
 		w.WriteInt16(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadInt16()
 		if suite.NoErrorf(err, "ReadInt16() got error %v", err) {
@@ -157,7 +157,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteInt() {
 		w.WriteInt(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadInt()
 		if suite.NoErrorf(err, "ReadInt() got error %v", err) {
@@ -175,7 +175,7 @@ func (suite *ReadWriteTestSuite) TestReadWritePackedInt() {
 		w.WritePackedInt(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range packedIntTests {
 		out, err := r.ReadPackedInt()
 		if suite.NoErrorf(err, "ReadPackedInt() got error %v", err) {
@@ -193,7 +193,7 @@ func (suite *ReadWriteTestSuite) TestReadWritePackedLong() {
 		w.WritePackedLong(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range packedLongTests {
 		out, err := r.ReadPackedLong()
 		if suite.NoErrorf(err, "ReadPackedLong() got error %v", err) {
@@ -213,7 +213,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteDouble() {
 		w.WriteDouble(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadDouble()
 		if suite.NoErrorf(err, "ReadDouble() got error %v", err) {
@@ -233,7 +233,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteString() {
 
 	w.WriteString(nil)
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range stringTests {
 		out, err := r.ReadString()
 		if suite.NoErrorf(err, "ReadString() got error %v", err) {
@@ -263,7 +263,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteBoolean() {
 	w.WriteByte(2)
 	tests = append(tests, []bool{false, true, true}...)
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadBoolean()
 		if suite.NoErrorf(err, "ReadBoolean() got error %v", err) {
@@ -284,7 +284,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteByteArray() {
 	// Invalid length of byte array.
 	w.WritePackedInt(-2)
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range byteArrayTests {
 		out, err := r.ReadByteArray()
 		if suite.NoErrorf(err, "ReadByteArray() got error %v", err) {
@@ -311,7 +311,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteByteArrayWithInt() {
 		w.WriteByteArrayWithInt(v)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadByteArrayWithInt()
 		if suite.NoErrorf(err, "ReadByteArrayWithInt() got error %v", err) {
@@ -331,7 +331,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteVersion() {
 		w.WriteVersion(ver)
 	}
 
-	r := NewReader(bytes.NewReader(w.Bytes()))
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
 	for _, in := range tests {
 		out, err := r.ReadVersion()
 		if suite.NoErrorf(err, "ReadVersion() got error %v", err) {
@@ -436,7 +436,7 @@ func (suite *ReadWriteTestSuite) TestReadWriteFieldValue() {
 func (suite *ReadWriteTestSuite) roundTrip(in types.FieldValue) {
 	wr := NewWriter()
 	wr.WriteFieldValue(in)
-	br := bytes.NewReader(wr.Bytes())
+	br := bytes.NewBuffer(wr.Bytes())
 	r := NewReader(br)
 	out, err := r.ReadFieldValue()
 	if !suite.NoErrorf(err, "ReadFieldValue(value=%v, type=%[1]T) got error %v", in, err) {

@@ -53,6 +53,9 @@ func (suite *BadProtocolTestSuite) SetupSuite() {
 	suite.bpTestClient, err = nosqldb.NewClient(suite.Client.Config)
 	suite.Require().NoErrorf(err, "failed to create a client, got error %v", err)
 
+	// Currently this test requires V3 or lower
+	suite.bpTestClient.SetSerialVersion(3)
+
 	// this will set the serial protocol version. Ignore errors from it.
 	suite.bpTestClient.VerifyConnection()
 
@@ -111,7 +114,7 @@ func (suite *BadProtocolTestSuite) createTableAndIndex() {
 
 // processTestResponse is a custom handleResponse function for the Client.
 // It checks error code from the response, does not parse the response content.
-func processTestResponse(httpResp *http.Response, req nosqldb.Request) (nosqldb.Result, error) {
+func processTestResponse(httpResp *http.Response, req nosqldb.Request, serialVerUsed int16) (nosqldb.Result, error) {
 	data, err := ioutil.ReadAll(httpResp.Body)
 	httpResp.Body.Close()
 	if err != nil {
@@ -765,7 +768,7 @@ func (suite *BadProtocolTestSuite) TestBadWriteMultipleRequest() {
 		suite.wr.Reset()
 		suite.wr.WriteOpCode(v)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+		suite.doBadProtoTest2(req, data, desc, nosqlerr.BadProtocolMessage, nosqlerr.IllegalArgument)
 	}
 
 }

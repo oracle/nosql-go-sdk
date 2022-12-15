@@ -26,7 +26,11 @@ testcases ?=
 options ?=
 examples := basic delete index
 
-GOTEST := $(GOENV) $(GO) test -timeout 20m -count 1 -run "$(testcases)" -v $(options)
+# Enable to get code coverage from tests
+# afterwards, run go tool cover -html=nosqldb/cover.out
+#COVER := -coverprofile cover.out
+
+GOTEST := $(GOENV) $(GO) test $(COVER) -timeout 20m -count 1 -run "$(testcases)" -v $(options)
 
 .PHONY: all build test cloudsim-test onprem-test clean lint build-examples release $(examples) help
 
@@ -34,7 +38,7 @@ all: build
 
 # compile all packages
 build:
-	cd $(SRC) && $(GOENV) $(GO) build -v ./...
+	cd $(SRC) && $(GOENV) $(GO) build -gcflags="-e" -v ./...
 
 # run tests
 test:
@@ -54,7 +58,7 @@ clean:
 
 # lint check
 lint:
-	cd $(SRC) && golint -set_exit_status -min_confidence 0.3  ./...
+	cd $(SRC) && $(GO) vet
 
 # compile examples
 build-examples: $(examples)

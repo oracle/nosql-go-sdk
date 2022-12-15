@@ -3,9 +3,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 1.4.0 - 2022-12-15
 
 ### Added
+Support for new, flexible wire protocol (V4):
+
+The previous protocol is still supported for communication with servers that do not yet support V4. The
+version negotation is internal and automatic; however, use of V4 features will fail
+at runtime when attempted with an older server. Failure may be an empty or
+undefined result or an exception if the request cannot be serviced at all. The following
+new features or interfaces depend on the new protocol version:
+ - added Durability to QueryRequest for queries that modify data
+ - added pagination information to TableUsageResult and TableUsageRequest
+ - added shard percent usage information to TableUsageResult
+ - added IndexInfo.FieldTypes to return the type information on an index on a JSON field
+ - added the ability to ask for and receive the schema of a query using
+     * PrepareRequest.GetQuerySchema
+     * PreparedStatement.GetQuerySchema
+ - Cloud only: added use of ETags, DefinedTags and FreeFormTags in TableRequest and TableResult
+
 - Latest Oracle Cloud Infrastructure regions and region codes: SGU, IFP, GCN
 
 ## 1.3.2 - 2022-10-18
