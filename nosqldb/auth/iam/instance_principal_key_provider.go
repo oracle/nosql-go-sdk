@@ -138,6 +138,10 @@ func (p *instancePrincipalKeyProvider) KeyID() (string, error) {
 	return fmt.Sprintf("ST$%s", securityToken), nil
 }
 
+func (p *instancePrincipalKeyProvider) ExpirationTime() time.Time {
+	return p.FederationClient.ExpirationTime()
+}
+
 func (p *instancePrincipalKeyProvider) TenancyOCID() (string, error) {
 	return p.TenancyID, nil
 }
@@ -166,6 +170,10 @@ func (p *instancePrincipalConfigurationProvider) PrivateRSAKey() (*rsa.PrivateKe
 
 func (p *instancePrincipalConfigurationProvider) KeyID() (string, error) {
 	return p.keyProvider.KeyID()
+}
+
+func (p *instancePrincipalConfigurationProvider) ExpirationTime() time.Time {
+	return p.keyProvider.ExpirationTime()
 }
 
 func (p *instancePrincipalConfigurationProvider) TenancyOCID() (string, error) {

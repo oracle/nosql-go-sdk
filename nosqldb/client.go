@@ -151,6 +151,8 @@ func NewClient(cfg Config) (*Client, error) {
 
 	c.oneTimeMessages = make(map[string]struct{})
 
+	c.warmupClientAuth()
+
 	return c, nil
 }
 
@@ -1136,6 +1138,18 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		return result, nil
 	}
+}
+
+
+func (c *Client) warmupClientAuth() {
+	// Create a dummy http request and pass it to the signing logic.
+	// this will initialize the IAM auth underneath.
+	// Don't return any errors - this is a best-effort attempt.
+	httpReq, err := httputil.NewPostRequest("https://nosql.oracle.com", []byte{})
+	if err != nil {
+		return
+	}
+	c.signHTTPRequest(httpReq)
 }
 
 func (c *Client) tableNeedsRefresh(tableName string) bool {

@@ -18,12 +18,16 @@ type jwtToken struct {
 	payload map[string]interface{}
 }
 
-const bufferTimeBeforeTokenExpiration = 5 * time.Minute
+// Return token expiry
+func (t *jwtToken) expirationTime() time.Time {
+	return time.Unix(int64(t.payload["exp"].(float64)), 0)
+}
 
+// NOTE: There are certain cases where the security token returned from Identity may
+// have a very short expiry (less than 5 minutes), and it's still valid. So this
+// expiration check must check up to the current second
 func (t *jwtToken) expired() bool {
-	exp := int64(t.payload["exp"].(float64))
-	expired := exp <= time.Now().Unix()+int64(bufferTimeBeforeTokenExpiration.Seconds())
-	return expired
+	return time.Now().After(t.expirationTime())
 }
 
 func parseJwt(tokenString string) (*jwtToken, error) {
