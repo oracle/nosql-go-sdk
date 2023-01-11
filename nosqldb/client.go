@@ -1145,11 +1145,19 @@ func (c *Client) warmupClientAuth() {
 	// Create a dummy http request and pass it to the signing logic.
 	// this will initialize the IAM auth underneath.
 	// Don't return any errors - this is a best-effort attempt.
-	httpReq, err := httputil.NewPostRequest("https://nosql.oracle.com", []byte{})
+	c.logger.Fine("Warming up auth...");
+	httpReq, err := httputil.NewPostRequest(c.requestURL, []byte{})
 	if err != nil {
+		c.logger.Fine("Got error creating warmup request: %v", err)
 		return
 	}
-	c.signHTTPRequest(httpReq)
+	httpReq.Header.Add("Host", c.serverHost)
+	err = c.signHTTPRequest(httpReq)
+	if err != nil {
+		c.logger.Fine("Got error signing warmup request: %v", err)
+		return
+	}
+	c.logger.Fine("Auth warmed up successfully")
 }
 
 func (c *Client) tableNeedsRefresh(tableName string) bool {
