@@ -47,6 +47,16 @@ func (suite *WriteMultipleTestSuite) SetupSuite() {
 		Value: 1,
 		Unit:  types.Days,
 	}
+	// a single child table, if supported by server
+	// first supported in 21.2
+	if suite.Config.Version >= "21.2" {
+		childTable := suite.table + ".child"
+		stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(" +
+			"childid INTEGER, childname STRING, childdata STRING, " +
+			"PRIMARY KEY(childid)) " +
+			"USING TTL 1 DAYS", childTable)
+		suite.ReCreateTable(childTable, stmt, nil)
+	}
 }
 
 func (suite *WriteMultipleTestSuite) TestOpSucceed() {
@@ -221,6 +231,63 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	rowPresent = append(rowPresent, false)
 
 	wmRes, err = suite.Client.WriteMultiple(wmReq)
+	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
+		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, recordKB)
+	}
+
+	// test writemultiple with parent/child tables
+	// first supported in 21.2.52
+	if suite.Config.Version < "21.2" {
+		return
+	}
+
+	shouldSucceed = make([]bool, 0, n)
+	rowPresent = make([]bool, 0, n)
+	wmReq = &nosqldb.WriteMultipleRequest{}
+	sid = 20
+	childTable := suite.table + ".child"
+	for i := 0; i < n; i++ {
+		// parent
+		value = suite.genRow(sid, i, recordKB, false)
+		putReq = &nosqldb.PutRequest{
+			TableName: suite.table,
+			Value:     value,
+		}
+		wmReq.AddPutRequest(putReq, false)
+		shouldSucceed = append(shouldSucceed, true)
+		rowPresent = append(rowPresent, false)
+
+		// child
+		value = suite.genChildRow(sid, i, i, recordKB)
+		putReq = &nosqldb.PutRequest{
+			TableName: childTable,
+			Value:     value,
+		}
+		wmReq.AddPutRequest(putReq, false)
+		shouldSucceed = append(shouldSucceed, true)
+		rowPresent = append(rowPresent, false)
+	}
+
+	wmRes, err = suite.Client.WriteMultiple(wmReq)
+	if err != nil {
+		// expected in the following KV releases:
+		// 21.2 <= .51
+		// 22.1 <= .22
+		// 22.2 <= .13
+		// 22.3 <= .3
+	    if suite.Config.Version <= "21.2.51" {
+			return
+		}
+	    if suite.Config.Version >= "22.1" && suite.Config.Version <= "22.1.22" {
+			return
+		}
+	    if suite.Config.Version >= "22.2" && suite.Config.Version <= "22.2.13" {
+			return
+		}
+	    if suite.Config.Version >= "22.3" && suite.Config.Version <= "22.3.3" {
+			return
+		}
+	}
 	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
 		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, recordKB)
 	}
@@ -646,6 +713,15 @@ func (suite *WriteMultipleTestSuite) genRow(sid, id, recordKB int, isUpdate bool
 	return m
 }
 
+func (suite *WriteMultipleTestSuite) genChildRow(sid, id, childid, recordKB int) *types.MapValue {
+	m := &types.MapValue{}
+	m.Put("sid", sid).Put("id", id)
+	m.Put("childid", childid)
+	m.Put("childname", fmt.Sprintf("name_%d_%d", sid, id))
+	m.Put("childdata", test.GenString((recordKB-1)*1024))
+	return m
+}
+
 func (suite *WriteMultipleTestSuite) genKey(sid, id int) *types.MapValue {
 	m := &types.MapValue{}
 	m.Put("sid", sid).Put("id", id)
@@ -658,13 +734,16 @@ func (suite *WriteMultipleTestSuite) runOpAbortedTest(requests []nosqldb.Request
 	wmReq := &nosqldb.WriteMultipleRequest{
 		TableName: suite.table,
 	}
+	var err error
 	for _, req := range requests {
 		switch r := req.(type) {
 		case *nosqldb.PutRequest:
-			wmReq.AddPutRequest(r, true)
+			err = wmReq.AddPutRequest(r, true)
+			suite.NoErrorf(err, "WriteMultiple() failed to add PutRequest, got error: %v", err)
 
 		case *nosqldb.DeleteRequest:
-			wmReq.AddDeleteRequest(r, true)
+			err = wmReq.AddDeleteRequest(r, true)
+			suite.NoErrorf(err, "WriteMultiple() failed to add DeleteRequest, got error: %v", err)
 
 		default:
 			suite.T().Errorf("unsupported request type for WriteMultipleRequest, "+

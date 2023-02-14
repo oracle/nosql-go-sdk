@@ -10,6 +10,7 @@
 package types
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -127,6 +128,138 @@ type Durability struct {
 // IsSet returns true if any durability values are nonzero
 func (d *Durability) IsSet() bool {
 	return d.MasterSync != 0 || d.ReplicaSync != 0 || d.ReplicaAck != 0
+}
+
+// DefinedTags encapsulates defined tags which are returned
+// from calls to Client.GetTable(). They can also be set during
+// table creation operations as well as alter table operations.
+// Cloud service only.
+// Added in SDK Version 1.4.0
+type DefinedTags struct {
+	Tags *MapValue
+}
+
+// AddTag adds a key/value string pair to the DefinedTags in the given
+// namespace.
+func (dt *DefinedTags) AddTag(namespace, key, value string) (err error) {
+	if dt.Tags == nil {
+		dt.Tags = NewEmptyMapValue()
+	}
+	if !dt.Tags.Contains(namespace) {
+		dt.Tags.Put(namespace, NewEmptyMapValue())
+	}
+	nsMap, ok := dt.Tags.GetMapValue(namespace)
+	if !ok {
+		return fmt.Errorf("Invalid internal value for namespace %s", namespace)
+	}
+	nsMap.Put(key, value)
+	return nil
+}
+
+// SetValuesFromJSON sets the DefinedTags values from a JSON string.
+// Any previous values will be lost.
+func (dt *DefinedTags) SetValuesFromJSON(jsonStr string) (err error) {
+	dt.Tags, err = NewMapValueFromJSON(jsonStr)
+	return err
+}
+
+// GetTag returns the DefinedTag for the given namespace and key, if present.
+// If not present, empty string is returned.
+func (dt *DefinedTags) GetTag(namespace, key string) string {
+	if dt.Tags == nil {
+		return ""
+	}
+	nsMap, ok := dt.Tags.GetMapValue(namespace)
+	if !ok {
+		return ""
+	}
+	str, _ := nsMap.GetString(key)
+	return str
+}
+
+// IsEmpty returns true of there are no key/value pairs in any namespace in the
+// DefinedTags. Otherwise it returns false.
+func (dt *DefinedTags) IsEmpty() bool {
+	if dt.Tags == nil || dt.Tags.Len() == 0 {
+		return true
+	}
+	// walk each namespace looking for any key/value pair
+	tagMap := dt.Tags.Map()
+	for k := range tagMap {
+		if mv, ok := dt.Tags.GetMapValue(k); ok == true {
+			if mv.Len() > 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// FreeFormTags encapsulates free-form tags which are returned
+// from calls to Client.GetTable(). They can also be set during
+// table creation operations as well as alter table operations.
+// Cloud service only.
+// Added in SDK Version 1.4.0
+type FreeFormTags struct {
+	Tags *MapValue
+}
+
+// SetValuesFromMap sets the FreeFormTags values from a string/interface map.
+// Any previous values will be lost.
+func (fft *FreeFormTags) SetValuesFromMap(m map[string]interface{}) {
+	fft.Tags = NewMapValue(m)
+}
+
+// SetValuesFromJSON sets the FreeFormTags values from a JSON string.
+// Any previous values will be lost.
+func (fft *FreeFormTags) SetValuesFromJSON(jsonStr string) (err error) {
+	fft.Tags, err = NewMapValueFromJSON(jsonStr)
+	return err
+}
+
+// AddTag adds a key/value string pair to the FreeFormTags.
+func (fft *FreeFormTags) AddTag(key, value string) (err error) {
+	if fft.Tags == nil {
+		fft.Tags = NewEmptyMapValue()
+	}
+	fft.Tags.Put(key, value)
+	return nil
+}
+
+// GetTag returns the tag for the given key, if present.
+// If not present, empty string is returned.
+func (fft *FreeFormTags) GetTag(key string) string {
+	if fft.Tags == nil {
+		return ""
+	}
+	str, _ := fft.Tags.GetString(key)
+	return str
+}
+
+// Contains returns true if the FreeFormTags contain a key/value pair with
+// the specified key, false otherwise.
+func (fft *FreeFormTags) Contains(k string) (ok bool) {
+	if fft.Tags == nil {
+		return false
+	}
+	return fft.Tags.Contains(k)
+}
+
+// Size returns the number of key/value pairs in the FreeFormTags.
+func (fft *FreeFormTags) Size() int {
+	if fft.Tags == nil {
+		return 0
+	}
+	return fft.Tags.Len()
+}
+
+// GetMap returns the underlying string/interface map in the FreeFormTags.
+func (fft *FreeFormTags) GetMap() (m *map[string]interface{}) {
+	if fft.Tags == nil {
+		return nil
+	}
+	v := fft.Tags.Map()
+	return &v
 }
 
 // CapacityMode defines the type of limits for a table.

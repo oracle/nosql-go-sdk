@@ -16,7 +16,7 @@ import (
 
 func BenchmarkRead(b *testing.B) {
 	buf := []byte{1, 2, 3, 4}
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	n := len(buf)
 	p := make([]byte, n)
 	b.SetBytes(int64(n))
@@ -28,7 +28,7 @@ func BenchmarkRead(b *testing.B) {
 
 func BenchmarkReadByte(b *testing.B) {
 	buf := []byte{1}
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,7 +41,7 @@ func BenchmarkReadByteArray(b *testing.B) {
 	bs := []byte{1, 2, 3, 4}
 	w.WriteByteArray(bs)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -54,7 +54,7 @@ func BenchmarkReadByteArrayWithInt(b *testing.B) {
 	bs := []byte{1, 2, 3, 4}
 	w.WriteByteArrayWithInt(bs)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -66,7 +66,7 @@ func BenchmarkReadBoolean(b *testing.B) {
 	w := NewWriter()
 	w.WriteBoolean(true)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -78,7 +78,7 @@ func BenchmarkReadInt(b *testing.B) {
 	w := NewWriter()
 	w.WriteInt(10)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -90,7 +90,7 @@ func BenchmarkReadInt16(b *testing.B) {
 	w := NewWriter()
 	w.WriteInt16(int16(10))
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -102,7 +102,7 @@ func BenchmarkReadPackedInt(b *testing.B) {
 	w := NewWriter()
 	w.WritePackedInt(10)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -114,7 +114,7 @@ func BenchmarkReadPackedLong(b *testing.B) {
 	w := NewWriter()
 	w.WritePackedLong(int64(10))
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -126,7 +126,7 @@ func BenchmarkReadDouble(b *testing.B) {
 	w := NewWriter()
 	w.WriteDouble(float64(3.1415926))
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -139,7 +139,7 @@ func BenchmarkReadString(b *testing.B) {
 	s := "Oracle NoSQL Database"
 	w.WriteString(&s)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -158,7 +158,7 @@ func BenchmarkReadMap(b *testing.B) {
 	mv.Put("bytes", []byte{1, 2, 3, 4, 5, 6, 7, 8})
 	w.WriteMap(mv)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -177,7 +177,7 @@ func BenchmarkReadArray(b *testing.B) {
 	}
 	w.WriteArray(arr)
 	buf := w.Bytes()
-	r := NewReader(bytes.NewReader(buf))
+	r := NewReader(bytes.NewBuffer(buf))
 	b.SetBytes(int64(len(buf)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -50,6 +50,9 @@ type Config struct {
 
 	// For extended testing
 	RunExtended bool `json:"runExtended"`
+
+	// For testing
+	SerialVersion int16 `json:"serialVersion"`
 }
 
 // newConfig creates a test configuration object from the specified JSON file.
@@ -146,6 +149,14 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 	client, err = nosqldb.NewClient(cfg.Config)
 	if err != nil {
 		return nil, err
+	}
+
+	// if specified, force a specific serial version
+	if cfg.SerialVersion != 0 {
+		if cfg.Verbose {
+			fmt.Printf("Setting client serial version to %d\n", cfg.SerialVersion)
+		}
+		client.SetSerialVersion(cfg.SerialVersion)
 	}
 
 	// this will set the protocol serial version according to the connected server.

@@ -9,6 +9,7 @@ package nosqldb
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
@@ -265,6 +266,12 @@ type TableResult struct {
 	// TableName represents the name of target table.
 	TableName string `json:"tableName"`
 
+	// compartmentOrNamespace is the compartment id (ocid) or namespace (if on-prem)
+	CompartmentOrNamespace string
+
+	// TableOcid is only used in the cloud service
+	TableOcid string
+
 	// State represents current state of the table.
 	// A table in Active state or Updating state is usable for normal operation.
 	// It is not permitted to perform table modification operations while the
@@ -278,11 +285,38 @@ type TableResult struct {
 	// The returned schema may subject to change in future releases.
 	Schema string `json:"schema"`
 
+	// DDL represents the DDL (create table) statement used to create this table if
+	// available. If the table has been altered since initial creation the
+	// statement is also altered to reflect the current table schema.
+	// The most reliable way to get the DDL statement is using GetTable
+	// on an existing table.
+	// Added in SDK Version 1.4.0
+	DDL string `json:"ddl"`
+
 	// OperationID represents the operation id for an asynchronous operation.
 	// This is empty if the request did not generate a new operation. The value
 	// can be used in GetTableRequest.OperationId to find potential errors
 	// resulting from the operation.
 	OperationID string `json:"operationID"`
+
+	// FreeFormTags represent the free-form tags associated with the table, if any.
+	// Cloud service only.
+	// Added in SDK Version 1.4.0
+	FreeFormTags *types.FreeFormTags
+
+	// DefinedTags represent the defined tags associated with the table, if any.
+	// Cloud service only.
+	// Added in SDK Version 1.4.0
+	DefinedTags *types.DefinedTags
+
+	// MatchETag represents the matchETag associated with this table. The matchETag is an
+	// opaque field that represents the current version of the table itself and
+	// can be used in future table modification operations to only perform
+	// them if the matchETag for the table has not changed. This is an
+	// optimistic concurrency control mechanism.
+	// Cloud service only.
+	// Added in SDK Version 1.4.0
+	MatchETag string `json:"matchETag"`
 }
 
 // String returns a JSON string representation of the TableResult.
@@ -363,6 +397,7 @@ func (r *TableResult) WaitForCompletion(client *Client, timeout, pollInterval ti
 			r.State = res.State
 			r.Limits = res.Limits
 			r.Schema = res.Schema
+			r.DDL = res.DDL
 			return r, nil
 		}
 
@@ -424,8 +459,16 @@ type IndexInfo struct {
 	IndexName string `json:"indexName"`
 
 	// FieldNames represents a slice of string that contains names of fields
-	// constitute the index.
+	// that constitute the index.
 	FieldNames []string `json:"fieldNames"`
+
+	// FieldTypes represents a slice of string that contains types of fields
+	// that constitute the index.
+	// The type is only non-null if the index is on a field of type JSON and
+	// is explicitly typed. If using a server that does not support this
+	// information, this will be null
+	// Added in SDK Version 1.4.0
+	FieldTypes []string `json:"fieldTypes"`
 }
 
 // String returns a JSON string representation of the IndexInfo.
@@ -548,6 +591,13 @@ type TableUsage struct {
 	// StorageThrottleCount represents the number of storage throttling
 	// exceptions on this table in the time period.
 	StorageThrottleCount int `json:"storageThrottleCount"`
+
+	// MaxShardUsagePercent represents the percentage of allowed storage
+	// usage for the shard with the highest usage percentage across all table
+	// shards. This can be used as a gauge of total storage available as well as
+	// a hint for key distribution across shards.
+	// Added in SDK version 1.4.0
+	MaxShardUsagePercent int `json:"maxShardUsagePercent"`
 }
 
 // String returns a JSON string representation of the TableUsage.
@@ -570,6 +620,12 @@ type TableUsageResult struct {
 	// UsageRecords represent a slice of usage records based on the parameters
 	// of the TableUsageRequest used.
 	UsageRecords []TableUsage `json:"usageRecords"`
+
+	// LastIndexReturned indicates the index of the last usage record returned.
+	// This can be provided to TableUsageRequest to indicate a starting point
+	// for listing usage records.
+	// Added in SDK 1.4.0
+	LastIndexReturned int
 }
 
 // String returns a JSON string representation of the TableUsageResult.
@@ -757,6 +813,14 @@ func newQueryResult(req *QueryRequest, isComputed bool) *QueryResult {
 func (r *QueryResult) compute() (err error) {
 	if r.isComputed {
 		return
+	}
+
+	if r.request == nil {
+		return fmt.Errorf("invalid QueryResult: no QueryRequest")
+	}
+
+	if r.request.driver == nil {
+		return fmt.Errorf("invalid QueryResult: no QueryRequest driver")
 	}
 
 	if err = r.request.driver.compute(r); err != nil {

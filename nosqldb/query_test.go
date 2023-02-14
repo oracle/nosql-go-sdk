@@ -150,7 +150,6 @@ func (suite *QueryTestSuite) TestBasicQuery() {
 	suite.executeQuery(stmt, nil, expNumRows, 0, true, expValues)
 }
 
-
 func (suite *QueryTestSuite) TestIllegalQuery() {
 
 	var prepReq *nosqldb.PrepareRequest

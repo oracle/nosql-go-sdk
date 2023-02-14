@@ -216,6 +216,11 @@ func NewMapValue(m map[string]interface{}) *MapValue {
 	}
 }
 
+// NewEmptyMapValue creates an empty MapValue
+func NewEmptyMapValue() *MapValue {
+	return NewMapValue(make(map[string]interface{}))
+}
+
 // NewMapValueFromJSON creates a MapValue from the specified JSON string.
 // It returns an error if jsonStr is not a valid JSON encoding.
 //
@@ -295,6 +300,13 @@ func (m *MapValue) Get(k string) (v interface{}, ok bool) {
 	return
 }
 
+// Contains checks for existence of a key in a MapValue.
+// If the key is present, it returns true, otherwise false.
+func (m *MapValue) Contains(k string) (ok bool) {
+	_, ok = m.m[k]
+	return
+}
+
 // GetByIndex only applies to an ordered MapValue. It looks for key k and value
 // v with specified index idx, which is 1-based index representing the insertion
 // order. For example, the index of first key/value pairs inserted into MapValue
@@ -359,6 +371,32 @@ func (m *MapValue) GetString(k string) (s string, ok bool) {
 	}
 
 	s, ok = v.(string)
+	return
+}
+
+// GetMapValue returns the MapValue value mv associated with the specified key k.
+// If the value does not exist, or is not a MapValue, this method returns
+// an empty value and sets ok to false.
+func (m *MapValue) GetMapValue(k string) (mv MapValue, ok bool) {
+	v, ok := m.Get(k)
+	if !ok {
+		return
+	}
+
+	mv, ok = v.(MapValue)
+	return
+}
+
+// GetBinary returns the binary value b associated with the specified key k.
+// If the value does not exist, or is not a binary value, this method returns
+// an empty byte array and sets ok to false.
+func (m *MapValue) GetBinary(k string) (b []byte, ok bool) {
+	v, ok := m.Get(k)
+	if !ok {
+		return
+	}
+
+	b, ok = v.([]byte)
 	return
 }
 

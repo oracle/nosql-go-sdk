@@ -8,6 +8,7 @@
 package proto
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -17,7 +18,7 @@ const (
 	// DefaultSerialVersion represents the protocol version used to serialize requests
 	// and deserialize results between client and server. The client may reduce this
 	// value when connected to older servers.
-	DefaultSerialVersion int16 = 3
+	DefaultSerialVersion int16 = 4
 
 	// QueryVersion represents the version used for query requests.
 	QueryVersion int16 = 3
@@ -149,6 +150,9 @@ type Reader interface {
 	// ReadString reads a string value.
 	ReadString() (*string, error)
 
+	// ReadNonNilString reads a non-nil string.
+	ReadNonNilString() (string, error)
+
 	// ReadBoolean reads a boolean value.
 	ReadBoolean() (bool, error)
 
@@ -168,6 +172,9 @@ type Reader interface {
 	// ReadByteArrayWithInt reads an array of bytes.
 	// The returned bytes is always non-nil.
 	ReadByteArrayWithInt() ([]byte, error)
+
+	// GetBuffer returns the underlying bytes.Buffer.
+	GetBuffer() *bytes.Buffer
 }
 
 // Writer is a protocol writer used to encode data to byte sequences and write to the output.
@@ -183,6 +190,9 @@ type Writer interface {
 
 	// WriteInt writes an int32 value.
 	WriteInt(value int) (int, error)
+
+	// WriteIntAtOffset writes an int32 value at a specific offset.
+	WriteIntAtOffset(value int, offset int) (int, error)
 
 	// WritePackedInt writes a packed int32 value.
 	WritePackedInt(value int) (int, error)

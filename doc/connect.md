@@ -303,6 +303,7 @@ database. In addition a running proxy service is required. See [Oracle NoSQL
 Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads,
 and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
 
+
 #### Configure for non-secure on-premise Oracle NoSQL Database
 
 To connect an application to a non-secure NoSQL database, specify the endpoint at

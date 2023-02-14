@@ -296,7 +296,6 @@ func (suite SmokeTestSuite) TestSmoke() {
 	suite.Require().NoErrorf(err, "Prepare(stmt=%s): %v", stmt, err)
 
 	// Bind the variables and query.
-	// prepRes.PreparedStatement.BindVariables = make(map[string]interface{}, 1)
 	clong := int64(11)
 	for i := 0; i < 5; i++ {
 		prepRes.PreparedStatement.SetVariable("$cl", clong)
