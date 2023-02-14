@@ -13,10 +13,10 @@ Th Go SDK requires:
   - An Oracle Cloud Infrastructure account
   - A user created in that account, in a group with a policy that grants the desired permissions.
 * For the Oracle NoSQL Database Cloud Simulator:
-  - See [Download Oracle NoSQL Cloud Simulator](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/downloading-oracle-nosql-cloud-simulator.html) to download and start the Cloud Simulator.
+  - See [Download Oracle NoSQL Cloud Simulator](https://www.oracle.com/downloads/cloud/nosql-cloud-sdk-downloads.html) to download and start the Cloud Simulator.
 * For the on-premise Oracle NoSQL Database:
   - An instance of the database, see [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html).
-  - A running proxy server, see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/22.1/admin/proxy-and-driver.html) for proxy configuration information.
+  - A running proxy server, see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
 
 ## Downloading and Installing the SDK
 
@@ -115,7 +115,7 @@ Access Management) service:
 
 ##### Acquire Credentials for the Oracle NoSQL Cloud Service
 
-See [Acquiring Credentials](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/acquiring-credentials.html) for details of credentials you will need to configure an application.
+See [Authentication to connect to Oracle NoSQL Database](https://docs.oracle.com/en/cloud/paas/nosql-cloud/dtddt/index.html) for details of credentials you will need to configure an application.
 
 These steps only need to be performed one time for a user. If they have already
 been done they can be skipped. You need to obtain the following credentials:
@@ -278,7 +278,7 @@ Cloud Service. Before using the Cloud Service it is recommended that users start
 with the Cloud Simulator to become familiar with the interfaces supported by
 the SDK.
 
-See [Download Oracle NoSQL Cloud Simulator](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/downloading-oracle-nosql-cloud-simulator.html) to download and start the Cloud Simulator.
+See [Download Oracle NoSQL Cloud Simulator](https://www.oracle.com/downloads/cloud/nosql-cloud-sdk-downloads.html) to download and start the Cloud Simulator.
 
 The Cloud Simulator does not require the credentials and authentication
 information required by the Oracle NoSQL Cloud Service. The Cloud
@@ -301,7 +301,8 @@ client, err := nosqldb.NewClient(cfg)
 The on-premise configuration requires a running instance of the Oracle NoSQL
 database. In addition a running proxy service is required. See [Oracle NoSQL
 Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads,
-and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.1/admin/proxy-and-driver.html) for proxy configuration information.
+and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
+
 
 #### Configure for non-secure on-premise Oracle NoSQL Database
 
