@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ### Changed
 - Updated yaml.v2 to 2.4.0
-- Updaated copyrights to 2023
+- Updated copyrights to 2023
 - Changed Version tests to be tolerant of serial versions
 
 ## 1.4.0 - 2022-12-15
