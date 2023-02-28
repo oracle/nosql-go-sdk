@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -86,6 +87,11 @@ func (kp testKeyProvider) PrivateRSAKey() (*rsa.PrivateKey, error) {
 	pass := ""
 	key, e := PrivateKeyFromBytes([]byte(testPrivateKey), &pass)
 	return key, e
+}
+
+func (kp testKeyProvider) ExpirationTime() time.Time {
+	// TODO: more expiry tests
+	return time.Now().Add(24 * time.Hour)
 }
 
 func (kp testKeyProvider) KeyID() (string, error) {

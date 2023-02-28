@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/stretchr/testify/assert"
@@ -119,6 +120,11 @@ func (m *mockFederationClient) PrivateKey() (*rsa.PrivateKey, error) {
 func (m *mockFederationClient) SecurityToken() (string, error) {
 	args := m.Called()
 	return args.String(0), args.Error(1)
+}
+
+func (m *mockFederationClient) ExpirationTime() time.Time {
+	// TODO: more expiry tests
+	return time.Now().Add(24 * time.Hour)
 }
 
 func (m *mockFederationClient) GetClaim(key string) (interface{}, error) {
