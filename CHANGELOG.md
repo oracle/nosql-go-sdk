@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Changed
+- Updated yaml.v2 to 2.4.0
+- Updated copyrights to 2023
+- Changed Version tests to be tolerant of serial versions
+
 ## 1.4.0 - 2022-12-15
 
 ### Added

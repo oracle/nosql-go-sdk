@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2022 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -1845,7 +1845,7 @@ func (suite *DataOpsTestSuite) checkGetResult(req *nosqldb.GetRequest, res *nosq
 		}
 
 		if expVersion != nil {
-			suite.Equalf(expVersion, res.Version, "unexpected version")
+			suite.Truef(test.VersionsEqual(expVersion, res.Version), "unexpected version")
 		} else {
 			suite.NotNilf(res.Version, "unexpected version")
 		}
@@ -1901,7 +1901,7 @@ func (suite *DataOpsTestSuite) checkExistingValueVersion(res *nosqldb.WriteResul
 
 		suite.NotNilf(res.ExistingVersion, "previous version should have been non-nil")
 		if expPrevVersion != nil {
-			suite.Equalf(expPrevVersion, res.ExistingVersion, "unexpected previous version")
+			suite.Truef(test.VersionsEqual(expPrevVersion, res.ExistingVersion), "unexpected previous version")
 		}
 
 	} else {

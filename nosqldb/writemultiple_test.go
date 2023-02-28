@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2022 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -852,7 +852,7 @@ func (suite *WriteMultipleTestSuite) verifyResultAborted(res *nosqldb.WriteMulti
 	suite.Nilf(opRes.Version, "version should have been nil")
 
 	if expFailOpPrevVersion != nil {
-		suite.Equalf(expFailOpPrevVersion, opRes.ExistingVersion, "wrong existing version")
+		suite.Truef(test.VersionsEqual(expFailOpPrevVersion, opRes.ExistingVersion), "wrong existing version")
 	} else {
 		suite.Nilf(opRes.ExistingVersion, "existing version should have been nil")
 	}

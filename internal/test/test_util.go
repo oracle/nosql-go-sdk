@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2022 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -8,6 +8,7 @@
 package test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -334,6 +335,26 @@ func byteSliceEqual(b1 []byte, v2 interface{}) bool {
 	default:
 		return false
 	}
+}
+
+func VersionsEqual(v1, v2 types.Version) bool {
+	arr1 := []byte(v1)
+	arr2 := []byte(v2)
+	if bytes.Equal(arr1, arr2) {
+		return true
+	}
+	// byte 7 (0-offset) of the Version is a serial version that may differ.
+	// if that's the only byte different then the two versions are
+	// essentially the same.
+	if (len(arr1) != len(arr2)) || len(arr1) < 9 {
+		return false
+	}
+	// Compare 0-6
+	if bytes.Equal(arr1[:7], arr2[:7]) == false {
+		return false
+	}
+	// Compare 8-end
+	return bytes.Equal(arr1[8:], arr2[8:])
 }
 
 // binaryPrecision returns the closest binary precision for the specified decimal precision.
