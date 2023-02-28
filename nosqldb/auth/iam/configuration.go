@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
 )
@@ -58,6 +59,11 @@ func NewRawConfigurationProvider(tenancy, user, region, fingerprint, privateKey 
 
 func (p rawConfigurationProvider) PrivateRSAKey() (key *rsa.PrivateKey, err error) {
 	return PrivateKeyFromBytes([]byte(p.privateKey), p.privateKeyPassphrase)
+}
+
+func (p rawConfigurationProvider) ExpirationTime() time.Time {
+	// raw configs don't expire
+	return time.Now().Add(24 * time.Hour)
 }
 
 func (p rawConfigurationProvider) KeyID() (keyID string, err error) {
@@ -299,6 +305,11 @@ func (p fileConfigurationProvider) KeyFingerprint() (value string, err error) {
 	}
 	value, err = presentOrError(info.Fingerprint, hasFingerprint, info.PresentConfiguration, "fingerprint")
 	return
+}
+
+func (p fileConfigurationProvider) ExpirationTime() time.Time {
+	// file configs don't expire
+	return time.Now().Add(24 * time.Hour)
 }
 
 func (p fileConfigurationProvider) KeyID() (keyID string, err error) {

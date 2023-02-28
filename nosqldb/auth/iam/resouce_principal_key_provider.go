@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 )
 
 const (
@@ -148,6 +149,10 @@ func (p *resourcePrincipalKeyProvider) KeyID() (string, error) {
 		return "", fmt.Errorf("failed to get security token: %s", err.Error())
 	}
 	return fmt.Sprintf("ST$%s", securityToken), nil
+}
+
+func (p *resourcePrincipalKeyProvider) ExpirationTime() time.Time {
+	return p.FederationClient.ExpirationTime()
 }
 
 func (p *resourcePrincipalKeyProvider) Region() (string, error) {
