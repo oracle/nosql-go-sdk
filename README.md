@@ -25,7 +25,7 @@ This project is open source and maintained by Oracle Corp.
   - Download the Oracle NoSQL Database Server (on-premise) and the Oracle NoSQL
 Database Proxy (aka HTTP Proxy) at [here](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html).
     >***NOTE***: The on-premise configuration requires a running instance of the HTTP Proxy,
-    see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/19.3/admin/proxy-and-driver.html) for HTTP proxy configuration information.
+    see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for HTTP proxy configuration information.
 
 
 ## Installation
@@ -189,7 +189,7 @@ defer client.Close()
 
 The Oracle NoSQL Cloud Simulator is a useful way to use this SDK to connect to a local server that supports the same protocol.
 
-See [Download the Oracle NoSQL Cloud Simulator](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/download-oracle-nosql-cloud-simulator.html) to download and start the Cloud Simulator.
+See [Download the Oracle NoSQL Cloud Simulator](https://www.oracle.com/downloads/cloud/nosql-cloud-sdk-downloads.html) to download and start the Cloud Simulator.
 
 The Cloud Simulator should not be used for deploying production applications or important data, but it does allow for rapid development and testing.
 
@@ -220,7 +220,7 @@ defer client.Close()
 
 ### Configure for the On-Premise Oracle NoSQL Database
 
-The on-premise configuration requires a running instance of the Oracle NoSQL database. In addition a running proxy service is required. See [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads, and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.1/admin/proxy-and-driver.html) for proxy configuration information.
+The on-premise configuration requires a running instance of the Oracle NoSQL database. In addition a running proxy service is required. See [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads, and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
 
 In this case, the `Endpoint` config parameter should point to the NoSQL proxy host and port location.
 
@@ -568,7 +568,7 @@ for details on how to build and run the examples.
 
 There are a few ways to get help or report issues:
 - Open an issue in the [Issues](https://github.com/oracle/nosql-go-sdk/issues) page.
-- Post your question on the [Oracle NoSQL Database Community](https://community.oracle.com/community/groundbreakers/database/nosql_database).
+- Post your question on the [Oracle NoSQL Database Community](https://forums.oracle.com/ords/apexds/domain/dev-community/category/nosql_database).
 - [Email to nosql\_sdk\_help\_grp@oracle.com](mailto:nosql_sdk_help_grp@oracle.com)
 
 When requesting help please be sure to include as much detail as possible,

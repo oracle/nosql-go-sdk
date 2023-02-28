@@ -308,7 +308,14 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 		return err
 	}
 	p.signature = req.Header.Get(requestHeaderAuthorization)
+
 	p.signatureExpiresAt = now.Add(p.expiryInterval)
+
+	// need to use min(expiryInterval, tokenExpiration)
+	exp := p.signer.ExpirationTime()
+	if p.signatureExpiresAt.After(exp) {
+		p.signatureExpiresAt = exp
+	}
 
 	return nil
 }

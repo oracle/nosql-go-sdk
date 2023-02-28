@@ -14,17 +14,20 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // HTTPRequestSigner the interface to sign a request
 type HTTPRequestSigner interface {
 	Sign(r *http.Request) error
+	ExpirationTime() time.Time
 }
 
 // KeyProvider interface that wraps information about the key's account owner
 type KeyProvider interface {
 	PrivateRSAKey() (*rsa.PrivateKey, error)
 	KeyID() (string, error)
+	ExpirationTime() time.Time
 }
 
 const signerVersion = "1"
@@ -119,6 +122,13 @@ func (signer ociRequestSigner) getSigningHeaders(r *http.Request) []string {
 	}
 
 	return result
+}
+
+func (signer ociRequestSigner) ExpirationTime() time.Time {
+	if signer.KeyProvider == nil {
+		return time.Now().Add(-time.Second)
+	}
+	return signer.KeyProvider.ExpirationTime()
 }
 
 func (signer ociRequestSigner) getSigningString(request *http.Request) string {
@@ -239,7 +249,7 @@ func (signer ociRequestSigner) computeSignature(request *http.Request) (signatur
 
 // Sign signs the http request, by inspecting the necessary headers. Once signed
 // the request will have the proper 'Authorization' header set, otherwise
-// and error is returned
+// an error is returned
 func (signer ociRequestSigner) Sign(request *http.Request) (err error) {
 	if signer.ShouldHashBody(request) {
 		err = calculateHashOfBody(request)

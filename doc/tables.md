@@ -75,7 +75,7 @@ for Oracle NoSQL Cloud Simulator
 3. [kvstore.AccessTokenProvider](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb/auth/kvstore#AccessTokenProvider)
 for Oracle NoSQL Database on-premise
 
-See the [Connect Tutorial](https://github.com/oracle/nosql-go-sdk/nosqldb/doc/connect.md)
+See the [Connect Tutorial](https://github.com/oracle/nosql-go-sdk/blob/main/doc/connect.md)
 for details on how to provide client configurations and authorization
 information for different environments.
 
@@ -86,11 +86,11 @@ Learn how to create tables and indexes in Oracle NoSQL Database.
 You must create a table before you can manipulate data on the table. Before 
 creating a table, learn about:
 
-* Design considerations for tables. See [Table Design](https://docs.oracle.com/en/cloud/paas/nosql-cloud/csnsd/table-design.html#GUID-7A409201-F240-4DE5-A0C1-545ADFCBFB77).
+* Design considerations for tables. See [Table Design](https://docs.oracle.com/en/cloud/paas/nosql-cloud/dtons/index.html).
 * Supported data types for the Oracle NoSQL Database. See
-[Supported Data Types](https://docs.oracle.com/pls/topic/lookup?ctx=en/cloud/paas/nosql-cloud&id=CSNSD-GUID-833B2B2A-1A32-48AB-A19E-413EAFB964B8).
-* For the Oracle NoSQL Database Cloud Service limits. See [Oracle NoSQL Database Cloud Limits](https://docs.oracle.com/pls/topic/lookup?ctx=en/cloud/paas/nosql-cloud&id=CSNSD-GUID-30129AB3-906B-4E71-8EFB-8E0BBCD67144).
-These limits are not relevant on-premise.
+[Supported Data Types](https://docs.oracle.com/en/cloud/paas/nosql-cloud/rnpxl/index.html#RNPXL-GUID-833B2B2A-1A32-48AB-A19E-413EAFB964B8).
+* For the Oracle NoSQL Database Cloud Service limits, See [Oracle NoSQL Database Cloud Limits](https://docs.oracle.com/en/cloud/paas/nosql-cloud/fkdyw/index.html).
+These limits are not relevant for on-premises.
 
 Use the [nosqldb.TableRequest](https://godoc.org/github.com/oracle/nosql-go-sdk/nosqldb#TableRequest) 
 to specify information for creating tables or indexes:

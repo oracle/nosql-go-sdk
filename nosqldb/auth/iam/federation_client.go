@@ -34,6 +34,7 @@ type federationClient interface {
 	claimHolder
 	PrivateKey() (*rsa.PrivateKey, error)
 	SecurityToken() (string, error)
+	ExpirationTime() time.Time
 }
 
 // claimHolder is implemented by any token interface that provides access to the
@@ -70,6 +71,16 @@ func (c *genericFederationClient) SecurityToken() (token string, err error) {
 		return "", err
 	}
 	return c.securityToken.String(), nil
+}
+
+func (c *genericFederationClient) ExpirationTime() time.Time {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	if err := c.renewKeyAndSecurityTokenIfNotValid(); err != nil {
+		return time.Now().Add(-time.Second)
+	}
+	return c.securityToken.ExpirationTime()
 }
 
 func (c *genericFederationClient) renewKeyAndSecurityTokenIfNotValid() (err error) {
@@ -268,6 +279,16 @@ func (c *x509FederationClient) SecurityToken() (token string, err error) {
 		return "", err
 	}
 	return c.securityToken.String(), nil
+}
+
+func (c *x509FederationClient) ExpirationTime() time.Time {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	if err := c.renewSecurityTokenIfNotValid(); err != nil {
+		return time.Now().Add(-time.Second)
+	}
+	return c.securityToken.ExpirationTime()
 }
 
 func (c *x509FederationClient) renewSecurityTokenIfNotValid() (err error) {
@@ -619,6 +640,7 @@ func (s *inMemorySessionKeySupplier) PublicKeyPemRaw() []byte {
 type securityToken interface {
 	fmt.Stringer
 	Valid() bool
+	ExpirationTime() time.Time
 
 	claimHolder
 }
@@ -633,7 +655,11 @@ func newInstancePrincipalToken(tokenString string) (newToken securityToken, err 
 	if jwtToken, err = parseJwt(tokenString); err != nil {
 		return nil, fmt.Errorf("failed to parse the token string \"%s\": %s", tokenString, err.Error())
 	}
-	return &instancePrincipalToken{tokenString, jwtToken}, nil
+	newToken = &instancePrincipalToken{tokenString, jwtToken};
+	if !newToken.Valid() {
+		return nil, fmt.Errorf("Expired or invalid token string \"%s\"", tokenString)
+	}
+	return
 }
 
 func (t *instancePrincipalToken) String() string {
@@ -642,6 +668,10 @@ func (t *instancePrincipalToken) String() string {
 
 func (t *instancePrincipalToken) Valid() bool {
 	return !t.jwtToken.expired()
+}
+
+func (t *instancePrincipalToken) ExpirationTime() time.Time {
+	return t.jwtToken.expirationTime()
 }
 
 var (
