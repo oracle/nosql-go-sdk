@@ -2036,12 +2036,7 @@ func readNsonTimestampFromString(r proto.Reader) (time.Time, error) {
 	if err != nil {
 		return val, err
 	}
-	val, err = time.Parse(types.ISO8601ZLayout, str)
-	if err == nil {
-		return val, nil
-	}
-	// try without the "Z"
-	return time.Parse(types.ISO8601Layout, str)
+	return types.ParseDateTime(str)
 }
 
 func readNsonOperationResult(r proto.Reader) (res *OperationResult, err error) {

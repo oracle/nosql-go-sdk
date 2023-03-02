@@ -941,6 +941,15 @@ func (suite *DataOpsTestSuite) TestNonNumericDataTypes() {
 	tsStrVal := "2019-05-02T10:23:42.123"
 	tsVal, err := time.Parse(types.ISO8601Layout, tsStrVal)
 	suite.Require().NoErrorf(err, "failed to parse %s as time.Time, got error %v.", tsStrVal, err)
+	tsStrZVal := "2019-05-02T10:23:42.123Z"
+	_, err = time.Parse(types.ISO8601ZLayout, tsStrZVal)
+	suite.Require().NoErrorf(err, "failed to parse %s as time.Time, got error %v.", tsStrZVal, err)
+	tsStrNoTVal := "2019-05-02 10:23:42.123"
+	_, err = time.Parse(types.ISO8601NoTLayout, tsStrNoTVal)
+	suite.Require().NoErrorf(err, "failed to parse %s as time.Time, got error %v.", tsStrNoTVal, err)
+	tsStrZNoTVal := "2019-05-02 10:23:42.123Z"
+	_, err = time.Parse(types.ISO8601ZNoTLayout, tsStrZNoTVal)
+	suite.Require().NoErrorf(err, "failed to parse %s as time.Time, got error %v.", tsStrZNoTVal, err)
 
 	type nonNumericTest struct {
 		targetField   string
@@ -1473,10 +1482,7 @@ func (suite *DataOpsTestSuite) runTimestampTest(table string, ts interface{}, pu
 	switch ts.(type) {
 	case string:
 		strVal := ts.(string)
-		tsTimeVal, err = time.Parse(types.ISO8601Layout, strVal)
-		if err != nil {
-			tsTimeVal, err = time.Parse(types.ISO8601ZLayout, strVal)
-		}
+		tsTimeVal, err = types.ParseDateTime(strVal)
 		suite.Require().NoErrorf(err, "failed to parse %q into time.Time, got error: %v", strVal, err)
 
 	case time.Time:
