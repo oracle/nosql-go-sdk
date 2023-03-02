@@ -446,6 +446,25 @@ const ISO8601Layout = "2006-01-02T15:04:05.999999999"
 // ISO8601ZLayout includes literal "Z"
 const ISO8601ZLayout = "2006-01-02T15:04:05.999999999Z"
 
+// ISO8601NoTLayout is the same as above woth a space instead of a 'T'
+const ISO8601NoTLayout = "2006-01-02 15:04:05.999999999"
+
+// ISO8601ZNoTLayout is the same as above woth a space instead of a 'T'
+const ISO8601ZNoTLayout = "2006-01-02 15:04:05.999999999Z"
+
+func ParseDateTime(datestr string) (time.Time, error) {
+        if v, err := time.Parse(ISO8601Layout, datestr) ; err == nil {
+            return v, nil
+        }
+        if v, err := time.Parse(ISO8601ZLayout, datestr) ; err == nil {
+            return v, nil
+        }
+        if v, err := time.Parse(ISO8601NoTLayout, datestr) ; err == nil {
+            return v, nil
+        }
+        return time.Parse(ISO8601ZNoTLayout, datestr)
+}
+
 // FieldRange defines a range of values to be used in a Client.MultiDelete()
 // operation, as specified in MultiDeleteRequest.FieldRange.
 //

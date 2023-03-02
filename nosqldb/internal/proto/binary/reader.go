@@ -15,7 +15,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"time"
 	"unicode/utf8"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -309,11 +308,7 @@ func (r *Reader) ReadFieldValue() (types.FieldValue, error) {
 		if s == nil {
 			return nil, errors.New("binary.Reader: invalid Timestamp value")
 		}
-		v, err := time.Parse(types.ISO8601Layout, *s)
-		if err == nil {
-			return v, nil
-		}
-		return time.Parse(types.ISO8601ZLayout, *s)
+		return types.ParseDateTime(*s)
 
 	case types.Number:
 		s, err := r.ReadString()
