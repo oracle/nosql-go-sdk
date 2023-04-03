@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## Unreleased
 
+### Added
+- Latest Oracle Cloud Infrastructure regions and region codes: MTY, STR, BEG, VLL, YUM
+
 ### Changed
 - Updated yaml.v2 to 2.4.0
 - Updated copyrights to 2023
