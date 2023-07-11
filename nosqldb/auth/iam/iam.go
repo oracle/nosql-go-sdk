@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 
 const (
 	requestHeaderDate                = "Date"
+	requestHeaderDelegationToken     = "opc-obo-token"
 	requestHeaderAuthorization       = "Authorization"
 	requestHeaderXNoSQLCompartmentID = "X-Nosql-Compartment-Id"
 )
@@ -40,6 +42,9 @@ type SignatureProvider struct {
 
 	// we need this for default compartmentID
 	compartmentID string
+
+	// delegation token - optional
+	delegationToken string
 
 	// cached signature string
 	signature string
@@ -194,6 +199,22 @@ func NewSignatureProviderWithInstancePrincipal(compartmentID string) (*Signature
 	return NewSignatureProviderWithConfiguration(configProvider, compartmentID)
 }
 
+// NewDelegationSignatureProviderWithInstancePrincipal creates a signature provider with
+// instance principal using a delegation token. This can be used for applications that access
+// NoSQL cloud service from within an Oracle Compute Instance.
+// The delegation token allows the instance to assume the privileges
+// of the user for which the token was created.
+//
+// The compartmentID specifies the OCID of compartment to which the Oracle
+// NoSQL tables belong. If empty, the tenancy OCID is used.
+func NewDelegationSignatureProviderWithInstancePrincipal(compartmentID string, delegationToken string) (*SignatureProvider, error) {
+	sp, err := NewSignatureProviderWithInstancePrincipal(compartmentID)
+	if err != nil {
+		return nil, err
+	}
+	return sp.SetDelegationToken(delegationToken)
+}
+
 // NewSignatureProviderWithConfiguration creates a signature provider with
 // the supplied configuration.
 //
@@ -220,9 +241,6 @@ func NewSignatureProviderWithConfiguration(configProvider ConfigurationProvider,
 		}
 	}
 
-	// we currently don't sign the -body- of the requests
-	signer := RequestSignerExcludeBody(configProvider)
-
 	// create a new signature every 5 minutes
 	expiryInterval, _ := time.ParseDuration("5m")
 
@@ -232,11 +250,11 @@ func NewSignatureProviderWithConfiguration(configProvider ConfigurationProvider,
 		signatureFormattedDate: "",
 		expiryInterval:         expiryInterval,
 		compartmentID:          compartmentID,
-		signer:                 signer,
 		configProvider:         configProvider,
 	}
 
-	return p, nil
+	// this will also set the signer
+	return p.SetDelegationToken("")
 }
 
 // fileExists checks if a file exists and is not a directory.
@@ -267,6 +285,26 @@ func (p *SignatureProvider) AuthorizationScheme() string {
 	return auth.Signature
 }
 
+// SetDelegationToken is used to set a delegation token for the signature provider.
+// Passing an empty string will configure the provider to not use delegation.
+func (p *SignatureProvider) SetDelegationToken(delegationToken string) (*SignatureProvider, error) {
+	if delegationToken == "" {
+		p.delegationToken = delegationToken
+		// we currently don't sign the -body- of the requests
+		p.signer = RequestSignerExcludeBody(p.configProvider)
+		return p, nil
+	}
+	// check token format
+	parts := strings.Split(delegationToken, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("given delegation token \"%s\" is not in valid JWT format", delegationToken)
+	}
+	p.delegationToken = delegationToken
+	// we currently don't sign the -body- of the requests
+	p.signer = DelegationRequestSignerExcludeBody(p.configProvider)
+	return p, nil
+}
+
 // AuthorizationString isn't used for IAM; instead, each individual request is
 // signed via SignHTTPRequest()
 func (p *SignatureProvider) AuthorizationString(req auth.Request) (auth string, err error) {
@@ -287,6 +325,11 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 
 	// no matter what, we set the compartmentID in the header
 	req.Header.Set(requestHeaderXNoSQLCompartmentID, p.compartmentID)
+
+	// if used, set the delegation token
+	if p.delegationToken != "" {
+		req.Header.Set(requestHeaderDelegationToken, p.delegationToken)
+	}
 
 	// use cached signature and date, if not expired
 	now := time.Now()
