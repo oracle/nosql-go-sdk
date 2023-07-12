@@ -47,6 +47,7 @@ type ociRequestSigner struct {
 
 var (
 	defaultGenericHeaders    = []string{"date", "(request-target)", "host"}
+	defaultDelegationHeaders = []string{"date", "(request-target)", "host", "opc-obo-token"}
 	defaultBodyHeaders       = []string{"content-length", "content-type", "x-content-sha256"}
 	defaultBodyHashPredicate = func(r *http.Request) bool {
 		return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
@@ -56,6 +57,12 @@ var (
 // DefaultGenericHeaders list of default generic headers that is used in signing
 func DefaultGenericHeaders() []string {
 	return makeACopy(defaultGenericHeaders)
+}
+
+// DefaultDelegationHeaders list of default headers that is used in signing with
+// delegation token
+func DefaultDelegationHeaders() []string {
+	return makeACopy(defaultDelegationHeaders)
 }
 
 // DefaultBodyHeaders list of default body headers that is used in signing
@@ -68,13 +75,27 @@ func DefaultRequestSigner(provider KeyProvider) HTTPRequestSigner {
 	return RequestSigner(provider, defaultGenericHeaders, defaultBodyHeaders)
 }
 
+// DelegationRequestSigner creates a signer with parameters including delegation token.
+func DelegationRequestSigner(provider KeyProvider) HTTPRequestSigner {
+	return RequestSigner(provider, defaultDelegationHeaders, defaultBodyHeaders)
+}
+
 // RequestSignerExcludeBody creates a signer without hash the body.
 func RequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 	bodyHashPredicate := func(r *http.Request) bool {
-		// week request signer will not hash the body
+		// weak request signer will not hash the body
 		return false
 	}
 	return RequestSignerWithBodyHashingPredicate(provider, defaultGenericHeaders, defaultBodyHeaders, bodyHashPredicate)
+}
+
+// DelegationRequestSignerExcludeBody creates a signer without hash the body but including delegation token.
+func DelegationRequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
+	bodyHashPredicate := func(r *http.Request) bool {
+		// weak request signer will not hash the body
+		return false
+	}
+	return RequestSignerWithBodyHashingPredicate(provider, defaultDelegationHeaders, defaultBodyHeaders, bodyHashPredicate)
 }
 
 // NewSignerFromOCIRequestSigner creates a copy of the request signer and attaches the new SignerBodyHashPredicate

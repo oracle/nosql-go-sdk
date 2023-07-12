@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ### Added
 - Latest Oracle Cloud Infrastructure regions and region codes: MTY, STR, BEG, VLL, YUM
+- Added new signature provider methods to allow for delegation (OBO) tokens to be used
+  with Instance Principals:
+     * NewSignatureProviderWithInstancePrincipalDelegation
+     * NewSignatureProviderWithInstancePrincipalDelegationFromFile
 
 ### Changed
 - Updated yaml.v2 to 2.4.0
