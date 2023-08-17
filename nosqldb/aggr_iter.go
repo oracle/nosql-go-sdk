@@ -8,8 +8,10 @@
 package nosqldb
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +24,7 @@ var (
 	_ planIterState = (*aggrIterState)(nil)
 	_ aggrPlanIter  = (*funcSumIter)(nil)
 	_ aggrPlanIter  = (*funcMinMaxIter)(nil)
+	_ aggrPlanIter  = (*funcCollectIter)(nil)
 )
 
 // aggrIterState represents the state for an aggregate plan iterator.
@@ -43,6 +46,13 @@ type aggrIterState struct {
 	// nullInputOnly indicates if input values supplied to the aggregate
 	// operation are all NULLs.
 	nullInputOnly bool
+
+	// collectArray is an array of results from array_collect().
+	// it is typically unordered and may contain duplicates.
+	// it is only sorted if in testing mode or if DISTINCT is used.
+	// note "FieldValue" == "interface{}" (basically any object)
+	// this is roughly equivalent to ArrayValue in java
+	collectArray []types.FieldValue
 }
 
 func newAggrIterState() *aggrIterState {
@@ -52,6 +62,7 @@ func newAggrIterState() *aggrIterState {
 		count:         0,
 		minMax:        types.NullValueInstance,
 		nullInputOnly: true,
+		collectArray:   make([]types.FieldValue, 0),
 	}
 }
 
@@ -60,6 +71,7 @@ func (st *aggrIterState) reset() error {
 	st.count = 0
 	st.minMax = types.NullValueInstance
 	st.nullInputOnly = true
+	st.collectArray = make([]types.FieldValue, 0)
 	return st.iterState.reset()
 }
 
@@ -319,6 +331,119 @@ func (iter *funcSumIter) displayContent(sb *strings.Builder, f *planFormatter) {
 	iter.planIterDelegate.displayPlan(iter.input, sb, f)
 }
 
+// funcSizeIter implements the built-in SQL size() function.
+type funcSizeIter struct {
+	*planIterDelegate
+
+	// The input plan iterator.
+	input planIter
+}
+
+func newFuncSizeIter(r proto.Reader) (iter *funcSizeIter, err error) {
+	delegate, err := newPlanIterDelegate(r, sumFunc)
+	if err != nil {
+		return
+	}
+
+	input, err := deserializePlanIter(r)
+	if err != nil {
+		return
+	}
+
+	iter = &funcSizeIter{
+		planIterDelegate: delegate,
+		input:            input,
+	}
+	return
+}
+
+func (iter *funcSizeIter) open(rcb *runtimeControlBlock) (err error) {
+	rcb.setState(iter.statePos, newAggrIterState())
+	return iter.input.open(rcb)
+}
+
+// reset resets the input iterator so that the next input value can be computed.
+//
+// This method does not reset the state for funcSizeIter, it is the getAggrValue()
+// method that resets the state.
+func (iter *funcSizeIter) reset(rcb *runtimeControlBlock) (err error) {
+	return iter.input.reset(rcb)
+}
+
+func (iter *funcSizeIter) close(rcb *runtimeControlBlock) (err error) {
+	state := rcb.getState(iter.statePos)
+	if state == nil {
+		return nil
+	}
+
+	if err = iter.input.close(rcb); err != nil {
+		return
+	}
+
+	return state.close()
+}
+
+
+// next sets the size of the passed-in map/array.
+func (iter *funcSizeIter) next(rcb *runtimeControlBlock) (more bool, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return false, fmt.Errorf("wrong iterator state type for funcSizeIter, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	if state.isDone() {
+		return false, nil
+	}
+
+	more, err = iter.input.next(rcb)
+	if err != nil {
+		return false, err
+	}
+
+	if more == false {
+		state.done()
+		return false, nil
+	}
+
+	item := iter.input.getResult(rcb)
+
+	if item == types.NullValueInstance {
+		rcb.setRegValue(iter.resultReg, item)
+		state.done()
+		return true, nil
+	}
+
+	size := 0
+	// if map, add size of map (number of elements)
+	// if array, add size of array (number of elements)
+	if mval, ok := item.(map[string]interface{}) ; ok {
+		size = len(mval)
+	} else if aval, ok := item.([]interface{}); ok {
+		size = len(aval)
+	} else if afval, ok := item.([]types.FieldValue); ok {
+		size = len(afval)
+	} else if mapval, ok := item.(*types.MapValue); ok {
+		size = mapval.Len()
+	} else {
+		// otherwise, return an error
+		return false, fmt.Errorf("Input to the size() function has wrong type\n" +
+					"Expected a complex item. Actual item type is:\n%T", item)
+	}
+
+	rcb.setRegValue(iter.resultReg, size)
+	return true, nil
+}
+
+func (iter *funcSizeIter) getPlan() string {
+	return iter.planIterDelegate.getExecPlan(iter)
+}
+
+func (iter *funcSizeIter) displayContent(sb *strings.Builder, f *planFormatter) {
+	iter.planIterDelegate.displayPlan(iter.input, sb, f)
+}
+
 // funcMinMaxIter implements the built-in SQL min() and max() aggregate functions.
 //
 // It is required by the driver to compute the total min/max from the partial
@@ -434,7 +559,7 @@ func (iter *funcMinMaxIter) computeMinMax(rcb *runtimeControlBlock, state *aggrI
 		return nil
 	}
 
-	cmp, err := compareAtomicValues(rcb, true, value, state.minMax)
+	cmp, err := compareAtomicsTotalOrder(rcb, value, state.minMax)
 	if err != nil {
 		return
 	}
@@ -478,140 +603,275 @@ func (iter *funcMinMaxIter) displayContent(sb *strings.Builder, f *planFormatter
 	iter.displayPlan(iter.input, sb, f)
 }
 
-// compareAtomicValues compares two atomic values and returns the result of comparison.
-// This function returns an error if either of the two values is non-atomic or
-// the values are not comparable. Otherwise, the returned res is:
+// funcCollectIter implements the built-in SQL array_collect() function.
 //
-//   0 if v1 == v2
-//   1 if v1 > v2
-//   -1 if v1 < v2
+// It is required by the driver to collect and possibly sort/unique the
+// rows received from the NoSQL database servers.
+type funcCollectIter struct {
+	*planIterDelegate
+
+	// The input plan iterator.
+	input planIter
+
+	// isDistinct specifies if the results should remove duplicates
+	isDistinct bool
+}
+
+func newFuncCollectIter(r proto.Reader) (iter *funcCollectIter, err error) {
+	delegate, err := newPlanIterDelegate(r, collectFunc)
+	if err != nil {
+		return
+	}
+
+	distinct, err := r.ReadBoolean()
+	if err != nil {
+		return
+	}
+
+	input, err := deserializePlanIter(r)
+	if err != nil {
+		return
+	}
+
+	iter = &funcCollectIter{
+		planIterDelegate: delegate,
+		input:            input,
+		isDistinct:       distinct,
+	}
+	return
+}
+
+// getFuncCode returns the function code.
 //
-// Whether the two values are comparable depends on the "forSort" parameter.
-// If true, then values that would otherwise be considered non-comparable are
-// assumed to have the following order:
+// This implements the funcPlanIter interface.
+func (iter *funcCollectIter) getFuncCode() funcCode {
+	if iter.isDistinct {
+		return fnArrayCollectDistinct
+	} else {
+		return fnArrayCollect
+	}
+}
+
+func (iter *funcCollectIter) open(rcb *runtimeControlBlock) (err error) {
+	rcb.setState(iter.statePos, newAggrIterState())
+	return iter.input.open(rcb)
+}
+
+func (iter *funcCollectIter) reset(rcb *runtimeControlBlock) (err error) {
+	return iter.input.reset(rcb)
+}
+
+func (iter *funcCollectIter) close(rcb *runtimeControlBlock) (err error) {
+	state := rcb.getState(iter.statePos)
+	if state == nil {
+		return nil
+	}
+
+	if err = iter.input.close(rcb); err != nil {
+		return
+	}
+
+	return state.close()
+}
+
+func (iter *funcCollectIter) next(rcb *runtimeControlBlock) (more bool, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return false, fmt.Errorf("wrong iterator state type for funcCollectIter, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	if state.isDone() {
+		return false, nil
+	}
+
+	var value types.FieldValue
+
+	for {
+		more, err = iter.input.next(rcb)
+		if err != nil {
+			return false, err
+		}
+
+		if !more {
+			return true, nil
+		}
+
+		value = iter.input.getResult(rcb)
+
+		err = iter.aggregate(rcb, state, value)
+		if err != nil {
+			return false, err
+		}
+	}
+}
+
+// aggregate implements the collection mechanism
+func (iter *funcCollectIter) aggregate(rcb *runtimeControlBlock, state *aggrIterState, value types.FieldValue) (err error) {
+	// isDistinct managed in getAggrValue()
+	if arr, ok := value.([]types.FieldValue); ok {
+		state.collectArray = append(state.collectArray, arr...)
+	} else {
+// TODO: empty/null values ok to ignore
+		return fmt.Errorf("wrong value type in collect.aggregate(): expected "+
+						"FieldValue array, got %T", value)
+	}
+
+	return nil
+}
+
+// getAggrValue returns the final result of the aggregate operation, it also
+// resets the iterator state if the reset flag is set.
 //
-//   NUMERICS < TIMESTAMP < STRING < BOOLEAN < EMPTY < JSON_NULL < NULL
+// This implements the aggrPlanIter interface.
+func (iter *funcCollectIter) getAggrValue(rcb *runtimeControlBlock, reset bool) (v types.FieldValue, err error) {
+	st := rcb.getState(iter.statePos)
+	state, ok := st.(*aggrIterState)
+	if !ok {
+		return nil, fmt.Errorf("wrong iterator state type for funcCollectIter.getAggrValue, "+
+			"expect *aggrIterState, got %T", st)
+	}
+
+	// if in test or isDistinct, sort the array
+	// TODO: skip sort if not in test
+	varray := state.collectArray
+	if varray == nil {
+		return nil, nil
+	}
+
+	errs := make([]error, 0)
+	sort.Slice(varray, func(i, j int) bool {
+		cmp, err := compareTotalOrder(nil, varray[i], varray[j])
+		if err != nil {
+			errs = append(errs, err)
+		}
+		return cmp < 0
+	})
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("Got %d errors trying to sort results. First error: %v",
+							len(errs), errs[0])
+	}
+
+	// if isDistinct, remove duplicates
+	if iter.isDistinct && len(varray) > 1 {
+		var e int = 1
+		for i := 1; i < len(varray); i++ {
+			if cmp, _ := compareTotalOrder(nil, varray[i], varray[i-1]); cmp != 0 {
+				varray[e] = varray[i]
+				e++
+			}
+		}
+		varray = varray[:e]
+	}
+
+	if reset {
+		state.reset()
+	}
+
+	return varray, nil
+}
+
+func (iter *funcCollectIter) getPlan() string {
+	return iter.planIterDelegate.getExecPlan(iter)
+}
+
+func (iter *funcCollectIter) displayContent(sb *strings.Builder, f *planFormatter) {
+	iter.displayPlan(iter.input, sb, f)
+}
+
+
+// compareAtomicsTotalOrder implements a total order among atomic values. The following order is
+// used among values that are not normally comparable with each other:
 //
-func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.FieldValue) (res int, err error) {
+// numerics < timestamps < strings < booleans < binaries < empty < json null < null
+//
+// An error is returned if v1 is not one of the above types (i.e. map or array).
+//
+func compareAtomicsTotalOrder(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res int, err error) {
 	if rcb != nil {
-		rcb.trace(4, "compareAtomicValues() : comparing values %v and %v", v1, v2)
+		rcb.trace(4, "compareAtomicsTotalOrder() : comparing values %v and %v", v1, v2)
 	}
 
 	switch v1 := v1.(type) {
 	case *types.NullValue:
-		if forSort {
-			switch v2.(type) {
-			case *types.NullValue:
-				res = 0
-			default:
-				res = 1
-			}
-			return
+		if _, ok := v2.(*types.NullValue); ok {
+			res = 0
+		} else {
+			res = 1
 		}
+		return
 
 	case *types.JSONNullValue:
 		if _, ok := v2.(*types.JSONNullValue); ok {
 			res = 0
-			return
+		} else if _, ok = v2.(*types.NullValue); ok {
+			res = -1
+		} else {
+			res = 1
 		}
-
-		if forSort {
-			switch v2.(type) {
-			case *types.NullValue:
-				res = -1
-			default:
-				res = 1
-			}
-			return
-		}
+		return
 
 	case *types.EmptyValue:
 		if _, ok := v2.(*types.EmptyValue); ok {
 			res = 0
-			return
+		} else if _, ok = v2.(*types.NullValue); ok {
+			res = -1
+		} else if _, ok = v2.(*types.JSONNullValue); ok {
+			res = -1
+		} else {
+			res = 1
 		}
-
-		if forSort {
-			switch v2.(type) {
-			case *types.JSONNullValue, *types.NullValue:
-				res = -1
-			default:
-				res = 1
-			}
-			return
-		}
+		return
 
 	case int:
 		switch v2 := v2.(type) {
 		case int:
 			res = compareInts(v1, v2)
-			return
 		case int64:
 			res = compareInt64s(int64(v1), v2)
-			return
 		case float64:
 			res = compareFloat64s(float64(v1), v2)
-			return
 		case *big.Rat:
 			rat1 := new(big.Rat).SetInt64(int64(v1))
 			res = rat1.Cmp(v2)
-			return
-		case time.Time, string, *string, bool,
-			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			// INTEGER value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
-			if forSort {
-				res = -1
-				return
-			}
+		default:
+			res = -1
 		}
+		return
 
 	case int64:
 		switch v2 := v2.(type) {
 		case int:
 			res = compareInt64s(v1, int64(v2))
-			return
 		case int64:
 			res = compareInt64s(v1, v2)
-			return
 		case float64:
 			res = compareFloat64s(float64(v1), v2)
-			return
 		case *big.Rat:
 			rat1 := new(big.Rat).SetInt64(v1)
 			res = rat1.Cmp(v2)
-			return
-		case time.Time, string, *string, bool,
-			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			// LONG value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
-			if forSort {
-				res = -1
-				return
-			}
+		default:
+			res = -1
 		}
+		return
 
 	case float64:
 		switch v2 := v2.(type) {
 		case int:
 			res = compareFloat64s(float64(v1), float64(v2))
-			return
 		case int64:
 			res = compareFloat64s(float64(v1), float64(v2))
-			return
 		case float64:
 			res = compareFloat64s(float64(v1), v2)
-			return
 		case *big.Rat:
 			rat1 := new(big.Rat).SetFloat64(v1)
 			res = rat1.Cmp(v2)
-			return
-		case time.Time, string, *string, bool,
-			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			// DOUBLE value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
-			if forSort {
-				res = -1
-				return
-			}
+		default:
+			res = -1
 		}
+		return
 
 	case *big.Rat:
 		rat2 := new(big.Rat)
@@ -619,26 +879,18 @@ func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.Fi
 		case int:
 			rat2.SetInt64(int64(v2))
 			res = v1.Cmp(rat2)
-			return
 		case int64:
 			rat2.SetInt64(v2)
 			res = v1.Cmp(rat2)
-			return
 		case float64:
 			rat2.SetFloat64(v2)
 			res = v1.Cmp(rat2)
-			return
 		case *big.Rat:
 			res = v1.Cmp(v2)
-			return
-		case time.Time, string, *string, bool,
-			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			// NUMBER value is less than TIMESTAMP/STRING/BOOLEAN/EMPTY/JSON_NULL/NULL
-			if forSort {
-				res = -1
-				return
-			}
+		default:
+			res = -1
 		}
+		return
 
 	case time.Time:
 		switch v2 := v2.(type) {
@@ -651,21 +903,12 @@ func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.Fi
 			default:
 				res = 1
 			}
-			return
-
 		case int, int64, float64, *big.Rat:
-			if forSort {
-				res = 1
-				return
-			}
-
-		case string, *string, bool,
-			*types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			for forSort {
-				res = -1
-				return
-			}
+			res = 1
+		default:
+			res = -1
 		}
+		return
 
 	case *string, string:
 		str1, ok1 := stringValue(v1)
@@ -684,41 +927,136 @@ func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.Fi
 			default:
 				res = 0
 			}
-			return
 		case int, int64, float64, *big.Rat, time.Time:
-			// STRING value is greater than INTEGER/LONG/DOUBLE/NUMBER/TIMESTAMP
-			if forSort {
-				res = 1
-				return
-			}
-		case bool, *types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			// STRING value is less than BOOLEAN/EMPTY/JSON_NULL/NULL
-			if forSort {
-				res = -1
-				return
-			}
+			res = 1
+		default:
+			res = -1
 		}
+		return
 
 	case bool:
 		switch v2 := v2.(type) {
 		case bool:
 			res = compareBools(v1, v2)
-			return
-		case int, int64, float64, *big.Rat, time.Time, string, *string:
-			if forSort {
-				res = 1
-				return
-			}
-		case *types.EmptyValue, *types.JSONNullValue, *types.NullValue:
-			if forSort {
-				res = -1
-				return
-			}
+		case int, int64, float64, *big.Rat, time.Time, *string, string:
+			res = 1
+		default:
+			res = -1
 		}
+		return
+
+	case []byte:
+		switch v2 := v2.(type) {
+		case []byte:
+			res = bytes.Compare(v1, v2)
+		case int, int64, float64, *big.Rat, time.Time, *string, string, bool:
+			res = 1
+		default:
+			res = -1
+		}
+		return
 	}
 
 	err = nosqlerr.NewIllegalState("cannot compare value of type %T with value of type %T", v1, v2)
 	return
+}
+
+
+// compareTotalOrder implements a total order among all values.
+//
+func compareTotalOrder(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res int, err error) {
+	if rcb != nil {
+		rcb.trace(4, "compareTotalOrder() : comparing values %v and %v", v1, v2)
+	}
+
+	switch v1 := v1.(type) {
+	case *types.MapValue:
+		switch v2 := v2.(type) {
+		case *types.MapValue:
+			res, err = compareMaps(rcb, v1, v2)
+		case []types.FieldValue:
+			res = -1
+		default:
+			res = 1
+		}
+		return
+
+	case []types.FieldValue:
+		switch v2 := v2.(type) {
+		case []types.FieldValue:
+			res, err = compareArrays(rcb, v1, v2)
+		default:
+			res = -1
+		}
+		return
+
+	default:
+		switch v2 := v2.(type) {
+		case map[string]interface{}, map[string]types.FieldValue, []interface{}, []types.FieldValue:
+			res = -1
+		default:
+			res, err = compareAtomicsTotalOrder(rcb, v1, v2)
+		}
+	}
+	return
+}
+
+// compareMaps deep compares two maps
+func compareMaps(rcb *runtimeControlBlock, v1, v2 *types.MapValue) (res int, err error) {
+
+	m1 := v1.Map()
+	m2 := v2.Map()
+
+	// iterate through map keys in sorted order
+	k1 := make([]string, 0, v1.Len())
+	for k := range m1 { k1 = append(k1, k) }
+	sort.Strings(k1)
+
+	k2 := make([]string, 0, v2.Len())
+	for k := range m2 { k2 = append(k2, k) }
+	sort.Strings(k2)
+
+	for i := 0; i < len(k1) && i < len(k2); i++ {
+		comp := strings.Compare(k1[i], k2[i])
+		if comp != 0 {
+			return comp, nil
+		}
+		comp, err = compareTotalOrder(rcb, m1[k1[i]], m2[k2[i]])
+		if comp != 0 || err != nil {
+			return comp, err
+		}
+	}
+
+	if len(k1) == len(k2) {
+		return 0, nil
+	}
+
+	if len(k1) > len(k2) {
+		return 1, nil
+	}
+
+	return -1, nil
+}
+
+// compareArrays deep compares two arrays
+func compareArrays(rcb *runtimeControlBlock, v1, v2 []types.FieldValue) (res int, err error) {
+
+	for i := 0; i < len(v1) && i < len(v2); i++ {
+		comp, err := compareTotalOrder(rcb, v1[i], v2[i])
+		if comp != 0 || err != nil {
+			return comp, err
+		}
+	}
+
+	if len(v1) == len(v2) {
+		return 0, nil
+	}
+
+	if len(v1) > len(v2) {
+		return 1, nil
+	}
+
+	return -1, nil
 }
 
 // stringValue returns the string that v represents or v points to when v is a

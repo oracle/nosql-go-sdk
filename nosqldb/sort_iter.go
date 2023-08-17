@@ -403,7 +403,7 @@ func (r *resultsBySortSpec) Less(i, j int) bool {
 			return !sortSpec.nullsFirst
 		}
 
-		compareRes, _ := compareAtomicValues(nil, true, v1, v2)
+		compareRes, _ := compareAtomicsTotalOrder(nil, v1, v2)
 		if compareRes == 0 {
 			continue
 		}

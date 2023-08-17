@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   with Instance Principals:
      * NewSignatureProviderWithInstancePrincipalDelegation
      * NewSignatureProviderWithInstancePrincipalDelegationFromFile
+- Added support for array_collect SQL functions
 
 ### Changed
 - Updated yaml.v2 to 2.4.0

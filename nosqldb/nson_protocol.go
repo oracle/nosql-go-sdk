@@ -91,6 +91,7 @@ var NsonFieldsMap = map[string]string{
 	RETURN_ROW:                 "RETURN_ROW",
 	ROW:                        "ROW",
 	ROW_VERSION:                "ROW_VERSION",
+	SERVER_MEMORY_CONSUMPTION:  "SERVER_MEMORY_CONSUMPTION",
 	SHARD_ID:                   "SHARD_ID",
 	SHARD_IDS:                  "SHARD_IDS",
 	START:                      "START",
