@@ -695,11 +695,13 @@ func (iter *groupIter) getAggrValue(rcb *runtimeControlBlock, aggrTuple []*aggrV
 		return aggrValue.value, nil
 	}
 
-	// if in test or isDistinct, sort the array
-	// TODO: skip sort if not in test
 	carray := aggrValue.collectArray
-	if carray == nil {
-		return nil, nil
+
+	// if in test or isDistinct, sort the array
+	// otherwise, skip sorting
+	if carray == nil || len(carray) < 2 ||
+		(rcb.getClient().InTest == false && aggrKind != fnArrayCollectDistinct) {
+		return carray, nil
 	}
 
 	errs := make([]error, 0)
@@ -717,7 +719,7 @@ func (iter *groupIter) getAggrValue(rcb *runtimeControlBlock, aggrTuple []*aggrV
 	}
 
 	// if distinct, remove duplicates
-	if aggrKind == fnArrayCollectDistinct && len(carray) > 1 {
+	if aggrKind == fnArrayCollectDistinct {
 		var e int = 1
 		for i := 1; i < len(carray); i++ {
 			if cmp, _ := compareTotalOrder(nil, carray[i], carray[i-1]); cmp != 0 {

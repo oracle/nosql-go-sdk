@@ -93,6 +93,10 @@ type Client struct {
 
 	// for generic locking
 	lockMux sync.Mutex
+
+	// InTest is used for internal SDK testing. It controls logic that may be
+	// specific to testing only.
+	InTest bool
 }
 
 var (

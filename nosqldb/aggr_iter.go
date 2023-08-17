@@ -733,16 +733,21 @@ func (iter *funcCollectIter) getAggrValue(rcb *runtimeControlBlock, reset bool) 
 			"expect *aggrIterState, got %T", st)
 	}
 
+	carray := state.collectArray
+
 	// if in test or isDistinct, sort the array
-	// TODO: skip sort if not in test
-	varray := state.collectArray
-	if varray == nil {
-		return nil, nil
+	// otherwise, skip sorting
+	if carray == nil || len(carray) < 2 ||
+		(rcb.getClient().InTest == false && iter.isDistinct == false) {
+		if reset {
+			state.reset()
+		}
+		return carray, nil
 	}
 
 	errs := make([]error, 0)
-	sort.Slice(varray, func(i, j int) bool {
-		cmp, err := compareTotalOrder(nil, varray[i], varray[j])
+	sort.Slice(carray, func(i, j int) bool {
+		cmp, err := compareTotalOrder(nil, carray[i], carray[j])
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -755,22 +760,22 @@ func (iter *funcCollectIter) getAggrValue(rcb *runtimeControlBlock, reset bool) 
 	}
 
 	// if isDistinct, remove duplicates
-	if iter.isDistinct && len(varray) > 1 {
+	if iter.isDistinct {
 		var e int = 1
-		for i := 1; i < len(varray); i++ {
-			if cmp, _ := compareTotalOrder(nil, varray[i], varray[i-1]); cmp != 0 {
-				varray[e] = varray[i]
+		for i := 1; i < len(carray); i++ {
+			if cmp, _ := compareTotalOrder(nil, carray[i], carray[i-1]); cmp != 0 {
+				carray[e] = carray[i]
 				e++
 			}
 		}
-		varray = varray[:e]
+		carray = carray[:e]
 	}
 
 	if reset {
 		state.reset()
 	}
 
-	return varray, nil
+	return carray, nil
 }
 
 func (iter *funcCollectIter) getPlan() string {

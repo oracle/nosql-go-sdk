@@ -151,6 +151,8 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 		return nil, err
 	}
 
+	client.InTest = true
+
 	// if specified, force a specific serial version
 	if cfg.SerialVersion != 0 {
 		if cfg.Verbose {
