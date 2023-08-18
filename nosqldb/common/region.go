@@ -23,6 +23,8 @@ const (
 	RegionIAD Region = "us-ashburn-1"
 	// RegionPHX represents the region for US West (Phoenix).
 	RegionPHX Region = "us-phoenix-1"
+	// RegionUSSaltLake2 represents the region for US MidWest (Salt Lake).
+	RegionUSSaltLake2 Region = "us-saltlake-2"
 	// RegionUSSanJose1 represents the region for US West (San Jose).
 	RegionUSSanJose1 Region = "us-sanjose-1"
 	// RegionUSChicago1 represents the region for US Central (Chicago).
@@ -63,10 +65,14 @@ const (
 	RegionAPSydney1 Region = "ap-sydney-1"
 	// RegionAPMelbourne1 represents the region for Australia Southeast (Melbourne).
 	RegionAPMelbourne1 Region = "ap-melbourne-1"
+	// RegionSABogota1 represents the region for Colombia
+	RegionSABogota1 Region = "sa-bogota-1"
 	// RegionSASaopaulo1 represents the region for Brazil East (Sao Paulo).
 	RegionSASaopaulo1 Region = "sa-saopaulo-1"
 	// RegionSASantiago1 represents the region for Chile (Santiago).
 	RegionSASantiago1 Region = "sa-santiago-1"
+	// RegionSAValparaiso1 represents the region for Chile (Valparaiso).
+	RegionSAValparaiso1 Region = "sa-valparaiso-1"
 	// RegionSAVinhedo1 represents the region for Brazil (Vinhedo).
 	RegionSAVinhedo1 Region = "sa-vinhedo-1"
 	// RegionMEJeddah1 represents the region for Saudi Arabia West (Jeddah).
@@ -175,6 +181,16 @@ const (
 
 	// RegionEUJovanovac1 represents the region for Jovanovac 1 (Serbia)
 	RegionEUJovanovac1 Region = "eu-jovanovac-1"
+
+	// OC22 REGIONS
+
+	// RegionEUJovanovac1 represents the dedicated region for Rome
+	RegionEUDCCRome1 Region = "eu-dcc-rome-1"
+
+	// OC24 REGIONS
+
+	// RegionEUDCCZurich1 represents the dedicated region for Zurich
+	RegionEUDCCZurich1 Region = "eu-dcc-zurich-1"
 )
 
 var realm = map[string]string{
@@ -191,6 +207,8 @@ var realm = map[string]string{
 	"oc17": "oraclecloud17.com",
 	"oc19": "oraclecloud.eu",
 	"oc20": "oraclecloud20.com",
+	"oc22": "oraclecloud22.com",
+	"oc24": "oraclecloud24.com",
 }
 
 var regionRealm = map[Region]string{
@@ -198,6 +216,7 @@ var regionRealm = map[Region]string{
 	RegionIAD:            "oc1",
 	RegionFRA:            "oc1",
 	RegionLHR:            "oc1",
+	RegionUSSaltLake2:    "oc1",
 	RegionUSSanJose1:     "oc1",
 	RegionUSChicago1:     "oc1",
 	RegionUKCardiff1:     "oc1",
@@ -221,9 +240,11 @@ var regionRealm = map[Region]string{
 	RegionEUMadrid1:      "oc1",
 	RegionEUMilan1:       "oc1",
 	RegionEUParis1:       "oc1",
+	RegionSABogota1:      "oc1",
 	RegionSASaopaulo1:    "oc1",
 	RegionSASantiago1:    "oc1",
 	RegionSAVinhedo1:     "oc1",
+	RegionSAValparaiso1:  "oc1",
 	RegionAFJohannesburg: "oc1",
 	RegionAPSignapore:    "oc1",
 	RegionEUMarseille:    "oc1",
@@ -266,11 +287,16 @@ var regionRealm = map[Region]string{
 	RegionEUMadrid2:    "oc19",
 
 	RegionEUJovanovac1: "oc20",
+
+	RegionEUDCCRome1: "oc22",
+
+	RegionEUDCCZurich1: "oc24",
 }
 
 var shortNameRegion = map[string]Region{
 	"phx": RegionPHX,
 	"iad": RegionIAD,
+	"aga": RegionUSSaltLake2,
 	"sjc": RegionUSSanJose1,
 	"ord": RegionUSChicago1,
 	"fra": RegionFRA,
@@ -284,8 +310,10 @@ var shortNameRegion = map[string]Region{
 	"mel": RegionAPMelbourne1,
 	"bom": RegionAPMumbai1,
 	"hyd": RegionAPHyderabad1,
+	"bog": RegionSABogota1,
 	"gru": RegionSASaopaulo1,
 	"scl": RegionSASantiago1,
+	"vap": RegionSAValparaiso1,
 	"vcp": RegionSAVinhedo1,
 	"icn": RegionAPSeoul1,
 	"yny": RegionAPChuncheon1,
@@ -331,6 +359,8 @@ var shortNameRegion = map[string]Region{
 	"str": RegionEUFrankfurt2,
 	"vll": RegionEUMadrid2,
 	"beg": RegionEUJovanovac1,
+	"nap": RegionEUDCCRome1,
+	"avz": RegionEUDCCZurich1,
 }
 
 func (region Region) secondLevelDomain() string {
