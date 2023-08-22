@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 1.4.1 - 2023-08-21
 
 ### Added
 - Latest Oracle Cloud Infrastructure regions and region codes: MTY, STR, BEG, VLL, YUM,
