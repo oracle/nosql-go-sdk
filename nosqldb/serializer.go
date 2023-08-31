@@ -29,6 +29,7 @@ type serializer interface {
 type Request interface {
 	serializer
 	getTableName() string
+	getNamespace() string
 	validate() error
 	setDefaults(cfg *RequestConfig)
 	shouldRetry() bool

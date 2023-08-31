@@ -86,6 +86,144 @@ func (suite *OnPremTestSuite) TestNamespacesOp() {
 	suite.doDDLTest("drop namespace NSABC", nosqlerr.NoError)
 }
 
+// TestNamespacesOp tests create, drop and show namespaces operations.
+func (suite *OnPremTestSuite) TestDefaultNamespaces() {
+
+	// this only works with versions of KV with default namespace support
+	if suite.Config.Version <= "22.3.31" {
+		return
+	}
+
+	suite.Client.RequestConfig.Namespace = "mydns"
+	suite.doDDLTest("create namespace mydns", nosqlerr.NoError)
+
+	// parent in mydns
+	stmt := "create table parent(sid integer, id integer, name string, " +
+			"salary long, primary key(SHARD(sid), id))"
+	suite.CreateTable(stmt, nil)
+
+	// child in mydns
+	stmt = "create table parent.child(cid integer, cname string, " +
+			"primary key(cid))"
+	suite.CreateTable(stmt, nil)
+
+	// test ListTables with default namespace: should return just myns
+	req := &nosqldb.ListTablesRequest{}
+	res, err := suite.Client.ListTables(req)
+	if suite.NoErrorf(err, "ListTables failed: %v", err) {
+		suite.Equalf(2, len(res.Tables), "unexpected number of tables returned")
+	}
+
+	// test ListTables with explicit namespace
+	req = &nosqldb.ListTablesRequest{Namespace: "mydns"}
+	res, err = suite.Client.ListTables(req)
+	if suite.NoErrorf(err, "ListTables failed: %v", err) {
+		suite.Equalf(2, len(res.Tables), "unexpected number of tables returned")
+	}
+
+	// test ListTables with explicit invalid
+	req = &nosqldb.ListTablesRequest{Namespace: "invalid"}
+	res, err = suite.Client.ListTables(req)
+	if suite.NoErrorf(err, "ListTables failed: %v", err) {
+		suite.Equalf(0, len(res.Tables), "expected zero tables returned for invalid namespace")
+	}
+
+	suite.Client.RequestConfig.Namespace = ""
+
+	// test ListTables with no namespace: should return all
+	req = &nosqldb.ListTablesRequest{}
+	res, err = suite.Client.ListTables(req)
+	if suite.NoErrorf(err, "ListTables failed: %v", err) {
+		// should have more than 2 tables listed
+		if len(res.Tables) <= 2 {
+			suite.Fail("Expected more than 2 tables, got %d", len(res.Tables))
+		}
+	}
+
+	suite.Client.RequestConfig.Namespace = "mydns"
+
+	// put data in both tables
+	for i:=0; i<10; i++ {
+		value := &types.MapValue{}
+		value.Put("id", i).Put("name", "pname")
+		value.Put("sid", i).Put("salary", i*1000)
+		putReq := &nosqldb.PutRequest{
+			TableName: "parent",
+			Value:     value,
+		}
+		//putRes, err := suite.Client.Put(putReq)
+		_, err := suite.Client.Put(putReq)
+		suite.NoErrorf(err, "Parent put failed: %v", err)
+		for j:=0; j<10; j++ {
+			value.Put("cid", j).Put("cname", fmt.Sprintf("cname%d", j))
+			putReq.TableName = "parent.child"
+			putReq.Value = value
+			//putRes, err = suite.Client.Put(putReq)
+			_, err = suite.Client.Put(putReq)
+			suite.NoErrorf(err, "Child put failed: %v", err)
+		}
+	}
+
+	// get parent
+	key := types.ToMapValue("id", 1).Put("sid", 1)
+	getReq := &nosqldb.GetRequest{TableName: "parent", Key: key}
+	_, err = suite.Client.Get(getReq)
+	suite.NoErrorf(err, "Error trying to get record from parent: %v", err)
+
+	// get child
+	key = types.ToMapValue("id", 1).Put("sid", 1).Put("cid", 1)
+	getReq = &nosqldb.GetRequest{TableName: "parent.child", Key: key}
+	_, err = suite.Client.Get(getReq)
+	suite.NoErrorf(err, "Error trying to get record from child: %v", err)
+
+	// same ops should fail with no default namespace
+	suite.Client.RequestConfig.Namespace = ""
+	// get parent
+	key = types.ToMapValue("id", 1).Put("sid", 1)
+	getReq = &nosqldb.GetRequest{TableName: "parent", Key: key}
+	_, err = suite.Client.Get(getReq)
+	suite.Errorf(err, "Expected error trying to get record from parent, got none")
+
+	// get child
+	key = types.ToMapValue("id", 1).Put("sid", 1).Put("cid", 1)
+	getReq = &nosqldb.GetRequest{TableName: "parent.child", Key: key}
+	_, err = suite.Client.Get(getReq)
+	suite.Errorf(err, "Expected error trying to get record from child, got none")
+
+	// verify namespace in tablename overrides default
+	key = types.ToMapValue("id", 1).Put("sid", 1).Put("cid", 1)
+	getReq = &nosqldb.GetRequest{TableName: "mydns:parent.child", Key: key, Namespace: "invalid"}
+	_, err = suite.Client.Get(getReq)
+	suite.NoErrorf(err, "Error trying to get record from child: %v", err)
+
+
+	// query parent
+	stmt = "select * from parent"
+	suite.Client.RequestConfig.Namespace = "mydns"
+	suite.DoQueryWithNamespace(stmt, "", 10)
+	suite.Client.RequestConfig.Namespace = "invalid"
+	suite.DoQueryWithNamespace(stmt, "mydns", 10)
+
+	// query child
+	stmt = "select * from parent.child"
+	suite.Client.RequestConfig.Namespace = "mydns"
+	suite.DoQueryWithNamespace(stmt, "", 100)
+	suite.Client.RequestConfig.Namespace = "invalid"
+	suite.DoQueryWithNamespace(stmt, "mydns", 100)
+
+	// test complex query (exercises internal request copying)
+	suite.Client.RequestConfig.Namespace = ""
+	stmt = "select sid, count(*) as cnt, sum(salary) as sum " +
+			"from parent group by sid";
+	suite.DoQueryWithNamespace(stmt, "mydns", 10)
+
+	// drop table with namespace in request
+	suite.DropTableWithNamespace("parent.child", false, "mydns")
+
+	// drop namespace - use cascade to remove tables
+	suite.doDDLTest("drop namespace mydns cascade", nosqlerr.NoError)
+}
+
 // TestUserRolesOp tests create/drop/show/list users, create/drop/show/list roles
 // and grant/revoke roles operations.
 //

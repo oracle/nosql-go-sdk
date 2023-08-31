@@ -1052,6 +1052,10 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		httpReq.Header.Set("Accept", "application/octet-stream")
 		httpReq.Header.Set("Connection", "keep-alive")
 		httpReq.Header.Set("User-Agent", sdkutil.UserAgent())
+		namespace := req.getNamespace()
+		if namespace != "" {
+			httpReq.Header.Add("x-nosql-default-ns", namespace)
+		}
 
 		// The authorization string could be empty when the client connects to a
 		// non-secure on-premise NoSQL database server over database proxy.
