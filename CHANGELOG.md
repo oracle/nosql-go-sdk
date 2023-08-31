@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   with Instance Principals:
      * NewSignatureProviderWithInstancePrincipalDelegation
      * NewSignatureProviderWithInstancePrincipalDelegationFromFile
+- On-premise only: added support for default namespace in config and
+  namespace in requests.
 
 ### Changed
 - Updated yaml.v2 to 2.4.0

@@ -98,7 +98,7 @@ type Config struct {
 	// This is only used for on-premise NoSQL server that configured with security.
 	Password []byte `json:"password,omitempty"`
 
-	// Configurations for requests.
+	// Default Configurations for requests.
 	RequestConfig `json:"requestConfig,omitempty"`
 
 	// Configurations for HTTP client.
@@ -408,6 +408,13 @@ type RequestConfig struct {
 	// include GetRequest and QueryRequest.
 	// If set, it must be either types.Eventual or types.Absolute.
 	Consistency types.Consistency `json:"consistency,omitempty"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request if it is not specified in the request struct itself or
+	// in an SQL DDL/Query using the 'namespace:tablename' format.
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // DefaultRequestTimeout returns the default timeout value for requests.
@@ -449,6 +456,18 @@ func (r *RequestConfig) DefaultConsistency() types.Consistency {
 		return defaultConsistency
 	}
 	return r.Consistency
+}
+
+// DefaultNamespace is used on-premises only. It defines a namespace to use
+// for the request if it is not specified in the request struct itself or
+// in an SQL DDL/Query using the 'namespace:tablename' format.
+// This is only available with on-premises installations using NoSQL
+// Server versions 23.3 and above.
+func (r *RequestConfig) DefaultNamespace() string {
+	if r == nil {
+		return ""
+	}
+	return r.Namespace
 }
 
 // LoggingConfig represents logging configurations.
