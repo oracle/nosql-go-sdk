@@ -6,12 +6,21 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ## Unreleased
 
 ### Added
-- Latest Oracle Cloud Infrastructure regions and region codes: MTY, STR, BEG, VLL, YUM
+- Added support for array_collect() and count(distinct) in queries. These
+  require server side support which is only available in Oracle NoSQL releases
+  23.3 and higher and will not be immediately available in the cloud service
+
+## 1.4.1 - 2023-08-21
+
+### Added
+- Latest Oracle Cloud Infrastructure regions and region codes: MTY, STR, BEG, VLL, YUM,
+  VAP, BOG, AGA, NAP, AVZ
 - Added new signature provider methods to allow for delegation (OBO) tokens to be used
   with Instance Principals:
      * NewSignatureProviderWithInstancePrincipalDelegation
      * NewSignatureProviderWithInstancePrincipalDelegationFromFile
-- Added support for array_collect SQL functions
+- On-premise only: added support for default namespace in config and
+  namespace in requests.
 
 ### Changed
 - Updated yaml.v2 to 2.4.0

@@ -143,7 +143,7 @@ func (suite *NoSQLTestSuite) GetNsTableName(ns, table string) string {
 }
 
 // DropTable drops the table.
-func (suite *NoSQLTestSuite) DropTable(table string, dropIfExists bool) {
+func (suite *NoSQLTestSuite) DropTableWithNamespace(table string, dropIfExists bool, namespace string) {
 	var stmt string
 	if dropIfExists {
 		stmt = "DROP TABLE IF EXISTS " + table
@@ -153,11 +153,17 @@ func (suite *NoSQLTestSuite) DropTable(table string, dropIfExists bool) {
 
 	req := &nosqldb.TableRequest{
 		Statement: stmt,
+		Namespace: namespace,
 	}
 
 	// BUG(zehliu): DoTableRequestAndWait does not seem to work for MiniCloud.
 	_, err := suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
 	suite.Require().NoErrorf(err, "%q: got error %v.", stmt, err)
+}
+
+// DropTable drops the table.
+func (suite *NoSQLTestSuite) DropTable(table string, dropIfExists bool) {
+	suite.DropTableWithNamespace(table, dropIfExists, "")
 }
 
 // ExecuteDDL executes the specified DDL statement using a SystemRequest.
@@ -167,10 +173,14 @@ func (suite *NoSQLTestSuite) ExecuteDDL(stmt string) {
 }
 
 // ExecuteTableDDL executes the specified DDL statement using a TableRequest.
-func (suite *NoSQLTestSuite) ExecuteTableDDL(stmt string) {
-	req := &nosqldb.TableRequest{Statement: stmt}
+func (suite *NoSQLTestSuite) ExecuteTableDDLWithNamespace(stmt string, namespace string) {
+	req := &nosqldb.TableRequest{Statement: stmt, Namespace: namespace}
 	_, err := suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
 	suite.Require().NoErrorf(err, "failed to execute %q, got error %v.", stmt, err)
+}
+
+func (suite *NoSQLTestSuite) ExecuteTableDDL(stmt string) {
+	suite.ExecuteTableDDLWithNamespace(stmt, "")
 }
 
 // ExecuteQueryStmt executes the query statement.
@@ -178,11 +188,26 @@ func (suite *NoSQLTestSuite) ExecuteQueryStmt(stmt string) ([]*types.MapValue, e
 	return suite.ExecuteQueryRequest(&nosqldb.QueryRequest{Statement: stmt})
 }
 
+// ExecuteQueryStmtWithNamespace executes the query statement in given namespace
+func (suite *NoSQLTestSuite) ExecuteQueryStmtWithNamespace(stmt string, namespace string) ([]*types.MapValue, error) {
+	return suite.ExecuteQueryRequest(&nosqldb.QueryRequest{Statement: stmt, Namespace: namespace})
+}
+
 // ExecuteQueryRequest executes the query request.
 func (suite *NoSQLTestSuite) ExecuteQueryRequest(queryReq *nosqldb.QueryRequest) ([]*types.MapValue, error) {
 	return ExecuteQueryRequest(suite.Client, queryReq)
 }
 
+// DoQueryWithNamespace executes the query statement in given namespace and
+// expects a given number of rows returned
+func (suite *NoSQLTestSuite) DoQueryWithNamespace(stmt string, namespace string, expRows int) {
+	res, err := suite.ExecuteQueryRequest(&nosqldb.QueryRequest{Statement: stmt, Namespace: namespace})
+	if suite.NoErrorf(err, "Unexpected error running query: %v", err) {
+		suite.Equalf(expRows, len(res), "wrong number of rows returned from query")
+	}
+}
+
+// ExecuteQueryRequest executes the query request.
 // AddToTables adds the specified table into a table list, in which all tables
 // would be dropped on TearDownSuite if DropTablesOnTearDown is specified in test configuration.
 func (suite *NoSQLTestSuite) AddToTables(table string) {

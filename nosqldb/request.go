@@ -38,7 +38,7 @@ type GetRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	// Consistency specifies desired consistency policy for the request.
@@ -46,8 +46,19 @@ type GetRequest struct {
 	// If set, it must be either types.Absolute or types.Eventual, otherwise
 	// an IllegalArgument error will be returned.
 	// If not set, the default consistency value configured for Client is used,
-	// which is determined by Client.DefaultConsistency().
+	// which is determined by RequestConfig.DefaultConsistency().
 	Consistency types.Consistency `json:"consistency"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -82,6 +93,10 @@ func (r *GetRequest) setDefaults(cfg *RequestConfig) {
 	if r.Consistency == 0 {
 		r.Consistency = cfg.DefaultConsistency()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *GetRequest) shouldRetry() bool {
@@ -94,6 +109,10 @@ func (r *GetRequest) timeout() time.Duration {
 
 func (r *GetRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *GetRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *GetRequest) doesReads() bool {
@@ -132,8 +151,19 @@ type GetTableRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -154,6 +184,10 @@ func (r *GetTableRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *GetTableRequest) shouldRetry() bool {
@@ -166,6 +200,10 @@ func (r *GetTableRequest) timeout() time.Duration {
 
 func (r *GetTableRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *GetTableRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *GetTableRequest) doesReads() bool {
@@ -200,8 +238,19 @@ type GetIndexesRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -222,6 +271,10 @@ func (r *GetIndexesRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *GetIndexesRequest) shouldRetry() bool {
@@ -234,6 +287,10 @@ func (r *GetIndexesRequest) timeout() time.Duration {
 
 func (r *GetIndexesRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *GetIndexesRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *GetIndexesRequest) doesReads() bool {
@@ -266,11 +323,15 @@ type ListTablesRequest struct {
 	// If not set, there is no limit.
 	Limit uint `json:"limit,omitempty"`
 
-	// Namespace specifies the namespace to use for the list.
-	//
-	// It is optional and used for on-premise only.
-	// If set, only tables in the namespace provided are returned.
-	// If not set, all tables accessible to the user will be returned.
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
 	// Timeout specifies the timeout value for the request.
@@ -278,7 +339,7 @@ type ListTablesRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	common.InternalRequestData
@@ -292,6 +353,10 @@ func (r *ListTablesRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *ListTablesRequest) shouldRetry() bool {
@@ -304,6 +369,10 @@ func (r *ListTablesRequest) timeout() time.Duration {
 
 func (r *ListTablesRequest) getTableName() string {
 	return ""
+}
+
+func (r *ListTablesRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *ListTablesRequest) doesReads() bool {
@@ -337,7 +406,7 @@ type SystemRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultTableRequestTimeout().
+	// which is determined by RequestConfig.DefaultTableRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	common.InternalRequestData
@@ -370,6 +439,10 @@ func (r *SystemRequest) timeout() time.Duration {
 }
 
 func (r *SystemRequest) getTableName() string {
+	return ""
+}
+
+func (r *SystemRequest) getNamespace() string {
 	return ""
 }
 
@@ -408,7 +481,7 @@ type SystemStatusRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultTableRequestTimeout().
+	// which is determined by RequestConfig.DefaultTableRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	common.InternalRequestData
@@ -441,6 +514,10 @@ func (r *SystemStatusRequest) timeout() time.Duration {
 }
 
 func (r *SystemStatusRequest) getTableName() string {
+	return ""
+}
+
+func (r *SystemStatusRequest) getNamespace() string {
 	return ""
 }
 
@@ -540,8 +617,19 @@ type TableRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultTableRequestTimeout().
+	// which is determined by RequestConfig.DefaultTableRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -573,6 +661,10 @@ func (r *TableRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultTableRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *TableRequest) shouldRetry() bool {
@@ -585,6 +677,10 @@ func (r *TableRequest) timeout() time.Duration {
 
 func (r *TableRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *TableRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *TableRequest) doesReads() bool {
@@ -734,7 +830,7 @@ type DeleteRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
@@ -750,6 +846,17 @@ type DeleteRequest struct {
 	// operation should cause the whole operation to fail.
 	// It is copied from the parent WriteOperation, and is for internal use only.
 	abortOnFail bool
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -776,6 +883,10 @@ func (r *DeleteRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *DeleteRequest) shouldRetry() bool {
@@ -788,6 +899,10 @@ func (r *DeleteRequest) timeout() time.Duration {
 
 func (r *DeleteRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *DeleteRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *DeleteRequest) doesReads() bool {
@@ -887,7 +1002,7 @@ type PutRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
@@ -903,6 +1018,17 @@ type PutRequest struct {
 	// operation should cause the whole operation to fail.
 	// It is copied from the parent WriteOperation, and is for internal use only.
 	abortOnFail bool
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -937,6 +1063,10 @@ func (r *PutRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *PutRequest) shouldRetry() bool {
@@ -949,6 +1079,10 @@ func (r *PutRequest) timeout() time.Duration {
 
 func (r *PutRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *PutRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *PutRequest) doesReads() bool {
@@ -1013,8 +1147,19 @@ type TableUsageRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -1039,6 +1184,10 @@ func (r *TableUsageRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *TableUsageRequest) shouldRetry() bool {
@@ -1051,6 +1200,10 @@ func (r *TableUsageRequest) timeout() time.Duration {
 
 func (r *TableUsageRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *TableUsageRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *TableUsageRequest) doesReads() bool {
@@ -1088,8 +1241,19 @@ type PrepareRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name in the SQL query string
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -1110,6 +1274,10 @@ func (r *PrepareRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *PrepareRequest) shouldRetry() bool {
@@ -1123,6 +1291,10 @@ func (r *PrepareRequest) timeout() time.Duration {
 func (r *PrepareRequest) getTableName() string {
 	// TODO
 	return ""
+}
+
+func (r *PrepareRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *PrepareRequest) doesReads() bool {
@@ -1255,7 +1427,7 @@ type QueryRequest struct {
 	// If set, it must be either types.Absolute or types.Eventual, otherwise
 	// an IllegalArgument error will be returned.
 	// If not set, the default consistency value configured for Client is used,
-	// which is determined by Client.DefaultConsistency().
+	// which is determined by RequestConfig.DefaultConsistency().
 	Consistency types.Consistency `json:"consistency,omitempty"`
 
 	// Durability is currently only used in On-Prem installations.
@@ -1270,7 +1442,7 @@ type QueryRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	// traceLevel sets the desired tracing level used to trace the query execution.
@@ -1297,6 +1469,17 @@ type QueryRequest struct {
 	// If this is not set, cloud rate limiting may not work properly for the
 	// query request.
 	TableName string
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name in the SQL query string
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -1325,6 +1508,10 @@ func (r *QueryRequest) setDefaults(cfg *RequestConfig) {
 	if r.Consistency == 0 {
 		r.Consistency = cfg.DefaultConsistency()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *QueryRequest) shouldRetry() bool {
@@ -1337,6 +1524,10 @@ func (r *QueryRequest) timeout() time.Duration {
 
 func (r *QueryRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *QueryRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *QueryRequest) doesReads() bool {
@@ -1663,7 +1854,7 @@ type WriteMultipleRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
@@ -1673,6 +1864,20 @@ type WriteMultipleRequest struct {
 	// checkSubReqSize represents whether to check sub request size.
 	// This is for internal use, and is set automatically by client.
 	checkSubReqSize bool
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name in the SQL query string
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	// NOTE: unlike TableName, the Namespace in WriteMultipleRequest is used
+	// as the namespace for all sub-requests. Namespaces in sub-requests will
+	// be ignored.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -1740,6 +1945,10 @@ func (r *WriteMultipleRequest) timeout() time.Duration {
 
 func (r *WriteMultipleRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *WriteMultipleRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *WriteMultipleRequest) doesReads() bool {
@@ -1849,12 +2058,23 @@ type MultiDeleteRequest struct {
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
 	// IllegalArgument error will be returned.
 	// If not set, the default timeout value configured for Client is used,
-	// which is determined by Client.DefaultRequestTimeout().
+	// which is determined by RequestConfig.DefaultRequestTimeout().
 	Timeout time.Duration `json:"timeout"`
 
 	// Durability is currently only used in On-Prem installations.
 	// Added in SDK Version 1.3.0
 	Durability types.Durability `json:"durability"`
+
+	// Namespace is used on-premises only. It defines a namespace to use
+	// for the request. It is optional.
+	// If a namespace is specified in the table name for the request
+	// (using the namespace:tablename format), that value will override this
+	// setting.
+	// If not set, the default namespace value configured for Client is used,
+	// which is determined by RequestConfig.DefaultNamespace().
+	// This is only available with on-premises installations using NoSQL
+	// Server versions 23.3 and above.
+	Namespace string `json:"namespace,omitempty"`
 
 	common.InternalRequestData
 }
@@ -1883,6 +2103,10 @@ func (r *MultiDeleteRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
+
+	if r.Namespace == "" {
+		r.Namespace = cfg.DefaultNamespace()
+	}
 }
 
 func (r *MultiDeleteRequest) shouldRetry() bool {
@@ -1895,6 +2119,10 @@ func (r *MultiDeleteRequest) timeout() time.Duration {
 
 func (r *MultiDeleteRequest) getTableName() string {
 	return r.TableName
+}
+
+func (r *MultiDeleteRequest) getNamespace() string {
+	return r.Namespace
 }
 
 func (r *MultiDeleteRequest) doesReads() bool {
