@@ -184,6 +184,10 @@ func (p *instancePrincipalConfigurationProvider) UserOCID() (string, error) {
 	return "", nil
 }
 
+func (p *instancePrincipalConfigurationProvider) SecurityTokenFile() (string, error) {
+	return "", fmt.Errorf("InstancePrincipalConfigurationProvider does not support SecurityTokenFile")
+}
+
 func (p *instancePrincipalConfigurationProvider) KeyFingerprint() (string, error) {
 	return "", nil
 }

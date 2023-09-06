@@ -5,6 +5,7 @@
 //  https://oss.oracle.com/licenses/upl/
 //
 
+//go:build onprem
 // +build onprem
 
 package nosqldb_test
@@ -99,12 +100,12 @@ func (suite *OnPremTestSuite) TestDefaultNamespaces() {
 
 	// parent in mydns
 	stmt := "create table parent(sid integer, id integer, name string, " +
-			"salary long, primary key(SHARD(sid), id))"
+		"salary long, primary key(SHARD(sid), id))"
 	suite.CreateTable(stmt, nil)
 
 	// child in mydns
 	stmt = "create table parent.child(cid integer, cname string, " +
-			"primary key(cid))"
+		"primary key(cid))"
 	suite.CreateTable(stmt, nil)
 
 	// test ListTables with default namespace: should return just myns
@@ -143,7 +144,7 @@ func (suite *OnPremTestSuite) TestDefaultNamespaces() {
 	suite.Client.RequestConfig.Namespace = "mydns"
 
 	// put data in both tables
-	for i:=0; i<10; i++ {
+	for i := 0; i < 10; i++ {
 		value := &types.MapValue{}
 		value.Put("id", i).Put("name", "pname")
 		value.Put("sid", i).Put("salary", i*1000)
@@ -154,7 +155,7 @@ func (suite *OnPremTestSuite) TestDefaultNamespaces() {
 		//putRes, err := suite.Client.Put(putReq)
 		_, err := suite.Client.Put(putReq)
 		suite.NoErrorf(err, "Parent put failed: %v", err)
-		for j:=0; j<10; j++ {
+		for j := 0; j < 10; j++ {
 			value.Put("cid", j).Put("cname", fmt.Sprintf("cname%d", j))
 			putReq.TableName = "parent.child"
 			putReq.Value = value
@@ -196,7 +197,6 @@ func (suite *OnPremTestSuite) TestDefaultNamespaces() {
 	_, err = suite.Client.Get(getReq)
 	suite.NoErrorf(err, "Error trying to get record from child: %v", err)
 
-
 	// query parent
 	stmt = "select * from parent"
 	suite.Client.RequestConfig.Namespace = "mydns"
@@ -214,7 +214,7 @@ func (suite *OnPremTestSuite) TestDefaultNamespaces() {
 	// test complex query (exercises internal request copying)
 	suite.Client.RequestConfig.Namespace = ""
 	stmt = "select sid, count(*) as cnt, sum(salary) as sum " +
-			"from parent group by sid";
+		"from parent group by sid"
 	suite.DoQueryWithNamespace(stmt, "mydns", 10)
 
 	// drop table with namespace in request

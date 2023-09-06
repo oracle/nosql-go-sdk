@@ -468,7 +468,6 @@ func (suite *ReadWriteTestSuite) roundTrip(in types.FieldValue) {
 
 }
 
-
 func (suite *ReadWriteTestSuite) javaSerializedString() {
 	// Test that an nson value serialized by java nson library can
 	// be accurately deserialized here, and re-serialized to the same string
@@ -503,7 +502,7 @@ func (suite *ReadWriteTestSuite) javaSerializedString() {
 	suite.Equalf(dst, wr.Bytes(), "Expected go bytes and java bytes to be the same")
 
 	// compare bse64 encoded bytes
-	goString:= base64.StdEncoding.EncodeToString(wr.Bytes())
+	goString := base64.StdEncoding.EncodeToString(wr.Bytes())
 	suite.Equalf(javaString, goString, "Expected go string and java string to be the same")
 }
 

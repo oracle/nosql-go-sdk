@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ type ConfigurationProvider interface {
 	UserOCID() (string, error)
 	KeyFingerprint() (string, error)
 	Region() (string, error)
+	SecurityTokenFile() (string, error)
 }
 
 // IsConfigurationProviderValid Tests all parts of the configuration provider do not return an error
@@ -99,6 +101,10 @@ func (p rawConfigurationProvider) UserOCID() (string, error) {
 	return p.user, nil
 }
 
+func (p rawConfigurationProvider) SecurityTokenFile() (string, error) {
+	return "", fmt.Errorf("RawConfigurationProvider does not support SecurityTokenFile")
+}
+
 func (p rawConfigurationProvider) KeyFingerprint() (string, error) {
 	if p.fingerprint == "" {
 		return "", fmt.Errorf("fingerprint can not be empty")
@@ -150,8 +156,8 @@ func ConfigurationProviderFromFileWithProfile(configFilePath, profile, privateKe
 }
 
 type configFileInfo struct {
-	UserOcid, Fingerprint, KeyFilePath, TenancyOcid, Region, Passphrase string
-	PresentConfiguration                                                byte
+	UserOcid, Fingerprint, KeyFilePath, TenancyOcid, Region, Passphrase, SecurityTokenFile string
+	PresentConfiguration                                                                   byte
 }
 
 const (
@@ -161,6 +167,7 @@ const (
 	hasRegion
 	hasKeyFile
 	hasPassphrase
+	hasSecurityTokenFile
 	none
 )
 
@@ -216,6 +223,9 @@ func parseConfigAtLine(start int, content []string) (info *configFileInfo, err e
 		case "tenancy":
 			configurationPresent = configurationPresent | hasTenancy
 			info.TenancyOcid = value
+		case "security_token_file":
+			configurationPresent = configurationPresent | hasSecurityTokenFile
+			info.SecurityTokenFile = value
 		case "region":
 			configurationPresent = configurationPresent | hasRegion
 			info.Region = value
@@ -239,6 +249,23 @@ func openConfigFile(configFilePath string) (data []byte, err error) {
 	}
 
 	return
+}
+
+func readTokenFromFile(tokenFilePath string) (string, error) {
+	expandedPath, err := sdkutil.ExpandPath(tokenFilePath)
+	if err != nil {
+		err = fmt.Errorf("can not read token file: %s due to: %s", tokenFilePath, err.Error())
+		return "", err
+	}
+
+	data, err := ioutil.ReadFile(expandedPath)
+	if err != nil {
+		err = fmt.Errorf("can not read token file: %s due to: %s", tokenFilePath, err.Error())
+		return "", err
+	}
+
+	token := strings.Replace(string(data), "\r\n", "", -1)
+	return strings.Replace(token, "\n", "", -1), nil
 }
 
 func (p fileConfigurationProvider) String() string {
@@ -286,6 +313,18 @@ func (p fileConfigurationProvider) TenancyOCID() (value string, err error) {
 	return
 }
 
+func (p fileConfigurationProvider) SecurityTokenFile() (value string, err error) {
+	info, err := p.readAndParseConfigFile()
+	if err != nil {
+		err = fmt.Errorf("can not read security token configuration due to: %s", err.Error())
+		return
+	}
+
+	value, err = presentOrError(info.SecurityTokenFile, hasSecurityTokenFile,
+		info.PresentConfiguration, "security_token_file")
+	return
+}
+
 func (p fileConfigurationProvider) UserOCID() (value string, err error) {
 	info, err := p.readAndParseConfigFile()
 	if err != nil {
@@ -312,11 +351,22 @@ func (p fileConfigurationProvider) ExpirationTime() time.Time {
 	return time.Now().Add(24 * time.Hour)
 }
 
-func (p fileConfigurationProvider) KeyID() (keyID string, err error) {
+func (p fileConfigurationProvider) KeyID() (string, error) {
 	info, err := p.readAndParseConfigFile()
 	if err != nil {
 		err = fmt.Errorf("can not read tenancy configuration due to: %s", err.Error())
-		return
+		return "", err
+	}
+
+	// SecurityTokenFile providers return different format for KeyID
+	sFile, err := p.SecurityTokenFile()
+	if sFile != "" && err == nil {
+		// open/read file, return "ST$" + value (minus newlines)
+		token, err := readTokenFromFile(sFile)
+		if err != nil {
+			return "", err
+		}
+		return "ST$" + token, nil
 	}
 
 	return fmt.Sprintf("%s/%s/%s", info.TenancyOcid, info.UserOcid, info.Fingerprint), nil
@@ -365,7 +415,11 @@ func (p fileConfigurationProvider) Region() (value string, err error) {
 
 	value, err = presentOrError(info.Region, hasRegion, info.PresentConfiguration, "region")
 	if err != nil {
-		return
+		// Attempt to read region from environment variable
+		value = os.Getenv("OCI_REGION")
+		if value == "" {
+			return
+		}
 	}
 
 	return canStringBeRegion(value)
@@ -378,4 +432,25 @@ func canStringBeRegion(stringRegion string) (region string, err error) {
 		return "", fmt.Errorf("region can not be empty or have spaces")
 	}
 	return stringRegion, nil
+}
+
+func SessionTokenProviderFromFileWithProfile(configFilePath, profile, privateKeyPassword string) (ConfigurationProvider, error) {
+	if profile == "" {
+		profile = "DEFAULT"
+	}
+	provider, err := ConfigurationProviderFromFileWithProfile(configFilePath, profile, privateKeyPassword)
+	if err != nil {
+		return nil, err
+	}
+	// verify that the config specifies a security token file
+	_, err = provider.SecurityTokenFile()
+	if err != nil {
+		return nil, err
+	}
+	// read the session token file, verify it has contents
+	_, err = provider.KeyID()
+	if err != nil {
+		return nil, err
+	}
+	return provider, nil
 }

@@ -1144,12 +1144,11 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	}
 }
 
-
 func (c *Client) warmupClientAuth() {
 	// Create a dummy http request and pass it to the signing logic.
 	// this will initialize the IAM auth underneath.
 	// Don't return any errors - this is a best-effort attempt.
-	c.logger.Fine("Warming up auth...");
+	c.logger.Fine("Warming up auth...")
 	httpReq, err := httputil.NewPostRequest(c.requestURL, []byte{})
 	if err != nil {
 		c.logger.Fine("Got error creating warmup request: %v", err)

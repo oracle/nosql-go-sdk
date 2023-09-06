@@ -178,6 +178,10 @@ func (p *resourcePrincipalKeyProvider) KeyFingerprint() (string, error) {
 	return "", nil
 }
 
+func (p *resourcePrincipalKeyProvider) SecurityTokenFile() (string, error) {
+	return "", fmt.Errorf("ResourcePrincipalKeyProvider does not support SecurityTokenFile")
+}
+
 func (p *resourcePrincipalKeyProvider) UserOCID() (string, error) {
 	return "", nil
 }
