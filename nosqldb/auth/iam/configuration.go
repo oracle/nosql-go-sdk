@@ -27,7 +27,7 @@ type ConfigurationProvider interface {
 
 // IsConfigurationProviderValid Tests all parts of the configuration provider do not return an error
 func IsConfigurationProviderValid(conf ConfigurationProvider) (ok bool, err error) {
-	baseFn := []func() (string, error){conf.TenancyOCID, conf.UserOCID, conf.KeyFingerprint, conf.KeyID}
+	baseFn := []func() (string, error){conf.TenancyOCID, conf.KeyFingerprint, conf.KeyID}
 	for _, fn := range baseFn {
 		_, err = fn()
 		ok = err == nil
@@ -41,6 +41,20 @@ func IsConfigurationProviderValid(conf ConfigurationProvider) (ok bool, err erro
 	if err != nil {
 		return
 	}
+
+	// if using session token, user is not required
+	sFile, err := conf.SecurityTokenFile()
+	if err == nil && sFile != "" {
+		return true, nil
+	}
+
+	// otherwise user ocid is required
+	_, err = conf.UserOCID()
+	ok = err == nil
+	if err != nil {
+		return
+	}
+
 	return true, nil
 }
 
