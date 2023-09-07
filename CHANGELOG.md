@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- Added capability to use Session Token based authentication:
+     * NewSessionTokenSignatureProvider
+     * NewSessionTokenSignatureProviderFromFile
+- Cloud only: added support to read region from system environment variable
+  OCI_REGION if using user principal or session token authentication
+
 ## 1.4.1 - 2023-08-21
 
 ### Added

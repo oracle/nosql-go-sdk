@@ -5,6 +5,7 @@
 //  https://oss.oracle.com/licenses/upl/
 //
 
+//go:build cloud || onprem
 // +build cloud onprem
 
 package nosqldb_test

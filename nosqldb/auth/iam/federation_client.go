@@ -655,7 +655,7 @@ func newInstancePrincipalToken(tokenString string) (newToken securityToken, err 
 	if jwtToken, err = parseJwt(tokenString); err != nil {
 		return nil, fmt.Errorf("failed to parse the token string \"%s\": %s", tokenString, err.Error())
 	}
-	newToken = &instancePrincipalToken{tokenString, jwtToken};
+	newToken = &instancePrincipalToken{tokenString, jwtToken}
 	if !newToken.Valid() {
 		return nil, fmt.Errorf("Expired or invalid token string \"%s\"", tokenString)
 	}

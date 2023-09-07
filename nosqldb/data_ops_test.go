@@ -5,6 +5,7 @@
 //  https://oss.oracle.com/licenses/upl/
 //
 
+//go:build cloud || onprem
 // +build cloud onprem
 
 package nosqldb_test
@@ -339,7 +340,6 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			nil,   // expPrevVersion
 			recordKB)
 	}
-
 
 	// Get non-existing row
 	key.Put("id", 100)

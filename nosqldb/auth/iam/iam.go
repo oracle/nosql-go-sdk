@@ -232,6 +232,76 @@ func NewSignatureProviderWithInstancePrincipalDelegationFromFile(compartmentID s
 	return sp.SetDelegationTokenFromFile(delegationTokenFile)
 }
 
+// NewSessionTokenSignatureProvider Creates a SignatureProvider using a
+// temporary session token read from a token file.
+//
+// The configuration file used is '~/.oci/config'. See [SDK Configuration File]
+// for details of the file's contents and format. The "DEFAULT" profile is used.
+//
+// The path of token file is read from the configuration, using the value of field 'security_token_file'.
+//
+// See [Session Token-Based Authentication] for more details of session-token-based authentication.
+//
+// You can use the OCI CLI to authenticate and create a token. See [Token-based Authentication for the CLI].
+//
+// When using this constructor, the user has a default compartment for all tables. It is the
+// root compartment of the user's tenancy.
+//
+// [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
+// Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
+// [Token-based Authentication for the CLI]: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/clitoken.htm
+//
+func NewSessionTokenSignatureProvider() (*SignatureProvider, error) {
+	return NewSessionTokenSignatureProviderFromFile("~/.oci/config", "DEFAULT", "")
+}
+
+// NewSessionTokenSignatureProviderFromFile Creates a SignatureProvider using a
+// temporary session token read from a token file, using the ociProfile
+// specified in the OCI configuration file configFilePath. See [SDK Configuration File]
+// for details of the file's contents and format.
+//
+// The path of token file is read from the configuration, using the value of field 'security_token_file'.
+//
+// See [Session Token-Based Authentication] for more details of session-token-based authentication.
+//
+// You can use the OCI CLI to authenticate and create a token. See [Token-based Authentication for the CLI].
+//
+// privateKeyPassphrase is only required if the private key uses a passphrase and
+// it is not specified in the "pass_phrase" field in the OCI configuration file.
+//
+// When using this constructor, the user has a default compartment for all tables. It is the
+// root compartment of the user's tenancy.
+//
+// [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
+// Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
+// [Token-based Authentication for the CLI]: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/clitoken.htm
+func NewSessionTokenSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassphrase string) (*SignatureProvider, error) {
+	// default to OCI "DEFAULT" if none given
+	if ociProfile == "" {
+		ociProfile = "DEFAULT"
+	}
+
+	configProvider, err := SessionTokenProviderFromFileWithProfile(configFilePath, ociProfile, privateKeyPassphrase)
+	if configProvider == nil || err != nil {
+		return nil, err
+	}
+	// validate all fields in the file
+	ok, err := IsConfigurationProviderValid(configProvider)
+	if ok == false {
+		return nil, err
+	}
+
+	sigProvider, err := NewSignatureProviderWithConfiguration(configProvider, "")
+	if err != nil {
+		return nil, err
+	}
+	sigProvider.compartmentID, err = configProvider.TenancyOCID()
+	if err != nil {
+		return nil, err
+	}
+	return sigProvider, nil
+}
+
 // NewSignatureProviderWithConfiguration creates a signature provider with
 // the supplied configuration.
 //
@@ -334,7 +404,7 @@ func (p *SignatureProvider) SetDelegationTokenFromFile(delegationTokenFile strin
 	if err != nil {
 		return nil, fmt.Errorf("cannot read delegation token file %s: %v", file, err)
 	}
-	tokenLines:= strings.Split(string(tokenData), "\n")
+	tokenLines := strings.Split(string(tokenData), "\n")
 	return p.SetDelegationToken(tokenLines[0])
 }
 

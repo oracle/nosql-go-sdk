@@ -1,8 +1,9 @@
 {
- "version": "21.2.19",
+ "version": "22.4.10",
  "tablePrefix": "Go",
  "reCreateTables": true,
  "verbose": true,
+ "serialVersion": 0,
  "dropTablesOnTearDown": true,
  "clientConfig": {
    "mode": "cloudsim",

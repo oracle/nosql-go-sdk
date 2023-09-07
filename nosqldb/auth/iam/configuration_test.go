@@ -19,6 +19,7 @@ var (
 	tkeyfile           = "somelocation"
 	ttenancy           = "sometenancy"
 	tregion            = "someregion"
+	tsessionfile       = "somesessionfile"
 	testPrivateKeyConf = `-----BEGIN RSA PRIVATE KEY-----
 MIICXgIBAAKBgQDCFENGw33yGihy92pDjZQhl0C36rPJj+CvfSC8+q28hxA161QF
 NUd13wuCTUcq0Qd2qsBe/2hFyc2DCJJg0h1L78+6Z4UMR7EOcpfdUE9Hf3m/hs+F
@@ -65,6 +66,14 @@ ufFtnLEj/5G9a8A//MFrXsXePUeBDEzjtEcjPGNxe0ZkuOgYx11Zc0R4oLI7LoHO
 07vtw4qCH4hztCJ5+JOUac6sGcILFRc4vSQQ15Cg5QEdBiSbQ/yo1P0hbNtSvnwO
 -----END RSA PRIVATE KEY-----`
 	testKeyPassphrase = "goisfun"
+	testSecurityToken = `bKbv8X2oyfxwp55w3MVKj1bfWnhvQgyqJ/1dER53STao3qRS26epRoBc0BoLtrNj
+L+Wfa3NeuEinetDYKRwWGHZqvbs/3PD5OKIXW1y/EAlg1vr6JWX8KxhQ0PzGJOdQ
+KPcB2duDtlNJ4awoGEsSp/qYyJLKOKpcz893OWTe3Oi9aQpzuL+kgH6VboCUdwdl
+Ub7YyTMFBkGzzjOXV/iSJDaxvVUIZt7CQS/DkBq4IHXX8iFUDzh6L297/BuRp3Q8
+9ydxmHQjNNtyH+RceZFn07IkWvPveo2BXpK4K9DXE39Z/g1nQzwTqgN8diXxwRuN
+Ge97lBWup4vP1TV8nyHW2AppgFVuPynO+XWfZUuCUzxNseB+XOyeqitoM4uvSNax
+DQmokjIf4qXC/46EnJ/fd9Ydz4GVQ4TYyxwNCBJK39RdUOcUtyI+A3IbZ+vt2HIV`
+	testSessionKeyID = "ST$bKbv8X2oyfxwp55w3MVKj1bfWnhvQgyqJ/1dER53STao3qRS26epRoBc0BoLtrNjL+Wfa3NeuEinetDYKRwWGHZqvbs/3PD5OKIXW1y/EAlg1vr6JWX8KxhQ0PzGJOdQKPcB2duDtlNJ4awoGEsSp/qYyJLKOKpcz893OWTe3Oi9aQpzuL+kgH6VboCUdwdlUb7YyTMFBkGzzjOXV/iSJDaxvVUIZt7CQS/DkBq4IHXX8iFUDzh6L297/BuRp3Q89ydxmHQjNNtyH+RceZFn07IkWvPveo2BXpK4K9DXE39Z/g1nQzwTqgN8diXxwRuNGe97lBWup4vP1TV8nyHW2AppgFVuPynO+XWfZUuCUzxNseB+XOyeqitoM4uvSNaxDQmokjIf4qXC/46EnJ/fd9Ydz4GVQ4TYyxwNCBJK39RdUOcUtyI+A3IbZ+vt2HIV"
 )
 
 func removeFileFn(filename string) {
@@ -86,15 +95,17 @@ key_file=somelocation
 tenancy=sometenancy
 compartment = somecompartment
 region=someregion
+security_token_file=somesessionfile
 `
 	c, e := parseConfigFile([]byte(data), "DEFAULT")
 
 	assert.NoError(t, e)
-	assert.Equal(t, c.UserOcid, tuser)
-	assert.Equal(t, c.Fingerprint, tfingerprint)
-	assert.Equal(t, c.KeyFilePath, tkeyfile)
-	assert.Equal(t, c.TenancyOcid, ttenancy)
-	assert.Equal(t, c.Region, tregion)
+	assert.Equal(t, tuser, c.UserOcid)
+	assert.Equal(t, tfingerprint, c.Fingerprint)
+	assert.Equal(t, tkeyfile, c.KeyFilePath)
+	assert.Equal(t, ttenancy, c.TenancyOcid)
+	assert.Equal(t, tregion, c.Region)
+	assert.Equal(t, tsessionfile, c.SecurityTokenFile)
 }
 
 func TestFileConfigurationProvider_ParseEmptyFile(t *testing.T) {
@@ -301,6 +312,108 @@ region=someregion
 	assert.NotEmpty(t, rskey)
 	assert.NoError(t, e1)
 	assert.NotEmpty(t, keyID)
+}
+
+
+func TestSessionConfigurationProvider_FromFileFn(t *testing.T) {
+	dataTpl := `[DEFAULT]
+user=someuser
+fingerprint=somefingerprint
+key_file=%s
+security_token_file=%s
+tenancy=sometenancy
+region=someregion
+`
+
+	keyFile := writeTempFile(testPrivateKeyConf)
+	tokenFile := writeTempFile(testSecurityToken)
+	data := fmt.Sprintf(dataTpl, keyFile, tokenFile)
+	tmpConfFile := writeTempFile(data)
+
+	defer removeFileFn(tmpConfFile)
+	defer removeFileFn(keyFile)
+	defer removeFileFn(tokenFile)
+
+	c, e0 := SessionTokenProviderFromFileWithProfile(tmpConfFile, "", "")
+	assert.NoError(t, e0)
+	assert.NotNil(t, c)
+	rskey, e := c.PrivateRSAKey()
+	keyID, e1 := c.KeyID()
+	tFile, e2 := c.SecurityTokenFile()
+	assert.NoError(t, e)
+	assert.NotEmpty(t, rskey)
+	assert.NoError(t, e1)
+	assert.Equal(t, testSessionKeyID, keyID)
+	assert.NoError(t, e2)
+	assert.Equal(t, tokenFile, tFile)
+}
+
+func TestSessionTokenSignatureProvider_FromFileFn(t *testing.T) {
+	dataTpl := `[DEFAULT]
+user=someuser
+fingerprint=somefingerprint
+key_file=%s
+security_token_file=%s
+tenancy=sometenancy
+region=someregion
+`
+
+	keyFile := writeTempFile(testPrivateKeyConf)
+	tokenFile := writeTempFile(testSecurityToken)
+	data := fmt.Sprintf(dataTpl, keyFile, tokenFile)
+	tmpConfFile := writeTempFile(data)
+
+	defer removeFileFn(tmpConfFile)
+	defer removeFileFn(keyFile)
+	defer removeFileFn(tokenFile)
+
+	c, e0 := NewSessionTokenSignatureProviderFromFile(tmpConfFile, "", "")
+	assert.NoError(t, e0)
+	assert.NotNil(t, c)
+}
+
+func TestSessionConfigurationProvider_MissingToken(t *testing.T) {
+	// note missing "security_token_file" field
+	dataTpl := `[DEFAULT]
+user=someuser
+fingerprint=somefingerprint
+key_file=%s
+tenancy=sometenancy
+region=someregion
+`
+
+	keyFile := writeTempFile(testPrivateKeyConf)
+	data := fmt.Sprintf(dataTpl, keyFile)
+	tmpConfFile := writeTempFile(data)
+
+	defer removeFileFn(tmpConfFile)
+	defer removeFileFn(keyFile)
+
+	c, e0 := SessionTokenProviderFromFileWithProfile(tmpConfFile, "", "")
+	assert.Error(t, e0)
+	assert.Nil(t, c)
+}
+
+func TestSessionConfigurationProvider_BadTokenFile(t *testing.T) {
+	dataTpl := `[DEFAULT]
+user=someuser
+fingerprint=somefingerprint
+key_file=%s
+security_token_file=gibberish
+tenancy=sometenancy
+region=someregion
+`
+
+	keyFile := writeTempFile(testPrivateKeyConf)
+	data := fmt.Sprintf(dataTpl, keyFile)
+	tmpConfFile := writeTempFile(data)
+
+	defer removeFileFn(tmpConfFile)
+	defer removeFileFn(keyFile)
+
+	c, e0 := SessionTokenProviderFromFileWithProfile(tmpConfFile, "", "")
+	assert.Error(t, e0)
+	assert.Nil(t, c)
 }
 
 func TestFileConfigurationProvider_FromFileAndProfile(t *testing.T) {

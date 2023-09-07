@@ -678,7 +678,7 @@ func (req *WriteMultipleRequest) serializeV3(w proto.Writer, serialVersion int16
 		} else {
 			if strings.EqualFold(tableName, operation.tableName()) == false {
 				isSingleTable = false
-				break;
+				break
 			}
 		}
 	}
