@@ -11,13 +11,12 @@ to the source code, examples, tests and documents.
 ### Sign the OCA
 
 Before you become a contributor, please read and sign
-[The Oracle Contributor Agreement](https://www.oracle.com/technetwork/community/oca-486395.html)
-(OCA), see [Contributing](https://github.com/oracle/nosql-go-sdk/blob/master/CONTRIBUTING.md)
+[Oracle Contributor Agreement][OCA](OCA),
+see [Contributing](https://github.com/oracle/nosql-go-sdk/blob/master/CONTRIBUTING.md)
 for more details.
 
 After you signed the OCA, make sure that your Git tool is configured to create
-commits using your chosen name and e-mail address as they appear in the
-[OCA Signatories list](https://www.oracle.com/technetwork/community/oca-486395.html#list).
+commits using the name and e-mail address you used to sign the OCA:
 You can configure Git globally (or locally as you prefer) with the commands:
 ```bash
 git config --global user.email you@example.com
@@ -31,14 +30,14 @@ check the [Issues](https://github.com/oracle/nosql-go-sdk/issues) page
 first, this helps prevent duplication of effort. If the issue is already being
 tracked, feel free to participate in the discussion.
 
-### Open a new issue
+### Opening issues
 
 If you find an issue that is not tracked in the [Issues](https://github.com/oracle/nosql-go-sdk/issues)
 page, feel free to open a new one, describe the issue, discuss your plans or
 proposed changes.
 All contributions should be connected to an issue except for the trivial changes.
 
-## Contributing
+## Contributing Code
 
 Follow the [Github Flow](https://guides.github.com/introduction/flow/) when you
 work on a change for Go SDK.
@@ -138,11 +137,10 @@ make onprem-test testcases=TestDataOperations/TestPutGetDelete
 
 See the [Examples](https://github.com/oracle/nosql-go-sdk#examples) section.
 
-## Pull Requests
+## Pull Request Process
 
 Pull requests can be made under
-[The Oracle Contributor Agreement](https://www.oracle.com/technetwork/community/oca-486395.html)
-(OCA).
+[Oracle Contributor Agreement][OCA](OCA).
 
 For pull requests to be accepted, the bottom of
 your commit message must have the following line using your name and
@@ -160,3 +158,11 @@ git commit --signoff
 
 Only pull requests from committers that can be verified as having
 signed the OCA can be accepted.
+
+## Code of conduct
+
+Follow the [Golden Rule](https://en.wikipedia.org/wiki/Golden_Rule). If you'd
+like more specific guidelines, see the [Contributor Covenant Code of Conduct][COC].
+
+[OCA]: https://oca.opensource.oracle.com
+[COC]: https://www.contributor-covenant.org/version/1/4/code-of-conduct/
