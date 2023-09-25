@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 1.4.2 - 2023-09-25
 
 ### Added
 
@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
      * NewSessionTokenSignatureProviderFromFile
 - Cloud only: added support to read region from system environment variable
   OCI_REGION if using user principal or session token authentication
+- On premise only: Added support for default namespaces in requests
+- Latest Oracle Cloud Infrastructure regions and region codes: OZZ, DRS
+- Updated realm domain for OC22/NAP
 
 ## 1.4.1 - 2023-08-21
 
