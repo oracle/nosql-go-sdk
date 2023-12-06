@@ -192,6 +192,16 @@ const (
 	// RegionEUDCCZurich1 represents the dedicated region for Zurich
 	RegionEUDCCZurich1 Region = "eu-dcc-zurich-1"
 
+	// OC25 REGIONS
+
+	// RegionAPDCCTokyo1 represents the dedicated region for Tokyo
+	RegionAPDCCTokyo1 Region = "ap-dcc-tokyo-1"
+
+	// OC26 REGIONS
+
+	// RegionMEAbudhabi3 represents the dedicated region for Abudabhi
+	RegionMEAbudhabi3 Region = "me-abudhabi-3"
+
 	// OC27 REGIONS
 
 	// RegionUSDCCSWJordan1 represents the dedicated region for SWJordan1
@@ -219,6 +229,8 @@ var realm = map[string]string{
 	"oc20": "oraclecloud20.com",
 	"oc22": "psn-pco.it",
 	"oc24": "oraclecloud24.com",
+	"oc25": "nricloud.jp",
+	"oc26": "oraclecloud26.com",
 	"oc27": "oraclecloud27.com",
 	"oc28": "oraclecloud28.com",
 }
@@ -304,6 +316,10 @@ var regionRealm = map[Region]string{
 
 	RegionEUDCCZurich1: "oc24",
 
+	RegionAPDCCTokyo1: "oc25",
+
+	RegionMEAbudhabi3: "oc26",
+
 	RegionUSDCCSWJordan1: "oc27",
 
 	RegionUSDCCSWJordan2: "oc28",
@@ -377,6 +393,8 @@ var shortNameRegion = map[string]Region{
 	"beg": RegionEUJovanovac1,
 	"nap": RegionEUDCCRome1,
 	"avz": RegionEUDCCZurich1,
+	"tyo": RegionAPDCCTokyo1,
+	"ahu": RegionMEAbudhabi3,
 	"ozz": RegionUSDCCSWJordan1,
 	"drs": RegionUSDCCSWJordan2,
 }
