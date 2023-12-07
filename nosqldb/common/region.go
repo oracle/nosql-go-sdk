@@ -156,6 +156,11 @@ const (
 	// RegionEUDCCRating2 represents the dedicated region for Rating2
 	RegionEUDCCRating2 Region = "eu-dcc-rating-2"
 
+	// OC15 REGIONS
+
+	// RegionAPDCCGazipur1 represents the region for Bangladesh
+	RegionAPDCCGazipur1 Region = "ap-dcc-gazipur-1"
+
 	// OC16 REGIONS
 
 	// RegionUSWestJordan1 represents the region for west jordan (Utah)
@@ -181,6 +186,11 @@ const (
 
 	// RegionEUJovanovac1 represents the region for Jovanovac 1 (Serbia)
 	RegionEUJovanovac1 Region = "eu-jovanovac-1"
+
+	// OC21 REGIONS
+
+	// RegionMEDCCDoha1 represents the region for Qatar
+	RegionMEDCCDoha1 Region = "me-dcc-doha-1"
 
 	// OC22 REGIONS
 
@@ -223,10 +233,12 @@ var realm = map[string]string{
 	"oc9":  "oraclecloud9.com",
 	"oc10": "oraclecloud10.com",
 	"oc14": "oraclecloud14.com",
+	"oc15": "oraclecloud15.com",
 	"oc16": "oraclecloud16.com",
 	"oc17": "oraclecloud17.com",
 	"oc19": "oraclecloud.eu",
 	"oc20": "oraclecloud20.com",
+	"oc21": "oraclecloud21.com",
 	"oc22": "psn-pco.it",
 	"oc24": "oraclecloud24.com",
 	"oc25": "nricloud.jp",
@@ -301,6 +313,8 @@ var regionRealm = map[Region]string{
 	RegionEUDCCRating1: "oc14",
 	RegionEUDCCRating2: "oc14",
 
+    RegionAPDCCGazipur1: "oc15",
+
 	RegionUSWestJordan1: "oc16",
 
 	RegionDCCPhoenix1: "oc17",
@@ -311,6 +325,8 @@ var regionRealm = map[Region]string{
 	RegionEUMadrid2:    "oc19",
 
 	RegionEUJovanovac1: "oc20",
+
+	RegionMEDCCDoha1: "oc21",
 
 	RegionEUDCCRome1: "oc22",
 
@@ -384,12 +400,14 @@ var shortNameRegion = map[string]Region{
 	"mxp": RegionEUDCCMilan2,
 	"dus": RegionEUDCCRating1,
 	"dtm": RegionEUDCCRating2,
+	"dac": RegionAPDCCGazipur1,
 	"sgu": RegionUSWestJordan1,
 	"ifp": RegionDCCPhoenix1,
 	"gcn": RegionDCCPhoenix2,
 	"yum": RegionDCCPhoenix4,
 	"str": RegionEUFrankfurt2,
 	"vll": RegionEUMadrid2,
+	"doh": RegionMEDCCDoha1,
 	"beg": RegionEUJovanovac1,
 	"nap": RegionEUDCCRome1,
 	"avz": RegionEUDCCZurich1,
