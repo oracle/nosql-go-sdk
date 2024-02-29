@@ -329,16 +329,6 @@ func readIntAndCheck(r proto.Reader, min int) (i int, err error) {
 
 }
 
-// isDone returns whether the iterator is in the DONE or CLOSED state.
-// CLOSED is included because, in the order of states, a CLOSED iterator is also DONE.
-func (d *planIterDelegate) isDone(rcb runtimeControlBlock) bool {
-	state := rcb.getState(d.statePos)
-	if state == nil {
-		return false
-	}
-	return state.isDone() || state.isClosed()
-}
-
 // getKind returns the kind of plan iterator.
 func (d *planIterDelegate) getKind() planIterKind {
 	return d.kind

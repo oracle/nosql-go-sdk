@@ -346,10 +346,7 @@ func (r *resultsBySortSpec) Less(i, j int) bool {
 			}
 
 			if v2 == types.EmptyValueInstance || v2 == types.JSONNullValueInstance {
-				if sortSpec.isDesc {
-					return true
-				}
-				return false
+				return sortSpec.isDesc
 			}
 
 			return sortSpec.nullsFirst
@@ -357,10 +354,7 @@ func (r *resultsBySortSpec) Less(i, j int) bool {
 
 		if v2 == types.NullValueInstance {
 			if v1 == types.EmptyValueInstance || v1 == types.JSONNullValueInstance {
-				if sortSpec.isDesc {
-					return false
-				}
-				return true
+				return !(sortSpec.isDesc)
 			}
 
 			return !sortSpec.nullsFirst
@@ -371,10 +365,7 @@ func (r *resultsBySortSpec) Less(i, j int) bool {
 				continue
 			}
 			if v2 == types.JSONNullValueInstance {
-				if sortSpec.isDesc {
-					return false
-				}
-				return true
+				return !(sortSpec.isDesc)
 			}
 
 			return sortSpec.nullsFirst
@@ -382,10 +373,7 @@ func (r *resultsBySortSpec) Less(i, j int) bool {
 
 		if v2 == types.EmptyValueInstance {
 			if v1 == types.JSONNullValueInstance {
-				if sortSpec.isDesc {
-					return true
-				}
-				return false
+				return sortSpec.isDesc
 			}
 
 			return !sortSpec.nullsFirst

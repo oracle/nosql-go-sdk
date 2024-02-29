@@ -237,7 +237,7 @@ func (rcb *runtimeControlBlock) decMemoryConsumption(v int64) {
 
 // addConsumedCapacity adds the specified capacity (readUnits/readKB/writeKB)
 // into the total capacity consumed for the query.
-func (rcb *runtimeControlBlock) addConsumedCapacity(c Capacity) {
+func (rcb *runtimeControlBlock) addConsumedCapacity(c *Capacity) {
 	rcb.ReadKB += c.ReadKB
 	rcb.ReadUnits += c.ReadUnits
 	rcb.WriteKB += c.WriteKB

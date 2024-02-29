@@ -480,7 +480,7 @@ func (iter *groupIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 					continue
 				}
 
-				err = iter.aggregate(rcb, state, gbResult.aggrTuple, i, newValue)
+				err = iter.aggregate(rcb, gbResult.aggrTuple, i, newValue)
 				if err != nil {
 					return false, err
 				}
@@ -512,7 +512,7 @@ func (iter *groupIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 				continue
 			}
 
-			err = iter.aggregate(rcb, state, aggrTuple, i, v)
+			err = iter.aggregate(rcb, aggrTuple, i, v)
 			if err != nil {
 				return false, err
 			}
@@ -581,7 +581,7 @@ func (iter *groupIter) displayContent(sb *strings.Builder, f *planFormatter) {
 	iter.input.displayContent(sb, f)
 }
 
-func (iter *groupIter) aggregate(rcb *runtimeControlBlock, state *groupIterState,
+func (iter *groupIter) aggregate(rcb *runtimeControlBlock,
 	aggrValues []*aggrValue, column int, val types.FieldValue) (err error) {
 
 	const one int64 = 1

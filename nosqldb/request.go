@@ -383,6 +383,238 @@ func (r *ListTablesRequest) doesWrites() bool {
 	return false
 }
 
+// AddReplicaRequest is a request used to add a remote replica in another region
+// to a local table.
+//
+// Cloud service only.
+//
+// Added in SDK Version 1.4.4
+type AddReplicaRequest struct {
+	// TableName specifies the name of an existing table.
+	// It is required for this request.
+	TableName string `json:"tableName"`
+
+	// ReplicaName is the name of the region to add the replicated table in.
+	// It is required for this request.
+	ReplicaName string `json:"replicaName"`
+
+	// MatchETag defines an ETag in the request that must be matched for the operation
+	// to proceed. The ETag must be non-null and have been returned in a
+	// previous TableResult. This is a form of optimistic concurrency
+	// control allowing an application to ensure no unexpected modifications
+	// have been made to the table.
+	MatchETag string `json:"matchETag"`
+
+	// Sets the read units for the replica table. This defaults
+	// to the units on the existing local table
+	ReadUnits int32 `json:"readUnits"`
+
+	// Sets the write units for the replica table. This defaults
+	// to the units on the existing local table
+	WriteUnits int32 `json:"writeUnits"`
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
+}
+
+func (r *AddReplicaRequest) validate() error {
+	return validateTimeout(r.Timeout)
+}
+
+func (r *AddReplicaRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *AddReplicaRequest) shouldRetry() bool {
+	return false
+}
+
+func (r *AddReplicaRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *AddReplicaRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *AddReplicaRequest) getNamespace() string {
+	return ""
+}
+
+func (r *AddReplicaRequest) doesReads() bool {
+	return false
+}
+
+func (r *AddReplicaRequest) doesWrites() bool {
+	return false
+}
+
+// DropReplicaRequest is a request used to remove a remote replica from another region.
+//
+// Cloud service only.
+//
+// Added in SDK Version 1.4.4
+type DropReplicaRequest struct {
+	// TableName specifies the name of an existing table.
+	// It is required for this request.
+	TableName string `json:"tableName"`
+
+	// ReplicaName is the name of the region to drop the replicated table from.
+	// It is required for this request.
+	ReplicaName string `json:"replicaName"`
+
+	// MatchETag defines an ETag in the request that must be matched for the operation
+	// to proceed. The ETag must be non-null and have been returned in a
+	// previous TableResult. This is a form of optimistic concurrency
+	// control allowing an application to ensure no unexpected modifications
+	// have been made to the table.
+	MatchETag string `json:"matchETag"`
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
+}
+
+func (r *DropReplicaRequest) validate() error {
+	return validateTimeout(r.Timeout)
+}
+
+func (r *DropReplicaRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *DropReplicaRequest) shouldRetry() bool {
+	return false
+}
+
+func (r *DropReplicaRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *DropReplicaRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *DropReplicaRequest) getNamespace() string {
+	return ""
+}
+
+func (r *DropReplicaRequest) doesReads() bool {
+	return false
+}
+
+func (r *DropReplicaRequest) doesWrites() bool {
+	return false
+}
+
+// ReplicaStatsRequest is a request used to remove a remote replica from another region.
+//
+// Cloud service only.
+//
+// ReplicaStatsRequest represents an operation
+// which returns stats information for one, or all replicas of a replicated
+// table, returned in ReplicaStatsResult. This information includes a
+// time series of replica stats, as found ReplicaStats.
+//
+// It is possible to return a range of stats records or, by default, only the
+// most recent stats records if startTime is not specified. Replica stats
+// records are created on a regular basis and maintained for a period of time.
+// Only records for time periods that have completed are returned so that a user
+// never sees changing data for a specific range.
+//
+// Added in SDK Version 1.4.4
+type ReplicaStatsRequest struct {
+	// TableName specifies the name of an existing table.
+	// It is required for this request.
+	TableName string `json:"tableName"`
+
+	// ReplicaName is the name of the region to query for stats. If this is left
+	// empty, stats for all replicated regions will be returned.
+	ReplicaName string `json:"replicaName"`
+
+	// StartTime start time to use for the request in milliseconds since the
+	// Epoch in UTC time. If no start time is set for this request the most
+	// recent complete stats records are returned, the number of records is
+	// up to the limit defined below.
+	StartTime *time.Time
+
+	// Limit defines the limit to the number of replica stats records desired. The
+	// default value is 1000.
+	Limit int32 `json:"limit"`
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
+}
+
+// SetStartTime is a convenience functon to set the start time from an ISO-formatted
+// datetime string.
+func (r *ReplicaStatsRequest) SetStartTime(startTime string) error {
+	t, err := types.ParseDateTime(startTime)
+	if err != nil {
+		return err
+	}
+	r.StartTime = &t
+	return nil
+}
+
+func (r *ReplicaStatsRequest) validate() error {
+	return validateTimeout(r.Timeout)
+}
+
+func (r *ReplicaStatsRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *ReplicaStatsRequest) shouldRetry() bool {
+	return false
+}
+
+func (r *ReplicaStatsRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *ReplicaStatsRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *ReplicaStatsRequest) getNamespace() string {
+	return ""
+}
+
+func (r *ReplicaStatsRequest) doesReads() bool {
+	return false
+}
+
+func (r *ReplicaStatsRequest) doesWrites() bool {
+	return false
+}
+
 // SystemRequest represents a request used to perform any table-independent
 // administrative operations such as create/drop of namespaces and
 // security-relevant operations such as create/drop users and roles.
@@ -533,12 +765,12 @@ func (r *SystemStatusRequest) doesWrites() bool {
 //
 // The following operations are supported by TableRequest:
 //
-//   create tables
-//   drop tables
-//   modify tables: add or remove columns
-//   create indexes
-//   drop indexes
-//   change table limits of an existing table
+//	create tables
+//	drop tables
+//	modify tables: add or remove columns
+//	create indexes
+//	drop indexes
+//	change table limits of an existing table
 //
 // Operation that is used to create a table must specify a Statement to define
 // the table schema and a TableLimits to define the throughput, storage,
@@ -870,7 +1102,7 @@ func (r *DeleteRequest) validate() (err error) {
 		return
 	}
 
-	if r.isSubRequest == false {
+	if !r.isSubRequest {
 		if err = validateTimeout(r.Timeout); err != nil {
 			return
 		}
@@ -1038,7 +1270,7 @@ func (r *PutRequest) validate() (err error) {
 		return
 	}
 
-	if r.isSubRequest == false {
+	if !r.isSubRequest {
 		if err = validateTimeout(r.Timeout); err != nil {
 			return
 		}
@@ -1878,7 +2110,7 @@ func (r *WriteMultipleRequest) validateTables() (err error) {
 		} else {
 			// check for parent/child table names
 			opTopTable := r.getTopTableName(op.tableName())
-			if strings.EqualFold(topTableName, opTopTable) == false {
+			if !strings.EqualFold(topTableName, opTopTable) {
 				return nosqlerr.NewIllegalArgument("WriteMultipleRequest: "+
 					"All sub requests should operate on the same table or "+
 					"descendant tables belonging to the same top level "+

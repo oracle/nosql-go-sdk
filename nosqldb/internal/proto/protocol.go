@@ -128,6 +128,28 @@ const (
 
 	// SystemStatusRequest is used to retrieve the operation status of a SystemRequest.
 	SystemStatusRequest // 24
+
+	// Unused, to be consistent with internal codes
+	Unused25 // 25
+	Unused26 // 26
+	Unused27 // 27
+	Unused28 // 28
+	Unused29 // 29
+	Unused30 // 30
+	Unused31 // 31
+	Unused32 // 32
+
+	// AddReplica is used in the cloud Global Active Tables
+	// it is used to add a table to a remote region
+	AddReplica // 33
+
+	// DropReplica is used in the cloud Global Active Tables
+	// it is used to remove a table from a remote region
+	DropReplica // 34
+
+	// GetReplicaStats is used in the cloud Global Active Tables
+	// it gets the stats for a replicated table
+	GetReplicaStats // 35
 )
 
 // Reader is a protocol reader used to read and decode byte sequences.
