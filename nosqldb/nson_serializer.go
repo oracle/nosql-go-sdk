@@ -1642,6 +1642,10 @@ func deserializeTableResult(r proto.Reader, _ int16) (*TableResult, int, error) 
 			res.MatchETag, err = readNsonString(r)
 		case SCHEMA_FROZEN:
 			res.SchemaFrozen, err = readNsonBoolean(r)
+		case INITIALIZED:
+			res.IsLocalReplicaInitialized, err = readNsonBoolean(r)
+		case REPLICAS:
+			res.Replicas, err = readNsonReplicas(r)
 		case LIMITS:
 			var lw *mapWalker
 			lw, _, err = newMapWalker(r)
@@ -1672,6 +1676,63 @@ func deserializeTableResult(r proto.Reader, _ int16) (*TableResult, int, error) 
 		return nil, BadProtocol, err
 	}
 	return res, 0, nil
+}
+
+func readNsonReplicas(r proto.Reader) (replicas []*Replica, err error) {
+	// array of replicas
+	if err = readNsonType(r, types.Array); err != nil {
+		return nil, err
+	}
+	// length in bytes: ignored
+	if _, err = r.ReadInt(); err != nil {
+		return nil, err
+	}
+	// number of array elements
+	numElements, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	replicas = make([]*Replica, 0, numElements)
+	for i := 0; i < numElements; i++ {
+		rep, err := readNsonReplica(r)
+		if err != nil {
+			return nil, err
+		}
+		replicas[i] = rep
+	}
+	return replicas, nil
+}
+
+func readNsonReplica(r proto.Reader) (rep *Replica, err error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, err
+	}
+	rep = &Replica{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case REGION:
+			rep.Name, err = readNsonString(r)
+		case TABLE_OCID:
+			rep.TableOcid, err = readNsonString(r)
+		case WRITE_UNITS:
+			rep.WriteUnits, err = readNsonInt(r, name)
+		case LIMITS_MODE:
+			rep.CapacityMode, err = readNsonCapacityMode(r)
+		case TABLE_STATE:
+			var state int
+			if state, err = readNsonInt(r, name); err == nil {
+				rep.State = types.TableState(state)
+			}
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rep, nil
 }
 
 // NsonSerializer is the base struct used for all serialization.
@@ -2613,9 +2674,8 @@ func readNsonIntArray(r proto.Reader) (arr []int, err error) {
 		return nil, err
 	}
 	arr = make([]int, 0, numElements)
-	var val int
 	for i := 0; i < numElements; i++ {
-		val, err = readNsonInt(r, "<array element>")
+		val, err := readNsonInt(r, "<array element>")
 		if err != nil {
 			return nil, err
 		}

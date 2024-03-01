@@ -267,10 +267,10 @@ type TableResult struct {
 	TableName string `json:"tableName"`
 
 	// compartmentOrNamespace is the compartment id (ocid) or namespace (if on-prem)
-	CompartmentOrNamespace string
+	CompartmentOrNamespace string `json:"compartmentOrNamespace"`
 
 	// TableOcid is only used in the cloud service
-	TableOcid string
+	TableOcid string `json:"tableOcid"`
 
 	// State represents current state of the table.
 	// A table in Active state or Updating state is usable for normal operation.
@@ -302,12 +302,12 @@ type TableResult struct {
 	// FreeFormTags represent the free-form tags associated with the table, if any.
 	// Cloud service only.
 	// Added in SDK Version 1.4.0
-	FreeFormTags *types.FreeFormTags
+	FreeFormTags *types.FreeFormTags `json:"freeFormTags"`
 
 	// DefinedTags represent the defined tags associated with the table, if any.
 	// Cloud service only.
 	// Added in SDK Version 1.4.0
-	DefinedTags *types.DefinedTags
+	DefinedTags *types.DefinedTags `json:"definedTags"`
 
 	// MatchETag represents the matchETag associated with this table. The matchETag is an
 	// opaque field that represents the current version of the table itself and
@@ -322,6 +322,16 @@ type TableResult struct {
 	// changed. This is only used in the cloud service for Global Active Tables.
 	// Added in SDK Version 1.4.3
 	SchemaFrozen bool `json:"schemaFrozen"`
+
+	// IsLocalReplicaInitialized indicates if this table is a replica and it has been
+	// fully initialized. This is only used in the cloud service for Global Active Tables.
+	// Added in SDK Version 1.4.3
+	IsLocalReplicaInitialized bool `json:"isLocalReplicaInitialized"`
+
+	// Replicas is an array of Replica objects, each representing a specific remote replica of
+	// this table. This is only used in the cloud service for Global Active Tables.
+	// Added in SDK Version 1.4.3
+	Replicas []*Replica `json:"replicas"`
 }
 
 // String returns a JSON string representation of the TableResult.
@@ -441,6 +451,27 @@ func (r ListTablesResult) String() string {
 	return jsonutil.AsJSON(r)
 }
 
+// Replica contains information about a remote replica of a table.
+//
+// It is only used by the Cloud service in Global Active Tables.
+// Added in SDK Version 1.4.3
+type Replica struct {
+	// Name is the name of the replica region
+	Name string `json:"name"`
+
+	// TableOcid is the OCID of the table in the remote region
+	TableOcid string `json:"tableOcid"`
+
+	// WriteUnits is the amount of write units used by the replicated table
+	WriteUnits int `json:"writeUnits"`
+
+	// CapacityMode is the current mode of the table (Provisioned, etc.)
+	CapacityMode types.CapacityMode `json:"capacityMode"`
+
+	// State is the current state of the remote table
+	State types.TableState `json:"state"`
+}
+
 // ReplicaStats contains information about replica lag for a specific replica.
 //
 // Replica lag is a measure of how current this table is relative to
@@ -456,6 +487,7 @@ func (r ListTablesResult) String() string {
 // table. If there have been no application writes for the table at the
 // remote replica, the service uses other mechanisms to calculate an
 // approximation of the lag, and the lag statistic will still be available.
+// Added in SDK Version 1.4.3
 type ReplicaStats struct {
 	// CollectionTime contains the time the replica lag collection was performed.
 	CollectionTime time.Time `json:"collectionTime"`
