@@ -13,7 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -61,7 +61,7 @@ func newConfig(configFile string) (*Config, error) {
 		return nil, errors.New("config file not specified")
 	}
 
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %v", configFile, err)
 	}
@@ -106,8 +106,7 @@ func (cfg *Config) IsOnPremSecureStore() bool {
 // createConfig creates a test configuration object from the JSON file specified
 // on command line of the form:
 //
-//   testConfig=<path to JSON file>
-//
+//	testConfig=<path to JSON file>
 func createConfig() (cfg *Config, err error) {
 	if !flag.Parsed() {
 		flag.Parse()

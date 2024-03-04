@@ -11,7 +11,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -155,7 +155,7 @@ func TestEndpointsFromJSON(t *testing.T) {
 	require.NoErrorf(t, err, "can't open region file %s: %v", *jsonRegionFile, err)
 	defer jFile.Close()
 
-	byteValue, _ := ioutil.ReadAll(jFile)
+	byteValue, _ := io.ReadAll(jFile)
 
 	// JSONRealm contains a name and pre/postfixes for urls
 	type JSONRealm struct {

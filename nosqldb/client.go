@@ -12,11 +12,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
-
-	//"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -957,6 +955,18 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		c.logger.Debug("the QueryRequest is neither prepared nor bound to a QueryDriver")
 	}
 
+	mustHashBody := false
+	if c.AuthorizationProvider != nil &&
+		c.AuthorizationProvider.AuthorizationScheme() == auth.Signature {
+		if _, ok := req.(*AddReplicaRequest); ok {
+			mustHashBody = true
+		} else if _, ok := req.(*DropReplicaRequest); ok {
+			mustHashBody = true
+		} else if _, ok := req.(*TableRequest); ok {
+			mustHashBody = true
+		}
+	}
+
 	var timeout time.Duration
 	var authStr string
 	var httpReq *http.Request
@@ -1118,6 +1128,9 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		namespace := req.getNamespace()
 		if namespace != "" {
 			httpReq.Header.Add("x-nosql-default-ns", namespace)
+		}
+		if mustHashBody {
+			httpReq.Header.Set("X-NoSQL-Hash-Body", "true")
 		}
 
 		// The authorization string could be empty when the client connects to a
@@ -1462,7 +1475,7 @@ func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16
 // content and parses them as an appropriate result suitable for the request.
 // Otherwise, it returns the http error.
 func (c *Client) processResponse(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error) {
-	data, err := ioutil.ReadAll(httpResp.Body)
+	data, err := io.ReadAll(httpResp.Body)
 	httpResp.Body.Close()
 	if err != nil {
 		return nil, err

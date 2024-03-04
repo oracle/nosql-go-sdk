@@ -6,7 +6,6 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -198,7 +197,7 @@ func parseConfigFile(data []byte, profile string) (info *configFileInfo, err err
 
 	//Look for profile
 	for i, line := range splitContent {
-		if match := profileRegex.FindStringSubmatch(line); match != nil && len(match) > 1 && match[1] == profile {
+		if match := profileRegex.FindStringSubmatch(line); len(match) > 1 && match[1] == profile {
 			start := i + 1
 			return parseConfigAtLine(start, splitContent)
 		}
@@ -257,7 +256,7 @@ func openConfigFile(configFilePath string) (data []byte, err error) {
 		return
 	}
 
-	data, err = ioutil.ReadFile(expandedPath)
+	data, err = os.ReadFile(expandedPath)
 	if err != nil {
 		err = fmt.Errorf("can not read config file: %s due to: %s", configFilePath, err.Error())
 	}
@@ -272,7 +271,7 @@ func readTokenFromFile(tokenFilePath string) (string, error) {
 		return "", err
 	}
 
-	data, err := ioutil.ReadFile(expandedPath)
+	data, err := os.ReadFile(expandedPath)
 	if err != nil {
 		err = fmt.Errorf("can not read token file: %s due to: %s", tokenFilePath, err.Error())
 		return "", err
@@ -404,7 +403,7 @@ func (p fileConfigurationProvider) PrivateRSAKey() (key *rsa.PrivateKey, err err
 		return
 	}
 
-	pemFileContent, err := ioutil.ReadFile(expandedPath)
+	pemFileContent, err := os.ReadFile(expandedPath)
 	if err != nil {
 		err = fmt.Errorf("can not read PrivateKey %s from configuration file due to: %s", filePath, err.Error())
 		return
@@ -439,7 +438,7 @@ func (p fileConfigurationProvider) Region() (value string, err error) {
 	return canStringBeRegion(value)
 }
 
-var blankRegex = regexp.MustCompile("\\s")
+var blankRegex = regexp.MustCompile(`\s`)
 
 func canStringBeRegion(stringRegion string) (region string, err error) {
 	if blankRegex.MatchString(stringRegion) || stringRegion == "" {

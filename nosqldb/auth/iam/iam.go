@@ -11,7 +11,6 @@ package iam
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -105,7 +104,7 @@ func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassphra
 	}
 	// validate all fields in the file
 	ok, err := IsConfigurationProviderValid(configProvider)
-	if ok == false {
+	if !ok {
 		return nil, err
 	}
 
@@ -124,7 +123,7 @@ func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, 
 
 	privateKey := privateKeyOrFile
 	if file, ok := fileExists(privateKeyOrFile); ok {
-		pemData, err := ioutil.ReadFile(file)
+		pemData, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("cannot read private key file %s: %v", file, err)
 		}
@@ -135,7 +134,7 @@ func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, 
 
 	// validate all required fields are provided
 	ok, err := IsConfigurationProviderValid(configProvider)
-	if ok == false {
+	if !ok {
 		return nil, err
 	}
 
@@ -151,11 +150,11 @@ func NewRawSignatureProvider(tenancy, user, region, fingerprint, compartmentID, 
 //
 // Resource principal is configured using the following environment variables:
 //
-//   OCI_RESOURCE_PRINCIPAL_VERSION
-//   OCI_RESOURCE_PRINCIPAL_RPST
-//   OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM
-//   OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM_PASSPHRASE
-//   OCI_RESOURCE_PRINCIPAL_REGION
+//	OCI_RESOURCE_PRINCIPAL_VERSION
+//	OCI_RESOURCE_PRINCIPAL_RPST
+//	OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM
+//	OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM_PASSPHRASE
+//	OCI_RESOURCE_PRINCIPAL_REGION
 //
 // Where OCI_RESOURCE_PRINCIPAL_VERSION specifies a resource principal version.
 // Current version is 2.2.
@@ -250,7 +249,6 @@ func NewSignatureProviderWithInstancePrincipalDelegationFromFile(compartmentID s
 // [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
 // Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
 // [Token-based Authentication for the CLI]: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/clitoken.htm
-//
 func NewSessionTokenSignatureProvider() (*SignatureProvider, error) {
 	return NewSessionTokenSignatureProviderFromFile("~/.oci/config", "DEFAULT", "")
 }
@@ -287,7 +285,7 @@ func NewSessionTokenSignatureProviderFromFile(configFilePath, ociProfile, privat
 	}
 	// validate all fields in the file
 	ok, err := IsConfigurationProviderValid(configProvider)
-	if ok == false {
+	if !ok {
 		return nil, err
 	}
 
@@ -397,10 +395,10 @@ func (p *SignatureProvider) SetDelegationToken(delegationToken string) (*Signatu
 // The file must have the token istelf and nothing else.
 func (p *SignatureProvider) SetDelegationTokenFromFile(delegationTokenFile string) (*SignatureProvider, error) {
 	file, ok := fileExists(delegationTokenFile)
-	if ok == false {
+	if !ok {
 		return nil, fmt.Errorf("delegation token file \"%s\" does not exist", delegationTokenFile)
 	}
-	tokenData, err := ioutil.ReadFile(file)
+	tokenData, err := os.ReadFile(file)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read delegation token file %s: %v", file, err)
 	}
@@ -419,7 +417,7 @@ func (p *SignatureProvider) AuthorizationString(req auth.Request) (auth string, 
 //
 // The Authorization header looks like:
 //
-//   Signature version=n,headers=<>,keyId=<>,algorithm="rsa-sha256",signature="..."
+//	Signature version=n,headers=<>,keyId=<>,algorithm="rsa-sha256",signature="..."
 //
 // This method uses the cached signature if it was generated within the expiry time
 // specified in signatureExpiry. Else it gets the current date/time and uses that to

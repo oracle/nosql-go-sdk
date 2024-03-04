@@ -14,7 +14,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"testing"
@@ -31,7 +30,7 @@ type iamTestSuite struct {
 // This implements the suite.SetupAllSuite interface.
 func (suite *iamTestSuite) SetupSuite() {
 	var err error
-	err = ioutil.WriteFile(testKeyFile, []byte(testKeyPemRaw), 0600)
+	err = os.WriteFile(testKeyFile, []byte(testKeyPemRaw), 0600)
 	suite.Require().NoErrorf(err, "cannot create private key file %s: %v", testKeyFile, err)
 	err = generateBadPrivateKeyPEM(testBadKeyFile)
 	suite.Require().NoErrorf(err, "cannot create private key file %s: %v", testBadKeyFile, err)
@@ -60,7 +59,7 @@ func generateBadPrivateKeyPEM(fileName string) (err error) {
 	}
 	privateKeyPem := pem.EncodeToMemory(block)
 	rand.Read(privateKeyPem[256:280])
-	err = ioutil.WriteFile(fileName, privateKeyPem, 0600)
+	err = os.WriteFile(fileName, privateKeyPem, 0600)
 	return
 }
 
@@ -353,16 +352,16 @@ func createPropFile(props testProviderInfo) (string, error) {
 		buf.WriteString("key_file=" + *props.keyFile + "\n")
 	}
 
-	f, err := ioutil.TempFile("testdata", "test-iam.properties.*~")
+	f, err := os.CreateTemp("testdata", "test-iam.properties.*~")
 	if err != nil {
 		return "", err
 	}
 
-	err = ioutil.WriteFile(f.Name(), buf.Bytes(), os.FileMode(0600))
+	err = os.WriteFile(f.Name(), buf.Bytes(), os.FileMode(0600))
 	return f.Name(), err
 }
 
-func (suite *iamTestSuite) checkSignatureGeneration(p *SignatureProvider, r *testProviderInfo, prefix string) error {
+func (suite *iamTestSuite) checkSignatureGeneration(p *SignatureProvider, r *testProviderInfo, _ string) error {
 
 	// create an http request, sign it, then verify the signature
 	body := bytes.NewBufferString("CREATE TABLE IF NOT EXISTS testData (id LONG, test_string STRING, PRIMARY KEY(id))")

@@ -12,7 +12,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -156,7 +155,7 @@ func generatePrivateKeyPEM(fileName string) (err error) {
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	}
 	privateKeyPem := pem.EncodeToMemory(block)
-	err = ioutil.WriteFile(fileName, privateKeyPem, 0600)
+	err = os.WriteFile(fileName, privateKeyPem, 0600)
 	return
 }
 

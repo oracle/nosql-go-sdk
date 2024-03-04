@@ -10,7 +10,7 @@ package nosqldb
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"testing"
@@ -363,7 +363,7 @@ func (m *mockExecutor) generateResponse(err error, httpReq *http.Request) *http.
 		body := wr.Bytes()
 		httpResp.StatusCode = 200
 		httpResp.Status = "200 OK"
-		httpResp.Body = ioutil.NopCloser(bytes.NewReader(body))
+		httpResp.Body = io.NopCloser(bytes.NewReader(body))
 		httpResp.ContentLength = int64(len(body))
 		return httpResp
 	}
@@ -372,7 +372,7 @@ func (m *mockExecutor) generateResponse(err error, httpReq *http.Request) *http.
 	if e, ok := err.(mockErr); ok {
 		httpResp.StatusCode = e.errCode
 		httpResp.Status = fmt.Sprintf("mock HTTP error: %d", e.errCode)
-		httpResp.Body = ioutil.NopCloser(bytes.NewBufferString(e.msg))
+		httpResp.Body = io.NopCloser(bytes.NewBufferString(e.msg))
 		httpResp.ContentLength = int64(len(e.msg))
 	}
 

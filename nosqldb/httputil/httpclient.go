@@ -12,10 +12,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -80,7 +80,7 @@ func NewHTTPClient(cfg HTTPConfig) (*HTTPClient, error) {
 			rootCAs = x509.NewCertPool()
 		}
 		if cfg.InsecureSkipVerify == false && cfg.CertPath != "" {
-			certs, err := ioutil.ReadFile(cfg.CertPath)
+			certs, err := os.ReadFile(cfg.CertPath)
 			if err != nil {
 				return nil, err
 			}
