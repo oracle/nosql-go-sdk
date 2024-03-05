@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 )
 
 // AuthorizationProvider is an interface used to provide authorization information
@@ -52,6 +53,9 @@ type AuthorizationProvider interface {
 
 	// Close releases resources allocated by the provider.
 	Close() error
+
+	// GetLogger retruns the logger to use, if any
+	GetLogger() *logger.Logger
 }
 
 // accessTokenRequest represents a request for access token from authorization server.

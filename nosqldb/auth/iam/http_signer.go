@@ -49,9 +49,11 @@ var (
 	defaultDelegationHeaders = []string{"date", "(request-target)", "host", "opc-obo-token"}
 	defaultBodyHeaders       = []string{"content-length", "content-type", "x-content-sha256"}
 	defaultBodyHashPredicate = func(r *http.Request) bool {
-		if r.Header.Get("X-NoSQL-Hash-Body") == "true" {
+		// Has the body if explicitly told to
+		if r.Header.Get("X-Nosql-Hash-Body") == "true" {
 			return true
 		}
+		// Otherwise only hash if one of the following request types
 		return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
 	}
 )
@@ -86,7 +88,7 @@ func DelegationRequestSigner(provider KeyProvider) HTTPRequestSigner {
 func RequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 	bodyHashPredicate := func(r *http.Request) bool {
 		// weak request signer will not hash the body unless explicitly told to
-		return r.Header.Get("X-NoSQL-Hash-Body") == "true"
+		return r.Header.Get("X-Nosql-Hash-Body") == "true"
 	}
 	return RequestSignerWithBodyHashingPredicate(provider, defaultGenericHeaders, defaultBodyHeaders, bodyHashPredicate)
 }
@@ -95,7 +97,7 @@ func RequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 func DelegationRequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 	bodyHashPredicate := func(r *http.Request) bool {
 		// weak request signer will not hash the body unless explicitly told to
-		return r.Header.Get("X-NoSQL-Hash-Body") == "true"
+		return r.Header.Get("X-Nosql-Hash-Body") == "true"
 	}
 	return RequestSignerWithBodyHashingPredicate(provider, defaultDelegationHeaders, defaultBodyHeaders, bodyHashPredicate)
 }

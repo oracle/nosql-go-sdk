@@ -955,6 +955,8 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		c.logger.Debug("the QueryRequest is neither prepared nor bound to a QueryDriver")
 	}
 
+	// Include the content body hash in the request signature if this is a
+	// Global Active Tables resuest, or a table DDL request.
 	mustHashBody := false
 	if c.AuthorizationProvider != nil &&
 		c.AuthorizationProvider.AuthorizationScheme() == auth.Signature {
@@ -1307,7 +1309,7 @@ func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
 
 	if limits.ReadUnits <= 0 && limits.WriteUnits <= 0 {
 		delete(c.rateLimiterMap, lTable)
-		c.logger.Info("removing rate limiting from table " + tableName)
+		c.logger.Fine("removing client-side rate limiting from table " + tableName)
 		return false
 	}
 
@@ -1335,7 +1337,7 @@ func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
 		}
 	}
 
-	c.logger.Info("Updated table '%s' to have RUs=%.1f and WUs=%.1f per second",
+	c.logger.Fine("Updated table '%s' rate limiters to have RUs=%.1f and WUs=%.1f per second",
 		tableName, RUs, WUs)
 
 	return true

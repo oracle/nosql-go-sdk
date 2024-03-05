@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
 )
 
@@ -432,8 +433,17 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 		req.Header.Set(requestHeaderDelegationToken, p.delegationToken)
 	}
 
-	// use cached signature and date, if not expired
 	now := time.Now()
+
+	mustHashBody := req.Header.Get("X-Nosql-Hash-Body") == "true"
+	if mustHashBody {
+		// If hashing body, skip all caching below
+		signatureFormattedDate := now.UTC().Format(http.TimeFormat)
+		req.Header.Set(requestHeaderDate, signatureFormattedDate)
+		return p.signer.Sign(req)
+	}
+
+	// use cached signature and date, if not expired and not including body hash
 	if p.signature != "" && p.signatureExpiresAt.After(now) {
 		p.mutex.RLock()
 		defer p.mutex.RUnlock()
@@ -445,14 +455,15 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 	// calculate new signature
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	p.signatureFormattedDate = now.UTC().Format(http.TimeFormat)
-	req.Header.Set(requestHeaderDate, p.signatureFormattedDate)
+	signatureFormattedDate := now.UTC().Format(http.TimeFormat)
+	req.Header.Set(requestHeaderDate, signatureFormattedDate)
 	err := p.signer.Sign(req)
 	if err != nil {
 		return err
 	}
-	p.signature = req.Header.Get(requestHeaderAuthorization)
 
+	p.signatureFormattedDate = signatureFormattedDate
+	p.signature = req.Header.Get(requestHeaderAuthorization)
 	p.signatureExpiresAt = now.Add(p.expiryInterval)
 
 	// need to use min(expiryInterval, tokenExpiration)
@@ -467,5 +478,10 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 // Close releases resources allocated by the provider and sets closed state for the provider.
 // Currently nothing to release
 func (p *SignatureProvider) Close() error {
+	return nil
+}
+
+// GetLogger returns the logger to use.
+func (p *SignatureProvider) GetLogger() *logger.Logger {
 	return nil
 }

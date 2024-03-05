@@ -256,6 +256,11 @@ func (p *AccessTokenProvider) SignHTTPRequest(req *http.Request) error {
 	return nil
 }
 
+// GetLogger returns the logger to use.
+func (p *AccessTokenProvider) GetLogger() *logger.Logger {
+	return p.logger
+}
+
 // Close releases resources allocated by the provider and sets closed state for the provider.
 func (p *AccessTokenProvider) Close() error {
 	if !p.isSecure || p.checkClosed() {

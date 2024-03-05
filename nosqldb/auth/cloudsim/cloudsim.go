@@ -13,6 +13,7 @@ import (
 	"net/http"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 )
 
 // AccessTokenProvider implements the nosqldb.AuthorizationProvider interface.
@@ -44,5 +45,10 @@ func (p *AccessTokenProvider) Close() error {
 // SignHTTPRequest signs the specified HTTP request.
 // It is no-op for this provider.
 func (p *AccessTokenProvider) SignHTTPRequest(req *http.Request) error {
+	return nil
+}
+
+// GetLogger returns a logger to use.
+func (p *AccessTokenProvider) GetLogger() *logger.Logger {
 	return nil
 }
