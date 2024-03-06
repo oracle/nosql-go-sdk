@@ -172,20 +172,6 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 	return client, nil
 }
 
-// getClient returns a NoSQL client used for testing.
-//
-// If there is a test client already created, the client is returned, otherwise
-// it creates a new client with the specified configuration.
-func getClient(cfg *Config) (*nosqldb.Client, error) {
-	if client != nil {
-		return client, nil
-	}
-
-	var err error
-	client, err = createClient(cfg)
-	return client, err
-}
-
 // Interceptor represents an interceptor that used to inject customized
 // procedures to setup NoSQL client, setup and teardown test resources.
 //
@@ -254,10 +240,6 @@ const (
 
 	// MinReadKB represents the minimum read KB for a query operation
 	MinReadKB = 1
-
-	// The default interval between two tests.
-	// This is used to avoid throttling errors during testing.
-	defaultTestInterval = 500 * time.Millisecond
 
 	// MaxDataSizeLimit represents the limit on data size for a row.
 	// It is 512 KB.
