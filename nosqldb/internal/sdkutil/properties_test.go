@@ -10,7 +10,6 @@ package sdkutil
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -121,7 +120,7 @@ func (suite *PropTestSuite) TestGet() {
 }
 
 func (suite *PropTestSuite) TestPut() {
-	f, err := ioutil.TempFile("", "go-driver-test-*.properties")
+	f, err := os.CreateTemp("", "go-driver-test-*.properties")
 	if !suite.NoErrorf(err, "failed to create a temporary file for testing") {
 		return
 	}
@@ -162,7 +161,7 @@ func (suite *PropTestSuite) TestPut() {
 }
 
 func (suite *PropTestSuite) TestConcurrency() {
-	f, err := ioutil.TempFile("", "go-driver-test-*.properties")
+	f, err := os.CreateTemp("", "go-driver-test-*.properties")
 	if !suite.NoErrorf(err, "failed to create a temporary file for testing") {
 		return
 	}

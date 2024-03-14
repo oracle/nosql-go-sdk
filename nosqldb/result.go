@@ -25,29 +25,29 @@ var errNilClient = nosqlerr.NewIllegalArgument("client must be non-nil")
 type Result interface {
 	// ConsumedCapacity is a function used to return the read, write throughput
 	// consumed by an operation.
-	ConsumedCapacity() (Capacity, error)
+	ConsumedCapacity() (*Capacity, error)
 
-	Delayed() DelayInfo
+	Delayed() *DelayInfo
 }
 
 // DelayInfo contains information about the amount of time a request was delayed.
 type DelayInfo struct {
 	// RateLimitTime represents the time delayed due to internal rate limiting.
-	RateLimitTime time.Duration
+	RateLimitTime time.Duration `json:"rateLimitTime"`
 	// RetryTime represents the time delayed due to internal request retries.
-	RetryTime time.Duration
+	RetryTime time.Duration `json:"retryTime"`
 }
 
 // Delayed returns the time delay information for a completed request.
-func (d DelayInfo) Delayed() DelayInfo {
+func (d *DelayInfo) Delayed() *DelayInfo {
 	return d
 }
 
-func (d DelayInfo) setRateLimitTime(t time.Duration) {
+func (d *DelayInfo) setRateLimitTime(t time.Duration) {
 	d.RateLimitTime = t
 }
 
-func (d DelayInfo) setRetryTime(t time.Duration) {
+func (d *DelayInfo) setRetryTime(t time.Duration) {
 	d.RetryTime = t
 }
 
@@ -73,7 +73,7 @@ func (r Capacity) String() string {
 }
 
 // ConsumedCapacity returns the read/write throughput consumed by an operation.
-func (r Capacity) ConsumedCapacity() (Capacity, error) {
+func (r *Capacity) ConsumedCapacity() (*Capacity, error) {
 	return r, nil
 }
 
@@ -83,8 +83,8 @@ func (r Capacity) ConsumedCapacity() (Capacity, error) {
 // care about consumed capacity.
 type noCapacity struct{}
 
-func (r noCapacity) ConsumedCapacity() (Capacity, error) {
-	return Capacity{}, nil
+func (r *noCapacity) ConsumedCapacity() (*Capacity, error) {
+	return &Capacity{}, nil
 }
 
 // GetResult represents the result of a Client.Get() operation.
@@ -150,9 +150,9 @@ func (r GetResult) RowExists() bool {
 // Asynchronous operations (e.g. create namespace) can be distinguished from
 // synchronous System operations in this way:
 //
-//   a. Asynchronous operations may return a non-nil OperationID.
-//   b. Asynchronous operations modify state, while synchronous operations are read-only.
-//   c. Synchronous operations return a state of types.Complete and have a non-nil ResultString.
+//	a. Asynchronous operations may return a non-nil OperationID.
+//	b. Asynchronous operations modify state, while synchronous operations are read-only.
+//	c. Synchronous operations return a state of types.Complete and have a non-nil ResultString.
 //
 // Client.GetSystemStatus() is synchronous, returning the known state of the
 // operation. It should only be called if the operation was asynchronous and
@@ -267,10 +267,10 @@ type TableResult struct {
 	TableName string `json:"tableName"`
 
 	// compartmentOrNamespace is the compartment id (ocid) or namespace (if on-prem)
-	CompartmentOrNamespace string
+	CompartmentOrNamespace string `json:"compartmentOrNamespace"`
 
 	// TableOcid is only used in the cloud service
-	TableOcid string
+	TableOcid string `json:"tableOcid"`
 
 	// State represents current state of the table.
 	// A table in Active state or Updating state is usable for normal operation.
@@ -302,12 +302,12 @@ type TableResult struct {
 	// FreeFormTags represent the free-form tags associated with the table, if any.
 	// Cloud service only.
 	// Added in SDK Version 1.4.0
-	FreeFormTags *types.FreeFormTags
+	FreeFormTags *types.FreeFormTags `json:"freeFormTags"`
 
 	// DefinedTags represent the defined tags associated with the table, if any.
 	// Cloud service only.
 	// Added in SDK Version 1.4.0
-	DefinedTags *types.DefinedTags
+	DefinedTags *types.DefinedTags `json:"definedTags"`
 
 	// MatchETag represents the matchETag associated with this table. The matchETag is an
 	// opaque field that represents the current version of the table itself and
@@ -317,6 +317,21 @@ type TableResult struct {
 	// Cloud service only.
 	// Added in SDK Version 1.4.0
 	MatchETag string `json:"matchETag"`
+
+	// SchemaFrozen indicates if the table schema is "frozen", i.e. it cannot be
+	// changed. This is only used in the cloud service for Global Active Tables.
+	// Added in SDK Version 1.4.3
+	SchemaFrozen bool `json:"schemaFrozen"`
+
+	// IsLocalReplicaInitialized indicates if this table is a replica and it has been
+	// fully initialized. This is only used in the cloud service for Global Active Tables.
+	// Added in SDK Version 1.4.3
+	IsLocalReplicaInitialized bool `json:"isLocalReplicaInitialized"`
+
+	// Replicas is an array of Replica objects, each representing a specific remote replica of
+	// this table. This is only used in the cloud service for Global Active Tables.
+	// Added in SDK Version 1.4.3
+	Replicas []*Replica `json:"replicas"`
 }
 
 // String returns a JSON string representation of the TableResult.
@@ -433,6 +448,76 @@ type ListTablesResult struct {
 
 // String returns a JSON string representation of the ListTablesResult.
 func (r ListTablesResult) String() string {
+	return jsonutil.AsJSON(r)
+}
+
+// Replica contains information about a remote replica of a table.
+//
+// It is only used by the Cloud service in Global Active Tables.
+// Added in SDK Version 1.4.3
+type Replica struct {
+	// Name is the name of the replica region
+	Name string `json:"name"`
+
+	// TableOcid is the OCID of the table in the remote region
+	TableOcid string `json:"tableOcid"`
+
+	// WriteUnits is the amount of write units used by the replicated table
+	WriteUnits int `json:"writeUnits"`
+
+	// CapacityMode is the current mode of the table (Provisioned, etc.)
+	CapacityMode types.CapacityMode `json:"capacityMode"`
+
+	// State is the current state of the remote table
+	State types.TableState `json:"state"`
+}
+
+// ReplicaStats contains information about replica lag for a specific replica.
+//
+// Replica lag is a measure of how current this table is relative to
+// the remote replica and indicates that this table has not yet received
+// updates that happened within the lag period.
+//
+// For example, if the replica lag is 5,000 milliseconds(5 seconds),
+// then this table will have all updates that occurred at the remote
+// replica that are more than 5 seconds old.
+//
+// Replica lag is calculated based on how long it took for the latest
+// operation from the table at the remote replica to be replayed at this
+// table. If there have been no application writes for the table at the
+// remote replica, the service uses other mechanisms to calculate an
+// approximation of the lag, and the lag statistic will still be available.
+// Added in SDK Version 1.4.3
+type ReplicaStats struct {
+	// CollectionTime contains the time the replica lag collection was performed.
+	CollectionTime time.Time `json:"collectionTime"`
+
+	// Lag contains the duration of the lag at the specified collection time.
+	Lag time.Duration `json:"lag"`
+}
+
+// ReplicaStatsResult represents the result of a Client.GetReplicaStats() operation.
+// It contains replica statistics for the requested table.
+type ReplicaStatsResult struct {
+	noCapacity
+	DelayInfo
+
+	// TableName represents the name of the table. It should match that given in
+	// the ReplicaStatsRequest.
+	TableName string `json:"tableName"`
+
+	// NextStartTime represents the next start time. This can be provided to
+	// ReplicaStatsRequest to be used as a starting point for listing
+	// replica stats records.
+	NextStartTime *time.Time `json:"nextStartTime"`
+
+	// StatsRecords is a map containing ReplicaStats arrays for each requested
+	// replica (region).
+	StatsRecords map[string][]*ReplicaStats `json:"statsRecords"`
+}
+
+// String returns a JSON string representation of the ReplicaStatsResult.
+func (r ReplicaStatsResult) String() string {
 	return jsonutil.AsJSON(r)
 }
 
@@ -853,13 +938,13 @@ func (r *QueryResult) getContinuationKey() ([]byte, error) {
 // ConsumedCapacity returns the consumed capacity by the query request.
 //
 // This implements the Result interface.
-func (r *QueryResult) ConsumedCapacity() (Capacity, error) {
+func (r *QueryResult) ConsumedCapacity() (*Capacity, error) {
 	err := r.compute()
 	if err != nil {
-		return Capacity{}, err
+		return &Capacity{}, err
 	}
 
-	return Capacity{
+	return &Capacity{
 		ReadKB:    r.ReadKB,
 		WriteKB:   r.WriteKB,
 		ReadUnits: r.ReadUnits,

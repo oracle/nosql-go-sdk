@@ -11,7 +11,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -50,6 +49,11 @@ var (
 	defaultDelegationHeaders = []string{"date", "(request-target)", "host", "opc-obo-token"}
 	defaultBodyHeaders       = []string{"content-length", "content-type", "x-content-sha256"}
 	defaultBodyHashPredicate = func(r *http.Request) bool {
+		// Has the body if explicitly told to
+		if r.Header.Get("X-Nosql-Hash-Body") == "true" {
+			return true
+		}
+		// Otherwise only hash if one of the following request types
 		return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
 	}
 )
@@ -83,8 +87,8 @@ func DelegationRequestSigner(provider KeyProvider) HTTPRequestSigner {
 // RequestSignerExcludeBody creates a signer without hash the body.
 func RequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 	bodyHashPredicate := func(r *http.Request) bool {
-		// weak request signer will not hash the body
-		return false
+		// weak request signer will not hash the body unless explicitly told to
+		return r.Header.Get("X-Nosql-Hash-Body") == "true"
 	}
 	return RequestSignerWithBodyHashingPredicate(provider, defaultGenericHeaders, defaultBodyHeaders, bodyHashPredicate)
 }
@@ -92,8 +96,8 @@ func RequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 // DelegationRequestSignerExcludeBody creates a signer without hash the body but including delegation token.
 func DelegationRequestSignerExcludeBody(provider KeyProvider) HTTPRequestSigner {
 	bodyHashPredicate := func(r *http.Request) bool {
-		// weak request signer will not hash the body
-		return false
+		// weak request signer will not hash the body unless explicitly told to
+		return r.Header.Get("X-Nosql-Hash-Body") == "true"
 	}
 	return RequestSignerWithBodyHashingPredicate(provider, defaultDelegationHeaders, defaultBodyHeaders, bodyHashPredicate)
 }
@@ -209,7 +213,7 @@ func drainBody(b io.ReadCloser) (r1, r2 io.ReadCloser, err error) {
 	if err = b.Close(); err != nil {
 		return nil, b, err
 	}
-	return ioutil.NopCloser(&buf), ioutil.NopCloser(bytes.NewReader(buf.Bytes())), nil
+	return io.NopCloser(&buf), io.NopCloser(bytes.NewReader(buf.Bytes())), nil
 }
 
 func hashAndEncode(data []byte) string {
@@ -227,13 +231,13 @@ func GetBodyHash(request *http.Request) (hashString string, err error) {
 	}
 
 	var data []byte
-	bReader := request.Body
+	var bReader io.ReadCloser
 	bReader, request.Body, err = drainBody(request.Body)
 	if err != nil {
 		return "", fmt.Errorf("can not read body of request while calculating body hash: %s", err.Error())
 	}
 
-	data, err = ioutil.ReadAll(bReader)
+	data, err = io.ReadAll(bReader)
 	if err != nil {
 		return "", fmt.Errorf("can not read body of request while calculating body hash: %s", err.Error())
 	}

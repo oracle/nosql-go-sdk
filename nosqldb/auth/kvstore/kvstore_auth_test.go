@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -572,13 +571,13 @@ func createConfigFile(username *string, password []byte) (string, error) {
 		buf.WriteString("password=" + string(password) + "\n")
 	}
 
-	f, err := ioutil.TempFile("", "kvstore-auth-config.*~")
+	f, err := os.CreateTemp("", "kvstore-auth-config.*~")
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	err = ioutil.WriteFile(f.Name(), buf.Bytes(), os.FileMode(0600))
+	err = os.WriteFile(f.Name(), buf.Bytes(), os.FileMode(0600))
 	return f.Name(), err
 }
 

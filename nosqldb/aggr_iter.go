@@ -1127,7 +1127,7 @@ func compareBools(x, y bool) int {
 	switch {
 	case x == y:
 		return 0
-	case x == false:
+	case !x:
 		return -1
 	default:
 		return 1

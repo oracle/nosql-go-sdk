@@ -13,7 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -61,7 +61,7 @@ func newConfig(configFile string) (*Config, error) {
 		return nil, errors.New("config file not specified")
 	}
 
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %v", configFile, err)
 	}
@@ -106,8 +106,7 @@ func (cfg *Config) IsOnPremSecureStore() bool {
 // createConfig creates a test configuration object from the JSON file specified
 // on command line of the form:
 //
-//   testConfig=<path to JSON file>
-//
+//	testConfig=<path to JSON file>
 func createConfig() (cfg *Config, err error) {
 	if !flag.Parsed() {
 		flag.Parse()
@@ -173,20 +172,6 @@ func createClient(cfg *Config) (*nosqldb.Client, error) {
 	}
 
 	return client, nil
-}
-
-// getClient returns a NoSQL client used for testing.
-//
-// If there is a test client already created, the client is returned, otherwise
-// it creates a new client with the specified configuration.
-func getClient(cfg *Config) (*nosqldb.Client, error) {
-	if client != nil {
-		return client, nil
-	}
-
-	var err error
-	client, err = createClient(cfg)
-	return client, err
 }
 
 // Interceptor represents an interceptor that used to inject customized
@@ -257,10 +242,6 @@ const (
 
 	// MinReadKB represents the minimum read KB for a query operation
 	MinReadKB = 1
-
-	// The default interval between two tests.
-	// This is used to avoid throttling errors during testing.
-	defaultTestInterval = 500 * time.Millisecond
 
 	// MaxDataSizeLimit represents the limit on data size for a row.
 	// It is 512 KB.
