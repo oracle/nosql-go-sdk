@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -1913,10 +1913,10 @@ func (r *WriteMultipleRequest) validateTables() (err error) {
 			// check for parent/child table names
 			opTopTable := r.getTopTableName(op.tableName())
 			if strings.EqualFold(topTableName, opTopTable) == false {
-				return nosqlerr.NewIllegalArgument("WriteMultipleRequest: " +
-					"All sub requests should operate on the same table or " +
-					"descendant tables belonging to the same top level " +
-					"table. The table '%s' is different from the table of " +
+				return nosqlerr.NewIllegalArgument("WriteMultipleRequest: "+
+					"All sub requests should operate on the same table or "+
+					"descendant tables belonging to the same top level "+
+					"table. The table '%s' is different from the table of "+
 					"other requests: '%s'", opTopTable, topTableName)
 			}
 		}

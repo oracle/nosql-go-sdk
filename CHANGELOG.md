@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 - Added support for array_collect() and count(distinct) in queries. These
   require server side support which is only available in Oracle NoSQL releases
   23.3 and higher and will not be immediately available in the cloud service
+- Latest Oracle Cloud Infrastructure regions and region codes: TYO, ABH, DAC, DOH
+
+### Changed
+- Changed copyrights to 2024
+
+## 1.4.2 - 2023-09-25
+
+### Added
+
+- Added capability to use Session Token based authentication:
+     * NewSessionTokenSignatureProvider
+     * NewSessionTokenSignatureProviderFromFile
+- Cloud only: added support to read region from system environment variable
+  OCI_REGION if using user principal or session token authentication
+- On premise only: Added support for default namespaces in requests
+- Latest Oracle Cloud Infrastructure regions and region codes: OZZ, DRS
+- Updated realm domain for OC22/NAP
 
 ## 1.4.1 - 2023-08-21
 

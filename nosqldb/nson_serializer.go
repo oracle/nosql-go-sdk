@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -1007,7 +1007,7 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) 
 		} else {
 			if strings.EqualFold(tableName, operation.tableName()) == false {
 				isSingleTable = false
-				break;
+				break
 			}
 		}
 	}
@@ -1044,11 +1044,11 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) 
 		if operation.DeleteRequest != nil {
 			operation.DeleteRequest.abortOnFail = operation.AbortOnFail
 			subReq = operation.DeleteRequest
-			err = operation.DeleteRequest.serializeInternal(w, serialVersion, isSingleTable==false)
+			err = operation.DeleteRequest.serializeInternal(w, serialVersion, isSingleTable == false)
 		} else if operation.PutRequest != nil {
 			operation.PutRequest.abortOnFail = operation.AbortOnFail
 			subReq = operation.PutRequest
-			err = operation.PutRequest.serializeInternal(w, serialVersion, isSingleTable==false)
+			err = operation.PutRequest.serializeInternal(w, serialVersion, isSingleTable == false)
 		}
 
 		if err != nil {

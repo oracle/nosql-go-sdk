@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -453,16 +453,16 @@ const ISO8601NoTLayout = "2006-01-02 15:04:05.999999999"
 const ISO8601ZNoTLayout = "2006-01-02 15:04:05.999999999Z"
 
 func ParseDateTime(datestr string) (time.Time, error) {
-        if v, err := time.Parse(ISO8601Layout, datestr) ; err == nil {
-            return v, nil
-        }
-        if v, err := time.Parse(ISO8601ZLayout, datestr) ; err == nil {
-            return v, nil
-        }
-        if v, err := time.Parse(ISO8601NoTLayout, datestr) ; err == nil {
-            return v, nil
-        }
-        return time.Parse(ISO8601ZNoTLayout, datestr)
+	if v, err := time.Parse(ISO8601Layout, datestr); err == nil {
+		return v, nil
+	}
+	if v, err := time.Parse(ISO8601ZLayout, datestr); err == nil {
+		return v, nil
+	}
+	if v, err := time.Parse(ISO8601NoTLayout, datestr); err == nil {
+		return v, nil
+	}
+	return time.Parse(ISO8601ZNoTLayout, datestr)
 }
 
 // FieldRange defines a range of values to be used in a Client.MultiDelete()

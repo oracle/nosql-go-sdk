@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -156,6 +156,11 @@ const (
 	// RegionEUDCCRating2 represents the dedicated region for Rating2
 	RegionEUDCCRating2 Region = "eu-dcc-rating-2"
 
+	// OC15 REGIONS
+
+	// RegionAPDCCGazipur1 represents the region for Bangladesh
+	RegionAPDCCGazipur1 Region = "ap-dcc-gazipur-1"
+
 	// OC16 REGIONS
 
 	// RegionUSWestJordan1 represents the region for west jordan (Utah)
@@ -182,6 +187,11 @@ const (
 	// RegionEUJovanovac1 represents the region for Jovanovac 1 (Serbia)
 	RegionEUJovanovac1 Region = "eu-jovanovac-1"
 
+	// OC21 REGIONS
+
+	// RegionMEDCCDoha1 represents the region for Qatar
+	RegionMEDCCDoha1 Region = "me-dcc-doha-1"
+
 	// OC22 REGIONS
 
 	// RegionEUJovanovac1 represents the dedicated region for Rome
@@ -191,6 +201,26 @@ const (
 
 	// RegionEUDCCZurich1 represents the dedicated region for Zurich
 	RegionEUDCCZurich1 Region = "eu-dcc-zurich-1"
+
+	// OC25 REGIONS
+
+	// RegionAPDCCTokyo1 represents the dedicated region for Tokyo
+	RegionAPDCCTokyo1 Region = "ap-dcc-tokyo-1"
+
+	// OC26 REGIONS
+
+	// RegionMEAbudhabi3 represents the dedicated region for Abudabhi
+	RegionMEAbudhabi3 Region = "me-abudhabi-3"
+
+	// OC27 REGIONS
+
+	// RegionUSDCCSWJordan1 represents the dedicated region for SWJordan1
+	RegionUSDCCSWJordan1 Region = "us-dcc-swjordan-1"
+
+	// OC28 REGIONS
+
+	// RegionUSDCCSWJordan1 represents the dedicated region for SWJordan2
+	RegionUSDCCSWJordan2 Region = "us-dcc-swjordan-2"
 )
 
 var realm = map[string]string{
@@ -203,12 +233,18 @@ var realm = map[string]string{
 	"oc9":  "oraclecloud9.com",
 	"oc10": "oraclecloud10.com",
 	"oc14": "oraclecloud14.com",
+	"oc15": "oraclecloud15.com",
 	"oc16": "oraclecloud16.com",
 	"oc17": "oraclecloud17.com",
 	"oc19": "oraclecloud.eu",
 	"oc20": "oraclecloud20.com",
-	"oc22": "oraclecloud22.com",
+	"oc21": "oraclecloud21.com",
+	"oc22": "psn-pco.it",
 	"oc24": "oraclecloud24.com",
+	"oc25": "nricloud.jp",
+	"oc26": "oraclecloud26.com",
+	"oc27": "oraclecloud27.com",
+	"oc28": "oraclecloud28.com",
 }
 
 var regionRealm = map[Region]string{
@@ -277,6 +313,8 @@ var regionRealm = map[Region]string{
 	RegionEUDCCRating1: "oc14",
 	RegionEUDCCRating2: "oc14",
 
+    RegionAPDCCGazipur1: "oc15",
+
 	RegionUSWestJordan1: "oc16",
 
 	RegionDCCPhoenix1: "oc17",
@@ -288,9 +326,19 @@ var regionRealm = map[Region]string{
 
 	RegionEUJovanovac1: "oc20",
 
+	RegionMEDCCDoha1: "oc21",
+
 	RegionEUDCCRome1: "oc22",
 
 	RegionEUDCCZurich1: "oc24",
+
+	RegionAPDCCTokyo1: "oc25",
+
+	RegionMEAbudhabi3: "oc26",
+
+	RegionUSDCCSWJordan1: "oc27",
+
+	RegionUSDCCSWJordan2: "oc28",
 }
 
 var shortNameRegion = map[string]Region{
@@ -352,15 +400,21 @@ var shortNameRegion = map[string]Region{
 	"mxp": RegionEUDCCMilan2,
 	"dus": RegionEUDCCRating1,
 	"dtm": RegionEUDCCRating2,
+	"dac": RegionAPDCCGazipur1,
 	"sgu": RegionUSWestJordan1,
 	"ifp": RegionDCCPhoenix1,
 	"gcn": RegionDCCPhoenix2,
 	"yum": RegionDCCPhoenix4,
 	"str": RegionEUFrankfurt2,
 	"vll": RegionEUMadrid2,
+	"doh": RegionMEDCCDoha1,
 	"beg": RegionEUJovanovac1,
 	"nap": RegionEUDCCRome1,
 	"avz": RegionEUDCCZurich1,
+	"tyo": RegionAPDCCTokyo1,
+	"ahu": RegionMEAbudhabi3,
+	"ozz": RegionUSDCCSWJordan1,
+	"drs": RegionUSDCCSWJordan2,
 }
 
 func (region Region) secondLevelDomain() string {

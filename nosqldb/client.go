@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -1148,12 +1148,11 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	}
 }
 
-
 func (c *Client) warmupClientAuth() {
 	// Create a dummy http request and pass it to the signing logic.
 	// this will initialize the IAM auth underneath.
 	// Don't return any errors - this is a best-effort attempt.
-	c.logger.Fine("Warming up auth...");
+	c.logger.Fine("Warming up auth...")
 	httpReq, err := httputil.NewPostRequest(c.requestURL, []byte{})
 	if err != nil {
 		c.logger.Fine("Got error creating warmup request: %v", err)

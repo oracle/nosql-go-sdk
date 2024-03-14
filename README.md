@@ -580,13 +580,15 @@ See the [Changelog](https://github.com/oracle/nosql-go-sdk/blob/master/CHANGELOG
 
 ## Contributing
 
-The nosql-go-sdk is an open source project. See
-[Contributing](https://github.com/oracle/nosql-go-sdk/blob/master/CONTRIBUTING.md)
-for information on how to contribute to the project.
+This project welcomes contributions from the community. Before submitting a pull request, please [review our contribution guide](./CONTRIBUTING.md)
+
+## Security
+
+Please consult the [security guide](./SECURITY.md) for our responsible security vulnerability disclosure process
 
 ## License
 
-Copyright (C) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+Copyright (C) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 
 This SDK is licensed under the Universal Permissive License 1.0. See
 [LICENSE](https://github.com/oracle/nosql-go-sdk/blob/master/LICENSE.txt) for

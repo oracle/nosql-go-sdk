@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -678,7 +678,7 @@ func (req *WriteMultipleRequest) serializeV3(w proto.Writer, serialVersion int16
 		} else {
 			if strings.EqualFold(tableName, operation.tableName()) == false {
 				isSingleTable = false
-				break;
+				break
 			}
 		}
 	}

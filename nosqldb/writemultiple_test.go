@@ -1,10 +1,11 @@
 //
-// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
 //
 
+//go:build cloud || onprem
 // +build cloud onprem
 
 package nosqldb_test
@@ -51,9 +52,9 @@ func (suite *WriteMultipleTestSuite) SetupSuite() {
 	// first supported in 21.2
 	if suite.Config.Version >= "21.2" {
 		childTable := suite.table + ".child"
-		stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(" +
-			"childid INTEGER, childname STRING, childdata STRING, " +
-			"PRIMARY KEY(childid)) " +
+		stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s("+
+			"childid INTEGER, childname STRING, childdata STRING, "+
+			"PRIMARY KEY(childid)) "+
 			"USING TTL 1 DAYS", childTable)
 		suite.ReCreateTable(childTable, stmt, nil)
 	}
@@ -275,16 +276,16 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 		// 22.1 <= .22
 		// 22.2 <= .13
 		// 22.3 <= .3
-	    if suite.Config.Version <= "21.2.51" {
+		if suite.Config.Version <= "21.2.51" {
 			return
 		}
-	    if suite.Config.Version >= "22.1" && suite.Config.Version <= "22.1.22" {
+		if suite.Config.Version >= "22.1" && suite.Config.Version <= "22.1.22" {
 			return
 		}
-	    if suite.Config.Version >= "22.2" && suite.Config.Version <= "22.2.13" {
+		if suite.Config.Version >= "22.2" && suite.Config.Version <= "22.2.13" {
 			return
 		}
-	    if suite.Config.Version >= "22.3" && suite.Config.Version <= "22.3.3" {
+		if suite.Config.Version >= "22.3" && suite.Config.Version <= "22.3.3" {
 			return
 		}
 	}
