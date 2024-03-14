@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -120,7 +119,7 @@ func (p *Properties) Save() error {
 
 	tmpFile := fmt.Sprintf("%s.tmp", p.file)
 	perm := os.FileMode(0644)
-	if err := ioutil.WriteFile(tmpFile, buf.Bytes(), perm); err != nil {
+	if err := os.WriteFile(tmpFile, buf.Bytes(), perm); err != nil {
 		return err
 	}
 	return os.Rename(tmpFile, p.file)

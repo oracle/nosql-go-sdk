@@ -55,6 +55,7 @@ const (
 	INCLUSIVE                  = "in"
 	INDEX                      = "i"
 	INDEXES                    = "ix"
+	INITIALIZED                = "it"
 	IS_JSON                    = "j"
 	IS_PREPARED                = "is"
 	IS_SIMPLE_QUERY            = "iq"
@@ -75,6 +76,7 @@ const (
 	MODIFIED                   = "md"
 	NAME                       = "m"
 	NAMESPACE                  = "ns"
+	NEXT_START_TIME            = "ni"
 	NOT_TARGET_TABLES          = "nt"
 	NUMBER_LIMIT               = "nl"
 	NUM_DELETIONS              = "nd"
@@ -101,11 +103,16 @@ const (
 	READ_KB                    = "rk"
 	READ_THROTTLE_COUNT        = "rt"
 	READ_UNITS                 = "ru"
+	REGION                     = "rn"
+	REPLICAS                   = "rc"
+	REPLICA_LAG                = "rl"
+	REPLICA_STATS              = "ra"
 	RETRY_HINT                 = "rh"
 	RETURN_INFO                = "ri"
 	RETURN_ROW                 = "rr"
 	ROW                        = "r"
 	ROW_VERSION                = "rv"
+	SCHEMA_FROZEN              = "sf"
 	SHARD_ID                   = "si"
 	SHARD_IDS                  = "sa"
 	SORT_PHASE1_RESULTS        = "p1"
@@ -125,6 +132,7 @@ const (
 	TABLE_STATE                = "as"
 	TABLE_USAGE                = "u"
 	TABLE_USAGE_PERIOD         = "pd"
+	TIME                       = "tm"
 	TIMEOUT                    = "t"
 	TOPOLOGY_INFO              = "tp"
 	TOPO_SEQ_NUM               = "ts"
@@ -161,12 +169,11 @@ func SetNsonDebug(d bool) {
 //
 // The fields of GetRequest are written in the following order:
 //
-//   OpCode: Get
-//   Timeout
-//   TableName
-//   Consistency
-//   Key
-//
+//	OpCode: Get
+//	Timeout
+//	TableName
+//	Consistency
+//	Key
 func (req *GetRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -223,11 +230,10 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16) (Result,
 //
 // The fields of GetTableRequest are written in the following order:
 //
-//   OpCode: GetTable
-//   Timeout
-//   TableName
-//   OperationID
-//
+//	OpCode: GetTable
+//	Timeout
+//	TableName
+//	OperationID
 func (req *GetTableRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -308,14 +314,13 @@ func (req *SystemStatusRequest) deserialize(r proto.Reader, serialVersion int16)
 //
 // The fields of TableRequest are written in the following order:
 //
-//   OpCode: TableRequest
-//   Timeout
-//   Statement: if it is set.
-//   A bool flag: indicates if table limits is set.
-//   TableLimits: skip if it is not set.
-//   A bool flag: indicates if table name is set.
-//   TableName: skip if it is not set.
-//
+//	OpCode: TableRequest
+//	Timeout
+//	Statement: if it is set.
+//	A bool flag: indicates if table limits is set.
+//	TableLimits: skip if it is not set.
+//	A bool flag: indicates if table name is set.
+//	TableName: skip if it is not set.
 func (req *TableRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -353,7 +358,7 @@ func (req *TableRequest) serialize(w proto.Writer, serialVersion int16) (err err
 		}
 		ns.endMap(LIMITS)
 	}
-	if req.DefinedTags != nil && req.DefinedTags.IsEmpty() == false {
+	if req.DefinedTags != nil && !req.DefinedTags.IsEmpty() {
 		var a []byte
 		if a, err = req.DefinedTags.Tags.MarshalJSON(); err != nil {
 			return
@@ -387,16 +392,232 @@ func (req *TableRequest) deserialize(r proto.Reader, serialVersion int16) (Resul
 	return deserializeTableResult(r, serialVersion)
 }
 
+// serialize writes the AddReplicaRequest to data stream using the specified protocol writer.
+//
+// The fields of AddReplicaRequest are written:
+//
+//	OpCode: AddReplicaRequest
+//	Timeout
+//	Tablename
+//	Replica name
+//	Read/Write units
+//	ETag
+func (req *AddReplicaRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.AddReplica, req.Timeout, req.TableName); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	ns.startPayload()
+	if err = ns.writeField(REGION, req.ReplicaName); err != nil {
+		return
+	}
+	if req.MatchETag != "" {
+		if err = ns.writeField(ETAG, req.MatchETag); err != nil {
+			return
+		}
+	}
+	if req.ReadUnits > 0 {
+		if err = ns.writeField(READ_UNITS, int(req.ReadUnits)); err != nil {
+			return
+		}
+	}
+	if req.WriteUnits > 0 {
+		if err = ns.writeField(WRITE_UNITS, int(req.WriteUnits)); err != nil {
+			return
+		}
+	}
+	ns.endPayload()
+
+	endRequest(ns)
+	return
+}
+
+func (req *AddReplicaRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+	return deserializeTableResult(r, serialVersion)
+}
+
+// serialize writes the DropReplicaRequest to data stream using the specified protocol writer.
+//
+// The fields of DropReplicaRequest are written:
+//
+//	OpCode: DropReplica
+//	Timeout
+//	Tablename
+//	Replica name
+//	ETag
+func (req *DropReplicaRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.DropReplica, req.Timeout, req.TableName); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	ns.startPayload()
+	if err = ns.writeField(REGION, req.ReplicaName); err != nil {
+		return
+	}
+	if req.MatchETag != "" {
+		if err = ns.writeField(ETAG, req.MatchETag); err != nil {
+			return
+		}
+	}
+	ns.endPayload()
+
+	endRequest(ns)
+	return
+}
+
+func (req *DropReplicaRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+	return deserializeTableResult(r, serialVersion)
+}
+
+// serialize writes the ReplicaStatsRequest to data stream using the specified protocol writer.
+//
+// The fields of ReplicaStatsRequest are written:
+//
+//	OpCode: ReplicaStats
+//	Timeout
+//	Tablename
+//	Region
+//	StartTime
+//	Limit
+func (req *ReplicaStatsRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.GetReplicaStats, req.Timeout, req.TableName); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	ns.startPayload()
+	if err = ns.writeField(REGION, req.ReplicaName); err != nil {
+		return
+	}
+	if req.StartTime != nil {
+		if err = ns.writeField(START, req.StartTime.Format(types.ISO8601ZLayout)); err != nil {
+			return
+		}
+	}
+	if req.Limit > 0 {
+		if err = ns.writeField(LIST_MAX_TO_READ, req.Limit); err != nil {
+			return
+		}
+	}
+	ns.endPayload()
+
+	endRequest(ns)
+	return
+}
+
+func (req *ReplicaStatsRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, code, err
+	}
+	res := &ReplicaStatsResult{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case ERROR_CODE:
+			code, err := walker.handleErrorCode()
+			if err != nil || code != 0 {
+				return nil, code, err
+			}
+		case TABLE_NAME:
+			res.TableName, err = readNsonString(r)
+		case NEXT_START_TIME:
+			ms, err := readNsonLong(r)
+			if err == nil {
+				t := time.UnixMilli(ms)
+				res.NextStartTime = &t
+			}
+		case REPLICA_STATS:
+			err = res.readReplicaStats(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, BadProtocol, err
+	}
+	return res, 0, nil
+}
+
+func (res *ReplicaStatsResult) readReplicaStats(r proto.Reader) error {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return err
+	}
+	res.StatsRecords = make(map[string][]*ReplicaStats)
+	for err == nil && walker.hasNext() {
+		walker.next()
+		// each NSON field is a replica_name:values map field
+		replicaName := walker.getCurrentName()
+		// value is an array of ReplicaStats records
+		if err = readNsonType(r, types.Array); err != nil {
+			return err
+		}
+		// length in bytes: ignored
+		if _, err = r.ReadInt(); err != nil {
+			return err
+		}
+		numElements, err := r.ReadInt()
+		if err != nil {
+			return err
+		}
+		records := make([]*ReplicaStats, numElements)
+		for i := 0; i < numElements; i++ {
+			walker, code, err := newMapWalker(r)
+			if err != nil || code != 0 {
+				return err
+			}
+			rs := &ReplicaStats{}
+			for err == nil && walker.hasNext() {
+				walker.next()
+				switch name := walker.getCurrentName(); name {
+				case TIME:
+					ms, err := readNsonLong(r)
+					if err == nil {
+						rs.CollectionTime = time.UnixMilli(ms)
+					}
+				case REPLICA_LAG:
+					ms, err := readNsonInt(r, name)
+					if err == nil {
+						rs.Lag = time.Duration(ms) * time.Millisecond
+					}
+				default:
+					err = skipNsonField(r, name)
+				}
+			}
+			if err != nil {
+				return err
+			}
+			records[i] = rs
+		}
+		res.StatsRecords[replicaName] = records
+	}
+	return nil
+}
+
 // serialize writes the ListTablesRequest to data stream using the specified protocol writer.
 //
 // The fields of ListTablesRequest are written in the following order:
 //
-//   OpCode: ListTables
-//   Timeout
-//   StartIndex
-//   Limit
-//   Namespace
-//
+//	OpCode: ListTables
+//	Timeout
+//	StartIndex
+//	Limit
+//	Namespace
 func (req *ListTablesRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -478,12 +699,11 @@ func (req *ListTablesRequest) deserialize(r proto.Reader, serialVersion int16) (
 //
 // The fields of GetIndexesRequest are written in the following order:
 //
-//   OpCode: GetIndexes
-//   Timeout
-//   TableName
-//   A bool flag: indicates if index name is set.
-//   IndexName: skip if index name is not set.
-//
+//	OpCode: GetIndexes
+//	Timeout
+//	TableName
+//	A bool flag: indicates if index name is set.
+//	IndexName: skip if index name is not set.
 func (req *GetIndexesRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -554,18 +774,17 @@ func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16) (
 //
 // The fields of DeleteRequest are written in the following order:
 //
-//   OpCode: Delete or DeleteIfVersion
-//   Timeout: skip if the request is a a sub request.
-//   TableName: skip if the request is a sub request.
-//   ReturnRow
-//   Key
-//   MatchVersion: skip if it is nil
-//
+//	OpCode: Delete or DeleteIfVersion
+//	Timeout: skip if the request is a a sub request.
+//	TableName: skip if the request is a sub request.
+//	ReturnRow
+//	Key
+//	MatchVersion: skip if it is nil
 func (req *DeleteRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	return req.serializeInternal(w, serialVersion, true)
 }
 
-func (req *DeleteRequest) serializeInternal(w proto.Writer, serialVersion int16, addTableName bool) (err error) {
+func (req *DeleteRequest) serializeInternal(w proto.Writer, _ int16, addTableName bool) (err error) {
 	ns := startRequest(w)
 
 	var op proto.OpCode
@@ -672,22 +891,21 @@ func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Resu
 //
 // The fields of PutRequest are written in the following order:
 //
-//   OpCode: either Put, PutIfAbsent, PutIfPresent or PutIfVersion.
-//   Timeout: skip if the request is a a sub request.
-//   TableName: skip if the request is a sub request.
-//   ReturnRow
-//   ExactMatch
-//   IdentityCacheSize
-//   Value
-//   UpdateTTL: this is true if UseTableTTL or TTL is set.
-//   TTL
-//   MatchVersion: skip if it is nil.
-//
+//	OpCode: either Put, PutIfAbsent, PutIfPresent or PutIfVersion.
+//	Timeout: skip if the request is a a sub request.
+//	TableName: skip if the request is a sub request.
+//	ReturnRow
+//	ExactMatch
+//	IdentityCacheSize
+//	Value
+//	UpdateTTL: this is true if UseTableTTL or TTL is set.
+//	TTL
+//	MatchVersion: skip if it is nil.
 func (req *PutRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	return req.serializeInternal(w, serialVersion, true)
 }
 
-func (req *PutRequest) serializeInternal(w proto.Writer, serialVersion int16, addTableName bool) (err error) {
+func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName bool) (err error) {
 
 	ns := startRequest(w)
 
@@ -819,13 +1037,12 @@ func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16) (Result,
 //
 // The fields of TableUsageRequest are written in the following order:
 //
-//   OpCode: GetTableUsage
-//   Timeout
-//   TableName
-//   StartTime
-//   EndTime
-//   Limit
-//
+//	OpCode: GetTableUsage
+//	Timeout
+//	TableName
+//	StartTime
+//	EndTime
+//	Limit
 func (req *TableUsageRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -907,14 +1124,13 @@ func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16) (
 //
 // The fields of MultiDeleteRequest are written in the following order:
 //
-//   OpCode: MultiDelete
-//   Timeout
-//   TableName
-//   Key
-//   FieldRange
-//   MaxWriteKB
-//   ContinuationKey
-//
+//	OpCode: MultiDelete
+//	Timeout
+//	TableName
+//	Key
+//	FieldRange
+//	MaxWriteKB
+//	ContinuationKey
 func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -987,12 +1203,11 @@ func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16) 
 //
 // The fields of WriteMultipleRequest are written in the following order:
 //
-//   OpCode: WriteMultiple
-//   Timeout
-//   TableName
-//   Number of operations
-//   All sub operations: either put or delete operation
-//
+//	OpCode: WriteMultiple
+//	Timeout
+//	TableName
+//	Number of operations
+//	All sub operations: either put or delete operation
 func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -1004,14 +1219,14 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) 
 		if tableName == "" {
 			tableName = operation.tableName()
 		} else {
-			if strings.EqualFold(tableName, operation.tableName()) == false {
+			if !strings.EqualFold(tableName, operation.tableName()) {
 				isSingleTable = false
 				break
 			}
 		}
 	}
 
-	if isSingleTable == false {
+	if !isSingleTable {
 		tableName = ""
 	}
 
@@ -1043,11 +1258,11 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) 
 		if operation.DeleteRequest != nil {
 			operation.DeleteRequest.abortOnFail = operation.AbortOnFail
 			subReq = operation.DeleteRequest
-			err = operation.DeleteRequest.serializeInternal(w, serialVersion, isSingleTable == false)
+			err = operation.DeleteRequest.serializeInternal(w, serialVersion, !isSingleTable)
 		} else if operation.PutRequest != nil {
 			operation.PutRequest.abortOnFail = operation.AbortOnFail
 			subReq = operation.PutRequest
-			err = operation.PutRequest.serializeInternal(w, serialVersion, isSingleTable == false)
+			err = operation.PutRequest.serializeInternal(w, serialVersion, !isSingleTable)
 		}
 
 		if err != nil {
@@ -1145,12 +1360,11 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16
 //
 // The fields of PrepareRequest are written in the following order:
 //
-//   OpCode: Prepare
-//   Timeout
-//   Statement
-//   QueryVersion
-//   GetQueryPlan
-//
+//	OpCode: Prepare
+//	Timeout
+//	Statement
+//	QueryVersion
+//	GetQueryPlan
 func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -1245,7 +1459,7 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err err
 		if err = ns.writeField(PREPARED_QUERY, pstmt.statement); err != nil {
 			return
 		}
-		if err = ns.writeBindVariables(w, pstmt.bindVariables); err != nil {
+		if err = ns.writeBindVariables(pstmt.bindVariables); err != nil {
 			return
 		}
 	} else {
@@ -1375,7 +1589,7 @@ func deserializeSystemResult(r proto.Reader) (*SystemResult, int, error) {
 	return res, 0, nil
 }
 
-func deserializeTableResult(r proto.Reader, serialVersion int16) (*TableResult, int, error) {
+func deserializeTableResult(r proto.Reader, _ int16) (*TableResult, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -1426,6 +1640,12 @@ func deserializeTableResult(r proto.Reader, serialVersion int16) (*TableResult, 
 			}
 		case ETAG:
 			res.MatchETag, err = readNsonString(r)
+		case SCHEMA_FROZEN:
+			res.SchemaFrozen, err = readNsonBoolean(r)
+		case INITIALIZED:
+			res.IsLocalReplicaInitialized, err = readNsonBoolean(r)
+		case REPLICAS:
+			res.Replicas, err = readNsonReplicas(r)
 		case LIMITS:
 			var lw *mapWalker
 			lw, _, err = newMapWalker(r)
@@ -1456,6 +1676,63 @@ func deserializeTableResult(r proto.Reader, serialVersion int16) (*TableResult, 
 		return nil, BadProtocol, err
 	}
 	return res, 0, nil
+}
+
+func readNsonReplicas(r proto.Reader) (replicas []*Replica, err error) {
+	// array of replicas
+	if err = readNsonType(r, types.Array); err != nil {
+		return nil, err
+	}
+	// length in bytes: ignored
+	if _, err = r.ReadInt(); err != nil {
+		return nil, err
+	}
+	// number of array elements
+	numElements, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	replicas = make([]*Replica, numElements)
+	for i := 0; i < numElements; i++ {
+		rep, err := readNsonReplica(r)
+		if err != nil {
+			return nil, err
+		}
+		replicas[i] = rep
+	}
+	return replicas, nil
+}
+
+func readNsonReplica(r proto.Reader) (rep *Replica, err error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, err
+	}
+	rep = &Replica{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case REGION:
+			rep.Name, err = readNsonString(r)
+		case TABLE_OCID:
+			rep.TableOcid, err = readNsonString(r)
+		case WRITE_UNITS:
+			rep.WriteUnits, err = readNsonInt(r, name)
+		case LIMITS_MODE:
+			rep.CapacityMode, err = readNsonCapacityMode(r)
+		case TABLE_STATE:
+			var state int
+			if state, err = readNsonInt(r, name); err == nil {
+				rep.State = types.TableState(state)
+			}
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return rep, nil
 }
 
 // NsonSerializer is the base struct used for all serialization.
@@ -1546,7 +1823,7 @@ func (ns *NsonSerializer) startField(key string) {
 	ns.writer.WriteString(&key)
 }
 
-func (ns *NsonSerializer) endField(key string) {
+func (ns *NsonSerializer) endField(_ string) {
 	// add one to number of elements
 	ns.incrSize(1)
 }
@@ -1555,7 +1832,7 @@ func (ns *NsonSerializer) startArrayField(index int) {
 	// nothing to do
 }
 
-func (ns *NsonSerializer) endArrayField(index int) {
+func (ns *NsonSerializer) endArrayField(_ int) {
 	// add one to number of elements
 	ns.incrSize(1)
 }
@@ -1600,7 +1877,7 @@ func (ns *NsonSerializer) writeTTL(value *types.TimeToLive) (err error) {
 
 func (ns *NsonSerializer) writeDurability(value types.Durability) (err error) {
 	// write nothing if default
-	if value.IsSet() == false {
+	if !value.IsSet() {
 		return nil
 	}
 	// the durability value accepted by server, which is
@@ -1736,8 +2013,10 @@ type mapWalker struct {
 // to deserialize using V4, the mapWalker constructor will throw an
 // IllegalArgumentException, because the following codes will be
 // returned from previous servers:
-//   V3: UNSUPPORTED_PROTOCOL (24)
-//   V2: BAD_PROTOCOL_MESSAGE (17)
+//
+//	V3: UNSUPPORTED_PROTOCOL (24)
+//	V2: BAD_PROTOCOL_MESSAGE (17)
+//
 // Neither of these maps to any valid Nson field.
 // Convert the error to an UnsupportedProtocolException so the client's
 // serial version negotiation logic will detect it and decrement
@@ -1754,6 +2033,9 @@ func newMapWalker(r proto.Reader) (*mapWalker, int, error) {
 		return nil, BadProtocol, fmt.Errorf("stream must point to a MAP, it points to %v of type %[1]T", t)
 	}
 	_, err = r.ReadInt() // total length of map in bytes
+	if err != nil {
+		return nil, BadProtocol, err
+	}
 	numElements, err := r.ReadInt()
 	if err != nil {
 		return nil, BadProtocol, err
@@ -1769,7 +2051,7 @@ func (mw *mapWalker) hasNext() bool {
 }
 
 func (mw *mapWalker) next() error {
-	if mw.hasNext() == false {
+	if !mw.hasNext() {
 		return fmt.Errorf("cannot call next with no elements remaining")
 	}
 	var err error
@@ -2167,7 +2449,7 @@ type driverPlanInfo struct {
 // Either qreq/qres are given, or preq/pres are given.
 func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	preq *PrepareRequest, pres *PrepareResult,
-	r proto.Reader, serialVersion int16) (code int, err error) {
+	r proto.Reader, _ int16) (code int, err error) {
 
 	isPreparedRequest := false
 	if qreq != nil && qreq.PreparedStatement != nil {
@@ -2266,9 +2548,9 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	}
 
 	if isPreparedRequest {
-		if qreq != nil && qreq.driver != nil {
-			// TODO update topo info
-		}
+		//if qreq != nil && qreq.driver != nil {
+		// TODO update topo info
+		//}
 		return 0, nil
 	}
 
@@ -2324,7 +2606,7 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 }
 
 func readDriverPlanInfo(arr []byte) (dpi *driverPlanInfo, err error) {
-	if arr == nil || len(arr) == 0 {
+	if len(arr) == 0 {
 		return nil, nil
 	}
 
@@ -2392,9 +2674,8 @@ func readNsonIntArray(r proto.Reader) (arr []int, err error) {
 		return nil, err
 	}
 	arr = make([]int, 0, numElements)
-	var val int
 	for i := 0; i < numElements; i++ {
-		val, err = readNsonInt(r, "<array element>")
+		val, err := readNsonInt(r, "<array element>")
 		if err != nil {
 			return nil, err
 		}
@@ -2431,7 +2712,7 @@ func readNsonQueryResults(r proto.Reader, qres *QueryResult) (err error) {
 }
 
 func readNsonPhase1Results(arr []byte, res *QueryResult) (err error) {
-	if arr == nil || len(arr) == 0 {
+	if len(arr) == 0 {
 		return nil
 	}
 	// create a new io.Reader from buffer
@@ -2464,11 +2745,12 @@ func readNsonPhase1Results(arr []byte, res *QueryResult) (err error) {
 
 // Bind variables:
 // "variables": [
-//   { "name": "foo", "value": {...}}
-//  .....
-// ]
 //
-func (ns *NsonSerializer) writeBindVariables(w proto.Writer, bindVars map[string]interface{}) (err error) {
+//	 { "name": "foo", "value": {...}}
+//	.....
+//
+// ]
+func (ns *NsonSerializer) writeBindVariables(bindVars map[string]interface{}) (err error) {
 
 	n := len(bindVars)
 	if n <= 0 {

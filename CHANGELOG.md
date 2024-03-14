@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ### Added
 - Latest Oracle Cloud Infrastructure regions and region codes: TYO, ABH, DAC, DOH, IZQ
+- Cloud only: added support for Global Active Tables. This includes new requests and structs:
+  - AddReplicaRequest
+  - DropReplicaRequest
+  - ReplicaStatsRequest/Result
+  - ReplicaStats
+  - Replica
+  as well as additional replica-related information in TableResult
 
 ### Changed
 - Changed copyrights to 2024

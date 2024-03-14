@@ -26,11 +26,6 @@ import (
 )
 
 const (
-	// The maximum number of bytes allowed for the request content.
-	// Payloads that exceed this value will result in an IllegalArgument error.
-	// This is a currently set to 1MB, cannot be configured by user.
-	maxContentLength = 1024 * 1024
-
 	// The default timeout value for requests.
 	// This applies to any requests other than TableRequest.
 	defaultRequestTimeout = 5 * time.Second
@@ -277,7 +272,7 @@ func (c *Config) setDefaults() (err error) {
 // the specified Endpoint. It returns an error if the specified region is not
 // recognized or the specified Endpoint does not conform to the syntax:
 //
-//   [http[s]://]host[:port]
+//	[http[s]://]host[:port]
 //
 // The following rules are applied to the Endpoint:
 //

@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -119,7 +118,7 @@ func newFileBasedFederationClient(securityTokenPath string, supplier sessionKeyS
 		SessionKeySupplier: supplier,
 		RefreshSecurityToken: func() (token securityToken, err error) {
 			var content []byte
-			if content, err = ioutil.ReadFile(securityTokenPath); err != nil {
+			if content, err = os.ReadFile(securityTokenPath); err != nil {
 				return nil, fmt.Errorf("failed to read security token from :%s. Due to: %s", securityTokenPath, err.Error())
 			}
 
@@ -235,7 +234,7 @@ func (client *authClient) Call(request *http.Request) (*http.Response, error) {
 
 	code := response.StatusCode / 100
 	if code == 4 || code == 5 {
-		body, _ := ioutil.ReadAll(response.Body)
+		body, _ := io.ReadAll(response.Body)
 		if len(body) == 0 {
 			return nil, fmt.Errorf("error status code: %d", response.StatusCode)
 		}
@@ -367,9 +366,9 @@ func (c *x509FederationClient) makeHTTPRequest(request *x509FederationRequest) (
 	bodyBytes := bytes.NewReader(rawJSON)
 	httpRequest.Header.Set("Content-Length", strconv.Itoa(len(rawJSON)))
 	httpRequest.Header.Set("Content-Type", "application/json")
-	httpRequest.Body = ioutil.NopCloser(bodyBytes)
+	httpRequest.Body = io.NopCloser(bodyBytes)
 	httpRequest.GetBody = func() (io.ReadCloser, error) {
-		return ioutil.NopCloser(bodyBytes), nil
+		return io.NopCloser(bodyBytes), nil
 	}
 
 	return &httpRequest, nil
@@ -399,7 +398,7 @@ func (c *x509FederationClient) getSecurityToken() (securityToken, error) {
 
 	response := x509FederationResponse{}
 	var content []byte
-	content, err = ioutil.ReadAll(httpResponse.Body)
+	content, err = io.ReadAll(httpResponse.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -528,13 +527,13 @@ func newFileBasedKeySessionSupplier(privateKeyPemPath string, passphrasePath *st
 			var err error
 			var passContent []byte
 			if passphrasePath != nil {
-				if passContent, err = ioutil.ReadFile(*passphrasePath); err != nil {
+				if passContent, err = os.ReadFile(*passphrasePath); err != nil {
 					return nil, nil, fmt.Errorf("can not read passphrase from file: %s, due to %s", *passphrasePath, err.Error())
 				}
 			}
 
 			var keyPemContent []byte
-			if keyPemContent, err = ioutil.ReadFile(privateKeyPemPath); err != nil {
+			if keyPemContent, err = os.ReadFile(privateKeyPemPath); err != nil {
 				return nil, nil, fmt.Errorf("can not read privateKey pem from file: %s, due to %s", privateKeyPemPath, err.Error())
 			}
 
@@ -657,7 +656,7 @@ func newInstancePrincipalToken(tokenString string) (newToken securityToken, err 
 	}
 	newToken = &instancePrincipalToken{tokenString, jwtToken}
 	if !newToken.Valid() {
-		return nil, fmt.Errorf("Expired or invalid token string \"%s\"", tokenString)
+		return nil, fmt.Errorf("expired or invalid token string \"%s\"", tokenString)
 	}
 	return
 }

@@ -13,7 +13,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"time"
 	"unicode/utf8"
@@ -98,7 +97,7 @@ func executeRequest(ctx context.Context, executor RequestExecutor, timeout time.
 	}
 	defer httpResp.Body.Close()
 
-	body, err := ioutil.ReadAll(httpResp.Body)
+	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +179,7 @@ DoRetry:
 
 // BasicAuth returns a basic authentication string of the format:
 //
-//   Basic base64(clientId:clientSecret)
-//
+//	Basic base64(clientId:clientSecret)
 func BasicAuth(clientID string, clientSecret []byte) string {
 	s := fmt.Sprintf("%s:%s", clientID, string(clientSecret))
 	buf := UTF8Encode(s)

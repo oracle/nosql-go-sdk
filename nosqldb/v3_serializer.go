@@ -24,12 +24,11 @@ import (
 //
 // The fields of GetRequest are written in the following order:
 //
-//   OpCode: Get
-//   Timeout
-//   TableName
-//   Consistency
-//   Key
-//
+//	OpCode: Get
+//	Timeout
+//	TableName
+//	Consistency
+//	Key
 func (req *GetRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3TableOp(w, proto.Get, req.Timeout, req.TableName); err != nil {
 		return
@@ -103,11 +102,10 @@ func (req *GetRequest) deserializeV3(r proto.Reader, serialVersion int16) (Resul
 //
 // The fields of GetTableRequest are written in the following order:
 //
-//   OpCode: GetTable
-//   Timeout
-//   TableName
-//   OperationID
-//
+//	OpCode: GetTable
+//	Timeout
+//	TableName
+//	OperationID
 func (req *GetTableRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3TableOp(w, proto.GetTable, req.Timeout, req.TableName); err != nil {
 		return
@@ -164,14 +162,13 @@ func (req *SystemStatusRequest) deserializeV3(r proto.Reader, serialVersion int1
 //
 // The fields of TableRequest are written in the following order:
 //
-//   OpCode: TableRequest
-//   Timeout
-//   Statement: if it is set.
-//   A bool flag: indicates if table limits is set.
-//   TableLimits: skip if it is not set.
-//   A bool flag: indicates if table name is set.
-//   TableName: skip if it is not set.
-//
+//	OpCode: TableRequest
+//	Timeout
+//	Statement: if it is set.
+//	A bool flag: indicates if table limits is set.
+//	TableLimits: skip if it is not set.
+//	A bool flag: indicates if table name is set.
+//	TableName: skip if it is not set.
 func (req *TableRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3Op(w, proto.TableRequest, req.Timeout); err != nil {
 		return
@@ -233,12 +230,11 @@ func (req *TableRequest) deserializeV3(r proto.Reader, serialVersion int16) (Res
 //
 // The fields of ListTablesRequest are written in the following order:
 //
-//   OpCode: ListTables
-//   Timeout
-//   StartIndex
-//   Limit
-//   Namespace
-//
+//	OpCode: ListTables
+//	Timeout
+//	StartIndex
+//	Limit
+//	Namespace
 func (req *ListTablesRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3Op(w, proto.ListTables, req.Timeout); err != nil {
 		return
@@ -291,12 +287,11 @@ func (req *ListTablesRequest) deserializeV3(r proto.Reader, serialVersion int16)
 //
 // The fields of GetIndexesRequest are written in the following order:
 //
-//   OpCode: GetIndexes
-//   Timeout
-//   TableName
-//   A bool flag: indicates if index name is set.
-//   IndexName: skip if index name is not set.
-//
+//	OpCode: GetIndexes
+//	Timeout
+//	TableName
+//	A bool flag: indicates if index name is set.
+//	IndexName: skip if index name is not set.
 func (req *GetIndexesRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3TableOp(w, proto.GetIndexes, req.Timeout, req.TableName); err != nil {
 		return
@@ -344,13 +339,12 @@ func (req *GetIndexesRequest) deserializeV3(r proto.Reader, serialVersion int16)
 //
 // The fields of DeleteRequest are written in the following order:
 //
-//   OpCode: Delete or DeleteIfVersion
-//   Timeout: skip if the request is a a sub request.
-//   TableName: skip if the request is a sub request.
-//   ReturnRow
-//   Key
-//   MatchVersion: skip if it is nil
-//
+//	OpCode: Delete or DeleteIfVersion
+//	Timeout: skip if the request is a a sub request.
+//	TableName: skip if the request is a sub request.
+//	ReturnRow
+//	Key
+//	MatchVersion: skip if it is nil
 func (req *DeleteRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	op := proto.Delete
 	hasVersion := req.MatchVersion != nil
@@ -417,17 +411,16 @@ func (req *DeleteRequest) deserializeV3(r proto.Reader, serialVersion int16) (Re
 //
 // The fields of PutRequest are written in the following order:
 //
-//   OpCode: either Put, PutIfAbsent, PutIfPresent or PutIfVersion.
-//   Timeout: skip if the request is a a sub request.
-//   TableName: skip if the request is a sub request.
-//   ReturnRow
-//   ExactMatch
-//   IdentityCacheSize
-//   Value
-//   UpdateTTL: this is true if UseTableTTL or TTL is set.
-//   TTL
-//   MatchVersion: skip if it is nil.
-//
+//	OpCode: either Put, PutIfAbsent, PutIfPresent or PutIfVersion.
+//	Timeout: skip if the request is a a sub request.
+//	TableName: skip if the request is a sub request.
+//	ReturnRow
+//	ExactMatch
+//	IdentityCacheSize
+//	Value
+//	UpdateTTL: this is true if UseTableTTL or TTL is set.
+//	TTL
+//	MatchVersion: skip if it is nil.
 func (req *PutRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	var op proto.OpCode
 	switch req.PutOption {
@@ -488,6 +481,9 @@ func (req *PutRequest) serializeV3(w proto.Writer, serialVersion int16) (err err
 
 func (req *PutRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
 	c, err := deserializeV3ConsumedCapacity(r)
+	if err != nil {
+		return nil, err
+	}
 	success, err := r.ReadBoolean()
 	if err != nil {
 		return nil, err
@@ -528,17 +524,52 @@ func (req *PutRequest) deserializeV3(r proto.Reader, serialVersion int16) (Resul
 	}, nil
 }
 
+// serializeV3 is invalid for Replica operations, as it is only implemented for the V4 protocol.
+func (req *AddReplicaRequest) serializeV3(w proto.Writer, serialVersion int16) error {
+	return nosqlerr.New(nosqlerr.IllegalArgument,
+		"Replica operations are not available with V3 server")
+}
+
+// deserializeV3 is invalid for Replica operations, as it is only implemented for the V4 protocol.
+func (req *AddReplicaRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, nosqlerr.New(nosqlerr.IllegalArgument,
+		"Replica operations are not available with V3 server")
+}
+
+// serializeV3 is invalid for Replica operations, as it is only implemented for the V4 protocol.
+func (req *DropReplicaRequest) serializeV3(w proto.Writer, serialVersion int16) error {
+	return nosqlerr.New(nosqlerr.IllegalArgument,
+		"Replica operations are not available with V3 server")
+}
+
+// deserializeV3 is invalid for Replica operations, as it is only implemented for the V4 protocol.
+func (req *DropReplicaRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, nosqlerr.New(nosqlerr.IllegalArgument,
+		"Replica operations are not available with V3 server")
+}
+
+// serializeV3 is invalid for Replica operations, as it is only implemented for the V4 protocol.
+func (req *ReplicaStatsRequest) serializeV3(w proto.Writer, serialVersion int16) error {
+	return nosqlerr.New(nosqlerr.IllegalArgument,
+		"Replica operations are not available with V3 server")
+}
+
+// deserializeV3 is invalid for Replica operations, as it is only implemented for the V4 protocol.
+func (req *ReplicaStatsRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, nosqlerr.New(nosqlerr.IllegalArgument,
+		"Replica operations are not available with V3 server")
+}
+
 // serializeV3 writes the TableUsageRequest to data stream using the specified protocol writer.
 //
 // The fields of TableUsageRequest are written in the following order:
 //
-//   OpCode: GetTableUsage
-//   Timeout
-//   TableName
-//   StartTime
-//   EndTime
-//   Limit
-//
+//	OpCode: GetTableUsage
+//	Timeout
+//	TableName
+//	StartTime
+//	EndTime
+//	Limit
 func (req *TableUsageRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3TableOp(w, proto.GetTableUsage, req.Timeout, req.TableName); err != nil {
 		return
@@ -577,6 +608,9 @@ func (req *TableUsageRequest) deserializeV3(r proto.Reader, serialVersion int16)
 	}
 
 	n, err := r.ReadPackedInt()
+	if err != nil {
+		return nil, err
+	}
 	res.UsageRecords = make([]TableUsage, 0, n)
 	for i := 0; i < n; i++ {
 		usageRecord, err := deserializeV3Usage(r)
@@ -594,14 +628,13 @@ func (req *TableUsageRequest) deserializeV3(r proto.Reader, serialVersion int16)
 //
 // The fields of MultiDeleteRequest are written in the following order:
 //
-//   OpCode: MultiDelete
-//   Timeout
-//   TableName
-//   Key
-//   FieldRange
-//   MaxWriteKB
-//   ContinuationKey
-//
+//	OpCode: MultiDelete
+//	Timeout
+//	TableName
+//	Key
+//	FieldRange
+//	MaxWriteKB
+//	ContinuationKey
 func (req *MultiDeleteRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3TableOp(w, proto.MultiDelete, req.Timeout, req.TableName); err != nil {
 		return
@@ -657,12 +690,11 @@ func (req *MultiDeleteRequest) deserializeV3(r proto.Reader, serialVersion int16
 //
 // The fields of WriteMultipleRequest are written in the following order:
 //
-//   OpCode: WriteMultiple
-//   Timeout
-//   TableName
-//   Number of operations
-//   All sub operations: either put or delete operation
-//
+//	OpCode: WriteMultiple
+//	Timeout
+//	TableName
+//	Number of operations
+//	All sub operations: either put or delete operation
 func (req *WriteMultipleRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3Op(w, proto.WriteMultiple, req.Timeout); err != nil {
 		return
@@ -676,7 +708,7 @@ func (req *WriteMultipleRequest) serializeV3(w proto.Writer, serialVersion int16
 		if tableName == "" {
 			tableName = operation.tableName()
 		} else {
-			if strings.EqualFold(tableName, operation.tableName()) == false {
+			if !strings.EqualFold(tableName, operation.tableName()) {
 				isSingleTable = false
 				break
 			}
@@ -781,6 +813,9 @@ func (req *WriteMultipleRequest) deserializeV3(r proto.Reader, serialVersion int
 
 	res.FailedOperationIndex = int(idx)
 	opRes, err := deserializeV3OperationResult(r, serialVersion)
+	if err != nil {
+		return nil, err
+	}
 	res.ResultSet = make([]OperationResult, 1)
 	res.ResultSet[0] = *opRes
 	return res, nil
@@ -790,12 +825,11 @@ func (req *WriteMultipleRequest) deserializeV3(r proto.Reader, serialVersion int
 //
 // The fields of PrepareRequest are written in the following order:
 //
-//   OpCode: Prepare
-//   Timeout
-//   Statement
-//   QueryVersion
-//   GetQueryPlan
-//
+//	OpCode: Prepare
+//	Timeout
+//	Statement
+//	QueryVersion
+//	GetQueryPlan
 func (req *PrepareRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	if err = serializeV3Op(w, proto.Prepare, req.Timeout); err != nil {
 		return

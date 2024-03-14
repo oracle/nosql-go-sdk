@@ -4,7 +4,6 @@ package iam
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -81,7 +80,7 @@ func removeFileFn(filename string) {
 }
 
 func writeTempFile(data string) (filename string) {
-	f, _ := ioutil.TempFile("", "gosdkTest")
+	f, _ := os.CreateTemp("", "gosdkTest")
 	f.WriteString(data)
 	filename = f.Name()
 	return
@@ -314,7 +313,6 @@ region=someregion
 	assert.NotEmpty(t, keyID)
 }
 
-
 func TestSessionConfigurationProvider_FromFileFn(t *testing.T) {
 	dataTpl := `[DEFAULT]
 user=someuser
@@ -525,7 +523,7 @@ region=someregion
 
 	homeDir, _ := os.UserHomeDir()
 	tmpKeyLocation := path.Join(homeDir, "testKey")
-	e := ioutil.WriteFile(tmpKeyLocation, []byte(testEncryptedPrivateKeyConf), 777)
+	e := os.WriteFile(tmpKeyLocation, []byte(testEncryptedPrivateKeyConf), 0777)
 	if e != nil {
 		assert.FailNow(t, e.Error())
 	}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 )
 
 func equalError(a, b error) bool {
@@ -39,5 +40,9 @@ func (p *DummyAccessTokenProvider) Close() error {
 }
 
 func (p DummyAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
+	return nil
+}
+
+func (p DummyAccessTokenProvider) GetLogger() *logger.Logger {
 	return nil
 }

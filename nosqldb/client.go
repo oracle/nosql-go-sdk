@@ -12,10 +12,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
-	//"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -266,12 +265,12 @@ func (c *Client) GetIndexes(req *GetIndexesRequest) (*GetIndexesResult, error) {
 //
 // This method can be used to perform the following operations:
 //
-//   create tables
-//   drop tables
-//   modify tables: add or remove columns
-//   create indexes
-//   drop indexes
-//   change table limits of an existing table
+//	create tables
+//	drop tables
+//	modify tables: add or remove columns
+//	create indexes
+//	drop indexes
+//	change table limits of an existing table
 //
 // These operations are implicitly asynchronous. DoTableRequest does not wait
 // for completion of the operation, it returns a TableResult that contains an
@@ -299,12 +298,12 @@ func (c *Client) DoTableRequest(req *TableRequest) (*TableResult, error) {
 //
 // This method can be used to perform the following operations:
 //
-//   create tables
-//   drop tables
-//   modify tables: add or remove columns
-//   create indexes
-//   drop indexes
-//   change table limits of an existing table
+//	create tables
+//	drop tables
+//	modify tables: add or remove columns
+//	create indexes
+//	drop indexes
+//	change table limits of an existing table
 //
 // These are potentially long-running operations that take time to complete.
 // This method allows specifying a timeout that represents a time duration to
@@ -335,10 +334,10 @@ func (c *Client) DoTableRequestAndWait(req *TableRequest, timeout, pollInterval 
 //
 // Examples of statements in the SystemRequest passed to this method include:
 //
-//   CREATE NAMESPACE mynamespace
-//   CREATE USER some_user IDENTIFIED BY password
-//   CREATE ROLE some_role
-//   GRANT ROLE some_role TO USER some_user
+//	CREATE NAMESPACE mynamespace
+//	CREATE USER some_user IDENTIFIED BY password
+//	CREATE ROLE some_role
+//	GRANT ROLE some_role TO USER some_user
 //
 // These operations are implicitly asynchronous. DoSystemRequest does not wait
 // for completion of the operation, it returns a SystemResult that contains an
@@ -371,10 +370,10 @@ func (c *Client) DoSystemRequest(req *SystemRequest) (*SystemResult, error) {
 //
 // Examples of statements passed to this method include:
 //
-//   CREATE NAMESPACE mynamespace
-//   CREATE USER some_user IDENTIFIED BY password
-//   CREATE ROLE some_role
-//   GRANT ROLE some_role TO USER some_user
+//	CREATE NAMESPACE mynamespace
+//	CREATE USER some_user IDENTIFIED BY password
+//	CREATE ROLE some_role
+//	GRANT ROLE some_role TO USER some_user
 //
 // These are potentially long-running operations that take time to complete.
 // This method allows specifying a timeout that represents a time duration to
@@ -664,6 +663,69 @@ func (c *Client) Delete(req *DeleteRequest) (*DeleteResult, error) {
 	return nil, errUnexpectedResult
 }
 
+// AddReplica crates a new replica of a table in a remote region.
+//
+// This method is used for cloud service only.
+// Added in SDK Version 1.4.3
+func (c *Client) AddReplica(req *AddReplicaRequest) (*TableResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TableResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
+// DropReplica removes new replica of a table in a remote region.
+//
+// This method is used for cloud service only.
+// Added in SDK Version 1.4.3
+func (c *Client) DropReplica(req *DropReplicaRequest) (*TableResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TableResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
+// GetReplicaStats gets stats for remote replicas of a table.
+//
+// This method is used for cloud service only.
+// Added in SDK Version 1.4.3
+func (c *Client) GetReplicaStats(req *ReplicaStatsRequest) (*ReplicaStatsResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*ReplicaStatsResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
 // GetTableUsage gets dynamic information about the specified table such as the
 // current throughput usage. Usage information is collected in time slices and
 // returned in individual usage records. It is possible to specify a time-based
@@ -694,9 +756,8 @@ func (c *Client) GetTableUsage(req *TableUsageRequest) (*TableUsageResult, error
 // When execute on the cloud service, there are some size-based limitations on
 // this operation:
 //
-//   1. The max number of individual operations (put, delete) in a single WriteMultiple request is 50.
-//   2. The total request size is limited to 25MB.
-//
+//  1. The max number of individual operations (put, delete) in a single WriteMultiple request is 50.
+//  2. The total request size is limited to 25MB.
 func (c *Client) WriteMultiple(req *WriteMultipleRequest) (*WriteMultipleResult, error) {
 	if req == nil {
 		return nil, errNilRequest
@@ -894,6 +955,20 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		c.logger.Debug("the QueryRequest is neither prepared nor bound to a QueryDriver")
 	}
 
+	// Include the content body hash in the request signature if this is a
+	// Global Active Tables resuest, or a table DDL request.
+	mustHashBody := false
+	if c.AuthorizationProvider != nil &&
+		c.AuthorizationProvider.AuthorizationScheme() == auth.Signature {
+		if _, ok := req.(*AddReplicaRequest); ok {
+			mustHashBody = true
+		} else if _, ok := req.(*DropReplicaRequest); ok {
+			mustHashBody = true
+		} else if _, ok := req.(*TableRequest); ok {
+			mustHashBody = true
+		}
+	}
+
 	var timeout time.Duration
 	var authStr string
 	var httpReq *http.Request
@@ -924,7 +999,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		tableName := req.getTableName()
 		if tableName != "" {
 			rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
-			if ok == false {
+			if !ok {
 				if req.doesReads() || req.doesWrites() {
 					c.backgroundUpdateLimiters(tableName)
 				}
@@ -973,7 +1048,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			}
 
 			if nosqlerr.Is(err, nosqlerr.UnsupportedProtocol) {
-				if c.decrementSerialVersion(serialVerUsed) == false {
+				if !c.decrementSerialVersion(serialVerUsed) {
 					return nil, err
 				}
 				// if serial version mismatch, we must re-serialize the request
@@ -999,11 +1074,11 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		}
 
 		// Before executing request: wait for rate limiter(s) to go below limit
-		if readLimiter != nil && checkReadUnits == true {
+		if readLimiter != nil && checkReadUnits {
 			// wait for read limiter to come below the limit
 			timeout = reqTimeout - time.Since(startTime)
 			if timeout <= 0 {
-				if readLimiter.TryConsumeUnits(0) == false {
+				if !readLimiter.TryConsumeUnits(0) {
 					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
 				}
 			} else {
@@ -1015,12 +1090,12 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 				rateDelayedTime += ms
 			}
 		}
-		if writeLimiter != nil && checkWriteUnits == true {
+		if writeLimiter != nil && checkWriteUnits {
 			// wait for write limiter to come below the limit
 			// note this may sleep for a while
 			timeout = reqTimeout - time.Since(startTime)
 			if timeout <= 0 {
-				if writeLimiter.TryConsumeUnits(0) == false {
+				if !writeLimiter.TryConsumeUnits(0) {
 					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
 				}
 			} else {
@@ -1055,6 +1130,9 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		namespace := req.getNamespace()
 		if namespace != "" {
 			httpReq.Header.Add("x-nosql-default-ns", namespace)
+		}
+		if mustHashBody {
+			httpReq.Header.Set("X-NoSQL-Hash-Body", "true")
 		}
 
 		// The authorization string could be empty when the client connects to a
@@ -1180,7 +1258,7 @@ func (c *Client) setTableNeedsRefresh(tableName string, needsRefresh bool) {
 
 	lTable := strings.ToLower(tableName)
 	nowNanos := time.Now().UnixNano()
-	if needsRefresh == true {
+	if needsRefresh {
 		c.tableLimitUpdateMap[lTable] = nowNanos - 1
 	} else {
 		c.tableLimitUpdateMap[lTable] = nowNanos + LimiterRefreshNanos
@@ -1192,7 +1270,7 @@ func (c *Client) backgroundUpdateLimiters(tableName string) {
 
 	c.limitMux.Lock()
 
-	if c.tableNeedsRefresh(lTable) == false {
+	if !c.tableNeedsRefresh(lTable) {
 		c.limitMux.Unlock()
 		return
 	}
@@ -1231,7 +1309,7 @@ func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
 
 	if limits.ReadUnits <= 0 && limits.WriteUnits <= 0 {
 		delete(c.rateLimiterMap, lTable)
-		c.logger.Info("removing rate limiting from table " + tableName)
+		c.logger.Fine("removing client-side rate limiting from table " + tableName)
 		return false
 	}
 
@@ -1259,7 +1337,7 @@ func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
 		}
 	}
 
-	c.logger.Info("Updated table '%s' to have RUs=%.1f and WUs=%.1f per second",
+	c.logger.Fine("Updated table '%s' rate limiters to have RUs=%.1f and WUs=%.1f per second",
 		tableName, RUs, WUs)
 
 	return true
@@ -1399,7 +1477,7 @@ func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16
 // content and parses them as an appropriate result suitable for the request.
 // Otherwise, it returns the http error.
 func (c *Client) processResponse(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error) {
-	data, err := ioutil.ReadAll(httpResp.Body)
+	data, err := io.ReadAll(httpResp.Body)
 	httpResp.Body.Close()
 	if err != nil {
 		return nil, err
@@ -1471,7 +1549,7 @@ func (c *Client) setSessionCookie(header http.Header) {
 	// headers, this code may need to be changed to look for
 	// multiple Set-Cookie headers.
 	v := header.Get("Set-Cookie")
-	if strings.HasPrefix(v, SessionCookieField) == false {
+	if !strings.HasPrefix(v, SessionCookieField) {
 		return
 	}
 	c.lockMux.Lock()
@@ -1548,7 +1626,7 @@ func (c *Client) ResetRateLimiters(tableName string) {
 		return
 	}
 	rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
-	if ok == false {
+	if !ok {
 		return
 	}
 	rp.WriteLimiter.Reset()
@@ -1572,7 +1650,7 @@ func (c *Client) VerifyConnection() error {
 	}
 
 	_, err := c.GetTable(req)
-	if err != nil && nosqlerr.IsTableNotFound(err) == false {
+	if err != nil && !nosqlerr.IsTableNotFound(err) {
 		return err
 	}
 
@@ -1607,7 +1685,7 @@ func (c *Client) SetSerialVersion(sVer int16) {
 }
 
 func (c *Client) oneTimeMessage(msg string) {
-	if _, ok := c.oneTimeMessages[msg]; ok == false {
+	if _, ok := c.oneTimeMessages[msg]; !ok {
 		c.oneTimeMessages[msg] = struct{}{}
 		c.logger.Warn(msg)
 	}

@@ -482,16 +482,15 @@ func (iter *funcMinMaxIter) displayContent(sb *strings.Builder, f *planFormatter
 // This function returns an error if either of the two values is non-atomic or
 // the values are not comparable. Otherwise, the returned res is:
 //
-//   0 if v1 == v2
-//   1 if v1 > v2
-//   -1 if v1 < v2
+//	0 if v1 == v2
+//	1 if v1 > v2
+//	-1 if v1 < v2
 //
 // Whether the two values are comparable depends on the "forSort" parameter.
 // If true, then values that would otherwise be considered non-comparable are
 // assumed to have the following order:
 //
-//   NUMERICS < TIMESTAMP < STRING < BOOLEAN < EMPTY < JSON_NULL < NULL
-//
+//	NUMERICS < TIMESTAMP < STRING < BOOLEAN < EMPTY < JSON_NULL < NULL
 func compareAtomicValues(rcb *runtimeControlBlock, forSort bool, v1, v2 types.FieldValue) (res int, err error) {
 	if rcb != nil {
 		rcb.trace(4, "compareAtomicValues() : comparing values %v and %v", v1, v2)
@@ -784,7 +783,7 @@ func compareBools(x, y bool) int {
 	switch {
 	case x == y:
 		return 0
-	case x == false:
+	case !x:
 		return -1
 	default:
 		return 1

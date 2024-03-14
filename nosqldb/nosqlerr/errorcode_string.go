@@ -30,6 +30,12 @@ func _() {
 	_ = x[TableDeploymentLimitExceeded-19]
 	_ = x[TenantDeploymentLimitExceeded-20]
 	_ = x[OperationNotSupported-21]
+	_ = x[EtagMismatch-22]
+	_ = x[CannotCancelWorkRequest-23]
+	_ = x[UnsupportedProtocol-24]
+	_ = x[Error25-25]
+	_ = x[TableNotReady-26]
+	_ = x[UnsupportedQueryVersion-27]
 	_ = x[ReadLimitExceeded-50]
 	_ = x[WriteLimitExceeded-51]
 	_ = x[SizeLimitExceeded-52]
@@ -45,14 +51,14 @@ func _() {
 }
 
 const (
-	_ErrorCode_name_0 = "NoErrorUnknownOperationTableNotFoundIndexNotFoundIllegalArgumentRowSizeLimitExceededKeySizeLimitExceededBatchOpNumberLimitExceededRequestSizeLimitExceededTableExistsIndexExistsInvalidAuthorizationInsufficientPermissionResourceExistsResourceNotFoundTableLimitExceededIndexLimitExceededBadProtocolMessageEvolutionLimitExceededTableDeploymentLimitExceededTenantDeploymentLimitExceededOperationNotSupported"
+	_ErrorCode_name_0 = "NoErrorUnknownOperationTableNotFoundIndexNotFoundIllegalArgumentRowSizeLimitExceededKeySizeLimitExceededBatchOpNumberLimitExceededRequestSizeLimitExceededTableExistsIndexExistsInvalidAuthorizationInsufficientPermissionResourceExistsResourceNotFoundTableLimitExceededIndexLimitExceededBadProtocolMessageEvolutionLimitExceededTableDeploymentLimitExceededTenantDeploymentLimitExceededOperationNotSupportedEtagMismatchCannotCancelWorkRequestUnsupportedProtocolError25TableNotReadyUnsupportedQueryVersion"
 	_ErrorCode_name_1 = "ReadLimitExceededWriteLimitExceededSizeLimitExceededOperationLimitExceeded"
 	_ErrorCode_name_2 = "RequestTimeoutServerErrorServiceUnavailableTableBusySecurityInfoUnavailableRetryAuthentication"
 	_ErrorCode_name_3 = "UnknownErrorIllegalState"
 )
 
 var (
-	_ErrorCode_index_0 = [...]uint16{0, 7, 23, 36, 49, 64, 84, 104, 130, 154, 165, 176, 196, 218, 232, 248, 266, 284, 302, 324, 352, 381, 402}
+	_ErrorCode_index_0 = [...]uint16{0, 7, 23, 36, 49, 64, 84, 104, 130, 154, 165, 176, 196, 218, 232, 248, 266, 284, 302, 324, 352, 381, 402, 414, 437, 456, 463, 476, 499}
 	_ErrorCode_index_1 = [...]uint8{0, 17, 35, 52, 74}
 	_ErrorCode_index_2 = [...]uint8{0, 14, 25, 43, 52, 75, 94}
 	_ErrorCode_index_3 = [...]uint8{0, 12, 24}
@@ -60,7 +66,7 @@ var (
 
 func (i ErrorCode) String() string {
 	switch {
-	case 0 <= i && i <= 21:
+	case 0 <= i && i <= 27:
 		return _ErrorCode_name_0[_ErrorCode_index_0[i]:_ErrorCode_index_0[i+1]]
 	case 50 <= i && i <= 53:
 		i -= 50

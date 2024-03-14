@@ -7,8 +7,8 @@ Database Go SDK. There are several supported environments:
 
 ## Prerequisites
 
-Th Go SDK requires:
-* Go 1.12 or later
+The Go SDK requires:
+* Go 1.16 or later
 * For the Oracle NoSQL Cloud Service
   - An Oracle Cloud Infrastructure account
   - A user created in that account, in a group with a policy that grants the desired permissions.
@@ -26,15 +26,6 @@ recommended to use the Go modules to manage dependencies for your application.
 ### Configuring GOPROXY
 
 Run `go env GOPROXY` to check if the `GOPROXY` is set correctly for your environment, if not, run the commands:
-
-* If using `go1.12`
-
-```sh
-export GO111MODULE="on"
-export GOPROXY="https://proxy.golang.org"
-```
-
-* If using `go1.13+`:
 
 ```go
 go env -w GO111MODULE=on

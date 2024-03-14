@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"crypto/rsa"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,7 +24,6 @@ var (
 	testTenancyOCID             = "ocid1.tenancy.oc1..aaaaaaaaba3pv6wkcr4jqae5f15p2b2m2yt2j6rx32uzr4h25vqstifsfdsq"
 	testUserOCID                = "ocid1.user.oc1..aaaaaaaat5nvwcna5j6aqzjcaty5eqbb6qt2jvpkanghtgdaqedqw3rynjq"
 	testFingerprint             = "20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34"
-	testComparmentOCID          = "ocid1.compartment.oc1..aaaaaaaam3we6vgnherjq5q2idnccdflvjsnog7mlr6rtdb25gilchfeyjxa"
 
 	testURL = "https://iaas.us-phoenix-1.oraclecloud.com/20160918/instances" +
 		"?availabilityDomain=Pjwf%3A%20PHX-AD-1&" +
@@ -51,14 +50,6 @@ kpyUXRNvFsDE0czpJJBvL/aRFUJxuRK91jhjC68sA7NsKMGg5OXb5I5Jj36xAkEA
 gIT7aFOYBFwGgQAQkWNKLvySgKbAZRTeLBacpHMuQdl1DfdntvAyqpAZ0lY0RKmW
 G6aFKaqQfOXKCyWoUiVknQJAXrlgySFci/2ueKlIE1QqIiLSZ8V8OlpFLRnb1pzI
 7U1yQXnTAEFYM560yJlzUpOb1V4cScGd365tiSMvxLOvTA==
------END RSA PRIVATE KEY-----`
-
-	testBadPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
-MIICXgIBAAKBgQDCFENGw33yGihy92pDjZQhl0C36rPJj+CvfSC8+q28hxA161QF
-NUd13wuCTUcq0Qd2qsBe/2hFyc2DCJJg0h1L78+6Z4UMR7EOcpfdUE9Hf3m/hs+F
-UR45uBJeDKffhjsdahdshfsdhfhdfhsdfhsdhfsdhfsdhfsdhfsdhfhdsfhdsfha
-AoGBAJR8ZkCUvx5kzv+utdl7T5MnordT1TvoXXJGXK7ZZ+UuvMNUCdN2QPc4sBiA
-QWvLw1cSKt5DsKZ8UETpYPy8pPYnnDEz2dDYiaew9+xEpubyeW2oH4Zx71wqBtOK
 -----END RSA PRIVATE KEY-----`
 
 	expectedSigningString = "date: Thu, 05 Jan 2014 21:31:40 GMT\n" +
@@ -229,7 +220,7 @@ func TestOCIRequestSigner_SignString2(t *testing.T) {
 		URL:        u,
 	}
 	bodyBuffer := bytes.NewBufferString(testBody)
-	r.Body = ioutil.NopCloser(bodyBuffer)
+	r.Body = io.NopCloser(bodyBuffer)
 	r.ContentLength = int64(bodyBuffer.Len())
 	r.Header.Set(requestHeaderDate, "Thu, 05 Jan 2014 21:31:40 GMT")
 	r.Header.Set(requestHeaderContentType, "application/json")
@@ -257,7 +248,7 @@ func TestOCIRequestSigner_ComputeSignature2(t *testing.T) {
 		URL:        u,
 	}
 	bodyBuffer := bytes.NewBufferString(testBody)
-	r.Body = ioutil.NopCloser(bodyBuffer)
+	r.Body = io.NopCloser(bodyBuffer)
 	r.ContentLength = int64(bodyBuffer.Len())
 	r.Header.Set(requestHeaderDate, "Thu, 05 Jan 2014 21:31:40 GMT")
 	r.Header.Set(requestHeaderContentType, "application/json")
@@ -286,7 +277,7 @@ func TestOCIRequestSigner_Sign2(t *testing.T) {
 		URL:        u,
 	}
 	bodyBuffer := bytes.NewBufferString(testBody)
-	r.Body = ioutil.NopCloser(bodyBuffer)
+	r.Body = io.NopCloser(bodyBuffer)
 	r.ContentLength = int64(bodyBuffer.Len())
 	r.Header.Set(requestHeaderDate, "Thu, 05 Jan 2014 21:31:40 GMT")
 	r.Header.Set(requestHeaderContentType, "application/json")
@@ -313,7 +304,7 @@ func TestOCIRequestSigner_SignEmptyBody(t *testing.T) {
 		URL:        u,
 	}
 	bodyBuffer := bytes.NewBufferString("")
-	r.Body = ioutil.NopCloser(bodyBuffer)
+	r.Body = io.NopCloser(bodyBuffer)
 	r.ContentLength = int64(bodyBuffer.Len())
 	r.Header.Set(requestHeaderDate, "Thu, 05 Jan 2014 21:31:40 GMT")
 	r.Header.Set(requestHeaderContentType, "application/json")
@@ -383,7 +374,7 @@ func TestOCIRequestSigner_SignBinaryBody(t *testing.T) {
 			lenOfBody := 0
 			if testC.bodyOfRequest != nil {
 				lenOfBody = testC.bodyOfRequest.Len()
-				testC.request.Body = ioutil.NopCloser(testC.bodyOfRequest)
+				testC.request.Body = io.NopCloser(testC.bodyOfRequest)
 			} else {
 				testC.request.Body = nil
 			}

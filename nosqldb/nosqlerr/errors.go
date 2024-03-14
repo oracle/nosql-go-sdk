@@ -69,6 +69,7 @@ var retryableErrors map[ErrorCode]bool = map[ErrorCode]bool{
 	RetryAuthentication:     true,
 	ServerError:             true,
 	TableBusy:               true,
+	TableNotReady:           true,
 	OperationLimitExceeded:  true,
 	ReadLimitExceeded:       true,
 	WriteLimitExceeded:      true,
@@ -147,7 +148,6 @@ func IsSecurityInfoUnavailable(err error) bool {
 // 3.2 Other server issues, begin from 125.
 // These include server illegal state, unknown server error, etc.
 // They might be retryable, or not.
-//
 type ErrorCode int
 
 const (
@@ -269,6 +269,17 @@ const (
 	// given driver protocol version. The driver should decrement its internal
 	// protocol version (and accompanying logic) and try again.
 	UnsupportedProtocol // 24
+
+	// Error25 not used in SDKs
+	Error25 // 25
+
+	// TableNotReady error indicates the table is still being created/updated
+	// and is not ready for use.
+	TableNotReady // 26
+
+	// UnsupportedQueryVersion error indicates the version of query used in the SDK is
+	// not supported by the server, and the SDK should downgrade its handling of query objects.
+	UnsupportedQueryVersion // 27
 )
 
 const (

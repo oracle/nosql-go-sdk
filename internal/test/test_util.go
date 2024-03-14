@@ -224,7 +224,7 @@ func valueEqual(v1, v2 interface{}) bool {
 	}
 
 	if v2 == nil {
-		return v1 == nil || v1 == types.JSONNullValueInstance ||
+		return v1 == types.JSONNullValueInstance ||
 			v1 == types.NullValueInstance || v1 == types.EmptyValueInstance
 	}
 
@@ -350,7 +350,7 @@ func VersionsEqual(v1, v2 types.Version) bool {
 		return false
 	}
 	// Compare 0-6
-	if bytes.Equal(arr1[:7], arr2[:7]) == false {
+	if !bytes.Equal(arr1[:7], arr2[:7]) {
 		return false
 	}
 	// Compare 8-end
@@ -454,11 +454,7 @@ func ratValueEqual(rat1, rat2 *big.Rat, fpArithSpec *nosqldb.FPArithSpec) bool {
 
 	// as last resort, compare the string representation.
 	decimalPrec := int(fpArithSpec.Precision)
-	if bf1.Text('G', decimalPrec) == bf2.Text('G', decimalPrec) {
-		return true
-	}
-
-	return false
+	return bf1.Text('G', decimalPrec) == bf2.Text('G', decimalPrec)
 }
 
 func timeValueEqual(t1 time.Time, v2 interface{}) bool {
