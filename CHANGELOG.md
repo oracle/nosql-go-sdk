@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ## Unreleased
 
 ### Added
-- Latest Oracle Cloud Infrastructure regions and region codes: TYO, ABH, DAC, DOH
+- Latest Oracle Cloud Infrastructure regions and region codes: TYO, ABH, DAC, DOH, IZQ
 
 ### Changed
 - Changed copyrights to 2024

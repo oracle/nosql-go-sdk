@@ -221,6 +221,11 @@ const (
 
 	// RegionUSDCCSWJordan1 represents the dedicated region for SWJordan2
 	RegionUSDCCSWJordan2 Region = "us-dcc-swjordan-2"
+
+	// OC31 REGIONS
+
+	// RegionAPHobsonville1 represents the dedicated region for Hobsonville
+	RegionAPHobsonville1 Region = "ap-hobsonville-1"
 )
 
 var realm = map[string]string{
@@ -245,6 +250,7 @@ var realm = map[string]string{
 	"oc26": "oraclecloud26.com",
 	"oc27": "oraclecloud27.com",
 	"oc28": "oraclecloud28.com",
+	"oc31": "sovereigncloud.nz",
 }
 
 var regionRealm = map[Region]string{
@@ -339,6 +345,8 @@ var regionRealm = map[Region]string{
 	RegionUSDCCSWJordan1: "oc27",
 
 	RegionUSDCCSWJordan2: "oc28",
+
+	RegionAPHobsonville1: "oc31",
 }
 
 var shortNameRegion = map[string]Region{
@@ -415,6 +423,7 @@ var shortNameRegion = map[string]Region{
 	"ahu": RegionMEAbudhabi3,
 	"ozz": RegionUSDCCSWJordan1,
 	"drs": RegionUSDCCSWJordan2,
+	"izq": RegionAPHobsonville1,
 }
 
 func (region Region) secondLevelDomain() string {
