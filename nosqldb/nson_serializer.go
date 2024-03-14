@@ -575,7 +575,7 @@ func (res *ReplicaStatsResult) readReplicaStats(r proto.Reader) error {
 		if err != nil {
 			return err
 		}
-		records := make([]*ReplicaStats, 0, numElements)
+		records := make([]*ReplicaStats, numElements)
 		for i := 0; i < numElements; i++ {
 			walker, code, err := newMapWalker(r)
 			if err != nil || code != 0 {
@@ -1692,7 +1692,7 @@ func readNsonReplicas(r proto.Reader) (replicas []*Replica, err error) {
 	if err != nil {
 		return nil, err
 	}
-	replicas = make([]*Replica, 0, numElements)
+	replicas = make([]*Replica, numElements)
 	for i := 0; i < numElements; i++ {
 		rep, err := readNsonReplica(r)
 		if err != nil {
