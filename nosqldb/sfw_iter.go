@@ -545,9 +545,9 @@ func (iter *sfwIter) produceLastGroup(rcb *runtimeControlBlock, state *sfwIterSt
 
 // groupInputTuple checks whether the current input tuple:
 //
-//   (a) starts the first group, i.e. it is the very 1st tuple in the input stream
-//   (b) belongs to the current group
-//   (c) starts a new group otherwise.
+//	(a) starts the first group, i.e. it is the very 1st tuple in the input stream
+//	(b) belongs to the current group
+//	(c) starts a new group otherwise.
 //
 // The method returns true in case (c), indicating that an output tuple is
 // ready to be returned to the consumer of this SFW, otherwise returns false.

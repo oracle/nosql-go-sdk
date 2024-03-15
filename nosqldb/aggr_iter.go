@@ -62,7 +62,7 @@ func newAggrIterState() *aggrIterState {
 		count:         0,
 		minMax:        types.NullValueInstance,
 		nullInputOnly: true,
-		collectArray:   make([]types.FieldValue, 0),
+		collectArray:  make([]types.FieldValue, 0),
 	}
 }
 
@@ -383,7 +383,6 @@ func (iter *funcSizeIter) close(rcb *runtimeControlBlock) (err error) {
 	return state.close()
 }
 
-
 // next sets the size of the passed-in map/array.
 func (iter *funcSizeIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 	st := rcb.getState(iter.statePos)
@@ -402,7 +401,7 @@ func (iter *funcSizeIter) next(rcb *runtimeControlBlock) (more bool, err error) 
 		return false, err
 	}
 
-	if more == false {
+	if !more {
 		state.done()
 		return false, nil
 	}
@@ -418,7 +417,7 @@ func (iter *funcSizeIter) next(rcb *runtimeControlBlock) (more bool, err error) 
 	size := 0
 	// if map, add size of map (number of elements)
 	// if array, add size of array (number of elements)
-	if mval, ok := item.(map[string]interface{}) ; ok {
+	if mval, ok := item.(map[string]interface{}); ok {
 		size = len(mval)
 	} else if aval, ok := item.([]interface{}); ok {
 		size = len(aval)
@@ -428,8 +427,8 @@ func (iter *funcSizeIter) next(rcb *runtimeControlBlock) (more bool, err error) 
 		size = mapval.Len()
 	} else {
 		// otherwise, return an error
-		return false, fmt.Errorf("Input to the size() function has wrong type\n" +
-					"Expected a complex item. Actual item type is:\n%T", item)
+		return false, fmt.Errorf("input to the size() function has wrong type\n"+
+			"expected a complex item, actual item type is:\n%T", item)
 	}
 
 	rcb.setRegValue(iter.resultReg, size)
@@ -708,14 +707,14 @@ func (iter *funcCollectIter) next(rcb *runtimeControlBlock) (more bool, err erro
 }
 
 // aggregate implements the collection mechanism
-func (iter *funcCollectIter) aggregate(rcb *runtimeControlBlock, state *aggrIterState, value types.FieldValue) (err error) {
+func (iter *funcCollectIter) aggregate(_ *runtimeControlBlock, state *aggrIterState, value types.FieldValue) (err error) {
 	// isDistinct managed in getAggrValue()
 	if arr, ok := value.([]types.FieldValue); ok {
 		state.collectArray = append(state.collectArray, arr...)
 	} else {
-// TODO: empty/null values ok to ignore
+		// TODO: empty/null values ok to ignore
 		return fmt.Errorf("wrong value type in collect.aggregate(): expected "+
-						"FieldValue array, got %T", value)
+			"FieldValue array, got %T", value)
 	}
 
 	return nil
@@ -738,7 +737,7 @@ func (iter *funcCollectIter) getAggrValue(rcb *runtimeControlBlock, reset bool) 
 	// if in test or isDistinct, sort the array
 	// otherwise, skip sorting
 	if carray == nil || len(carray) < 2 ||
-		(rcb.getClient().InTest == false && iter.isDistinct == false) {
+		(!rcb.getClient().InTest && !iter.isDistinct) {
 		if reset {
 			state.reset()
 		}
@@ -755,8 +754,8 @@ func (iter *funcCollectIter) getAggrValue(rcb *runtimeControlBlock, reset bool) 
 	})
 
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("Got %d errors trying to sort results. First error: %v",
-							len(errs), errs[0])
+		return nil, fmt.Errorf("got %d errors trying to sort results, first error: %v",
+			len(errs), errs[0])
 	}
 
 	// if isDistinct, remove duplicates
@@ -786,14 +785,12 @@ func (iter *funcCollectIter) displayContent(sb *strings.Builder, f *planFormatte
 	iter.displayPlan(iter.input, sb, f)
 }
 
-
 // compareAtomicsTotalOrder implements a total order among atomic values. The following order is
 // used among values that are not normally comparable with each other:
 //
 // numerics < timestamps < strings < booleans < binaries < empty < json null < null
 //
 // An error is returned if v1 is not one of the above types (i.e. map or array).
-//
 func compareAtomicsTotalOrder(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res int, err error) {
 	if rcb != nil {
 		rcb.trace(4, "compareAtomicsTotalOrder() : comparing values %v and %v", v1, v2)
@@ -966,9 +963,7 @@ func compareAtomicsTotalOrder(rcb *runtimeControlBlock, v1, v2 types.FieldValue)
 	return
 }
 
-
 // compareTotalOrder implements a total order among all values.
-//
 func compareTotalOrder(rcb *runtimeControlBlock, v1, v2 types.FieldValue) (res int, err error) {
 	if rcb != nil {
 		rcb.trace(4, "compareTotalOrder() : comparing values %v and %v", v1, v2)
@@ -1014,11 +1009,15 @@ func compareMaps(rcb *runtimeControlBlock, v1, v2 *types.MapValue) (res int, err
 
 	// iterate through map keys in sorted order
 	k1 := make([]string, 0, v1.Len())
-	for k := range m1 { k1 = append(k1, k) }
+	for k := range m1 {
+		k1 = append(k1, k)
+	}
 	sort.Strings(k1)
 
 	k2 := make([]string, 0, v2.Len())
-	for k := range m2 { k2 = append(k2, k) }
+	for k := range m2 {
+		k2 = append(k2, k)
+	}
 	sort.Strings(k2)
 
 	for i := 0; i < len(k1) && i < len(k2); i++ {

@@ -104,7 +104,7 @@ type aggrValue struct {
 	value           interface{}
 	gotNumericInput bool
 	// collectArray is used by collect methods
-	collectArray     []types.FieldValue
+	collectArray []types.FieldValue
 }
 
 // newAggrValue creates an aggrValue depending on the aggregate operation kind.
@@ -118,7 +118,7 @@ func newAggrValue(kind funcCode) (v *aggrValue, err error) {
 	case fnMax, fnMin:
 		v.value = types.NullValueInstance
 		return
-    case fnArrayCollect, fnArrayCollectDistinct:
+	case fnArrayCollect, fnArrayCollectDistinct:
 		v.collectArray = nil
 		return
 	default:
@@ -700,7 +700,7 @@ func (iter *groupIter) getAggrValue(rcb *runtimeControlBlock, aggrTuple []*aggrV
 	// if in test or isDistinct, sort the array
 	// otherwise, skip sorting
 	if carray == nil || len(carray) < 2 ||
-		(rcb.getClient().InTest == false && aggrKind != fnArrayCollectDistinct) {
+		(!rcb.getClient().InTest && aggrKind != fnArrayCollectDistinct) {
 		return carray, nil
 	}
 
@@ -714,8 +714,8 @@ func (iter *groupIter) getAggrValue(rcb *runtimeControlBlock, aggrTuple []*aggrV
 	})
 
 	if len(errs) > 0 {
-		return nil, fmt.Errorf("Got %d errors trying to sort results. First error: %v",
-							len(errs), errs[0])
+		return nil, fmt.Errorf("got %d errors trying to sort results, first error: %v",
+			len(errs), errs[0])
 	}
 
 	// if distinct, remove duplicates
