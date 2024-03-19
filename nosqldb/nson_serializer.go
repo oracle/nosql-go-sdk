@@ -113,6 +113,7 @@ const (
 	ROW                        = "r"
 	ROW_VERSION                = "rv"
 	SCHEMA_FROZEN              = "sf"
+	SERVER_MEMORY_CONSUMPTION  = "sm"
 	SHARD_ID                   = "si"
 	SHARD_IDS                  = "sa"
 	SORT_PHASE1_RESULTS        = "p1"
@@ -158,11 +159,11 @@ const (
 	UnsupportedProtocol = int(nosqlerr.UnsupportedProtocol)
 )
 
-var debug bool = false
+var nsondebug bool = false
 
 // SetNsonDebug sets the debug level. It is typically only used during testing.
 func SetNsonDebug(d bool) {
-	debug = d
+	nsondebug = d
 }
 
 // serialize writes the GetRequest to data stream using the specified protocol writer.
@@ -1474,6 +1475,10 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err err
 		}
 	}
 
+	if err = ns.writeNZLongField(SERVER_MEMORY_CONSUMPTION, req.MaxServerMemoryConsumption); err != nil {
+		return
+	}
+
 	if err = ns.writeMathContext(req.getFPArithSpec()); err != nil {
 		return
 	}
@@ -1858,6 +1863,18 @@ func (ns *NsonSerializer) writeNZField(key string, value int) (err error) {
 	return nil
 }
 
+func (ns *NsonSerializer) writeNZLongField(key string, value int64) (err error) {
+	if value <= 0 {
+		return nil
+	}
+	ns.startField(key)
+	if _, err = ns.writer.WriteFieldValue(value); err != nil {
+		return
+	}
+	ns.endField(key)
+	return nil
+}
+
 func (ns *NsonSerializer) writeTTL(value *types.TimeToLive) (err error) {
 	if value == nil {
 		return nil
@@ -2087,7 +2104,7 @@ func (mw *mapWalker) handleErrorCode() (int, error) {
 		switch name := mw.getCurrentName(); name {
 		case EXCEPTION:
 			msg, err = readNsonString(mw.reader)
-			if debug {
+			if nsondebug {
 				fmt.Fprintf(os.Stderr, "Got error code %d from server: %s\n", code, msg)
 			}
 		// TODO: CONSUMED
@@ -2106,7 +2123,7 @@ func (mw *mapWalker) handleErrorCode() (int, error) {
 }
 
 func skipNsonField(r proto.Reader, name string) (err error) {
-	if debug {
+	if nsondebug {
 		fmt.Fprintf(os.Stderr, " Skipping field '%s'\n", nsonReadable(name))
 	}
 	t, err := r.ReadByte()

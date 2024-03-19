@@ -6,7 +6,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 ## Unreleased
 
 ### Added
-- Latest Oracle Cloud Infrastructure regions and region codes: TYO, ABH, DAC, DOH, IZQ
 - Cloud only: added support for Global Active Tables. This includes new requests and structs:
   - AddReplicaRequest
   - DropReplicaRequest
@@ -14,6 +13,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   - ReplicaStats
   - Replica
   as well as additional replica-related information in TableResult
+- Latest Oracle Cloud Infrastructure regions and region codes: TYO, ABH, DAC, DOH, IZQ
+- Added support for array_collect() and count(distinct) in queries. These
+  require server side support which is only available in Oracle NoSQL releases
+  23.3 and higher and will not be immediately available in the cloud service
 
 ### Changed
 - Changed copyrights to 2024

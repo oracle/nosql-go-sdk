@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -102,6 +103,8 @@ func (t *groupTuple) checksum() (chksumValue chksum, err error) {
 type aggrValue struct {
 	value           interface{}
 	gotNumericInput bool
+	// collectArray is used by collect methods
+	collectArray []types.FieldValue
 }
 
 // newAggrValue creates an aggrValue depending on the aggregate operation kind.
@@ -114,6 +117,9 @@ func newAggrValue(kind funcCode) (v *aggrValue, err error) {
 		return
 	case fnMax, fnMin:
 		v.value = types.NullValueInstance
+		return
+	case fnArrayCollect, fnArrayCollectDistinct:
+		v.collectArray = nil
 		return
 	default:
 		return nil, nosqlerr.NewIllegalArgument("unsupported aggregate operation kind %v", kind)
@@ -405,7 +411,10 @@ func (iter *groupIter) next(rcb *runtimeControlBlock) (more bool, err error) {
 					if i < iter.numGBColumns {
 						res.Put(name, v.gbTuple.values[i])
 					} else {
-						aggrVal := iter.getAggrValue(rcb, v.aggrTuple, i)
+						aggrVal, err := iter.getAggrValue(rcb, v.aggrTuple, i)
+						if err != nil {
+							return false, err
+						}
 						res.Put(name, aggrVal)
 					}
 				}
@@ -637,7 +646,7 @@ func (iter *groupIter) aggregate(rcb *runtimeControlBlock,
 			return
 		}
 
-		cmp, err := compareAtomicValues(rcb, true, val, aggrVal.value)
+		cmp, err := compareAtomicsTotalOrder(rcb, val, aggrVal.value)
 		if err != nil {
 			return err
 		}
@@ -657,6 +666,15 @@ func (iter *groupIter) aggregate(rcb *runtimeControlBlock,
 			return nil
 		}
 
+	case fnArrayCollect, fnArrayCollectDistinct:
+		// sort/distinct is done in getAggrValue()
+		if v, ok := val.([]types.FieldValue); ok {
+			aggrVal.collectArray = append(aggrVal.collectArray, v...)
+		} else {
+			aggrVal.collectArray = append(aggrVal.collectArray, val)
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("aggregate method of kind %v is not implemented", aggrKind)
 	}
@@ -664,14 +682,53 @@ func (iter *groupIter) aggregate(rcb *runtimeControlBlock,
 	return nil
 }
 
-func (iter *groupIter) getAggrValue(rcb *runtimeControlBlock, aggrTuple []*aggrValue, column int) interface{} {
+func (iter *groupIter) getAggrValue(rcb *runtimeControlBlock, aggrTuple []*aggrValue, column int) (val interface{}, err error) {
 	aggrValue := aggrTuple[column-iter.numGBColumns]
 	aggrKind := iter.aggrFuncs[column-iter.numGBColumns]
 
 	// If none of the inputs to sum() is numeric value, return NULL as result.
 	if aggrKind == fnSum && !aggrValue.gotNumericInput {
-		return types.NullValueInstance
+		return types.NullValueInstance, nil
 	}
 
-	return aggrValue.value
+	if aggrKind != fnArrayCollect && aggrKind != fnArrayCollectDistinct {
+		return aggrValue.value, nil
+	}
+
+	carray := aggrValue.collectArray
+
+	// if in test or isDistinct, sort the array
+	// otherwise, skip sorting
+	if carray == nil || len(carray) < 2 ||
+		(!rcb.getClient().InTest && aggrKind != fnArrayCollectDistinct) {
+		return carray, nil
+	}
+
+	errs := make([]error, 0)
+	sort.Slice(carray, func(i, j int) bool {
+		cmp, err := compareTotalOrder(nil, carray[i], carray[j])
+		if err != nil {
+			errs = append(errs, err)
+		}
+		return cmp < 0
+	})
+
+	if len(errs) > 0 {
+		return nil, fmt.Errorf("got %d errors trying to sort results, first error: %v",
+			len(errs), errs[0])
+	}
+
+	// if distinct, remove duplicates
+	if aggrKind == fnArrayCollectDistinct {
+		var e int = 1
+		for i := 1; i < len(carray); i++ {
+			if cmp, _ := compareTotalOrder(nil, carray[i], carray[i-1]); cmp != 0 {
+				carray[e] = carray[i]
+				e++
+			}
+		}
+		carray = carray[:e]
+	}
+
+	return carray, nil
 }

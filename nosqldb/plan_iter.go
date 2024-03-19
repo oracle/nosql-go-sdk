@@ -21,18 +21,20 @@ import (
 type planIterKind int
 
 const (
-	constRef   planIterKind = 0
-	varRef     planIterKind = 1
-	extVarRef  planIterKind = 2
-	arithOp    planIterKind = 8
-	fieldStep  planIterKind = 11
-	sfw        planIterKind = 14
-	recv       planIterKind = 17
-	sumFunc    planIterKind = 39
-	minMaxFunc planIterKind = 41
-	sorting    planIterKind = 47
-	group      planIterKind = 65
-	sorting2   planIterKind = 66
+	constRef    planIterKind = 0
+	varRef      planIterKind = 1
+	extVarRef   planIterKind = 2
+	arithOp     planIterKind = 8
+	fieldStep   planIterKind = 11
+	sfw         planIterKind = 14
+	sizeFunc    planIterKind = 15
+	recv        planIterKind = 17
+	sumFunc     planIterKind = 39
+	minMaxFunc  planIterKind = 41
+	sorting     planIterKind = 47
+	group       planIterKind = 65
+	sorting2    planIterKind = 66
+	collectFunc planIterKind = 78
 )
 
 func (itk planIterKind) String() string {
@@ -49,6 +51,8 @@ func (itk planIterKind) String() string {
 		return "FIELD_STEP"
 	case sfw:
 		return "SFW"
+	case sizeFunc:
+		return "FN_SIZE"
 	case recv:
 		return "RECV"
 	case sumFunc:
@@ -61,6 +65,8 @@ func (itk planIterKind) String() string {
 		return "GROUP"
 	case sorting2:
 		return "SORT2"
+	case collectFunc:
+		return "FN_COLLECT"
 	default:
 		return "UNKNOWN"
 	}
@@ -89,6 +95,12 @@ const (
 
 	// fnMax represents the function code for the max() function.
 	fnMax funcCode = 48
+
+	// fnArrayCollect represents the function code for the array_collect() function.
+	fnArrayCollect funcCode = 91
+
+	// fnArrayCollectDistinct represents the function code for the max() function.
+	fnArrayCollectDistinct funcCode = 92
 )
 
 func (fc funcCode) String() string {
@@ -109,6 +121,10 @@ func (fc funcCode) String() string {
 		return "FN_COUNT_NUMBERS"
 	case fnSum:
 		return "FN_SUM"
+	case fnArrayCollect:
+		return "FN_ARRAY_COLLECT"
+	case fnArrayCollectDistinct:
+		return "FN_ARRAY_COLLECT_DISTINCT"
 	default:
 		return "UNKNOWN"
 	}
@@ -248,6 +264,10 @@ func deserializePlanIter(r proto.Reader) (planIter, error) {
 		return newFuncSumIter(r)
 	case minMaxFunc:
 		return newFuncMinMaxIter(r)
+	case sizeFunc:
+		return newFuncSizeIter(r)
+	case collectFunc:
+		return newFuncCollectIter(r)
 	case sorting, sorting2:
 		return newSortIter(r, kind)
 	case sfw:

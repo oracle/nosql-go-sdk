@@ -9,6 +9,7 @@ package test
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb"
@@ -88,6 +89,10 @@ func (suite *NoSQLTestSuite) CreateTable(createStmt string, limits *nosqldb.Tabl
 	}
 
 	res, err := suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
+	if err != nil && strings.Contains(err.Error(), "limits on child table") {
+		req.TableLimits = nil
+		res, err = suite.Client.DoTableRequestAndWait(req, 30*time.Second, time.Second)
+	}
 	suite.Require().NoErrorf(err, "%q: got error %v.", createStmt, err)
 	if res != nil {
 		suite.AddToTables(res.TableName)

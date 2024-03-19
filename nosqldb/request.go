@@ -1628,6 +1628,25 @@ type QueryRequest struct {
 	// The default value is 1GB.
 	MaxMemoryConsumption int64 `json:"maxMemoryConsumption"`
 
+	// MaxServerMemoryConsumption specifies the maximum number of memory bytes allowed
+	// to be consumed by the statement at a replication node. In general, queries
+	// do not consume a lot of memory while executing at a replcation node and the
+	// value of this parameter has no effect. Currently, the only exceptions are
+	// queries that use the array_collect function. For such queries, if
+	// the maximum amount of memory is exceeded, execution of the query
+	// at the replication node will be terminated (without error) and the
+	// set of query results that have been computed so far will be sent
+	// to the driver. The driver will keep executing the query, sending
+	// more requests to the replication nodes for additional results.
+	// So, for queries that use array_collect, increasing the value of this
+	// parameter will decrease the number of interactions between the driver
+	// and the replication nodes at the expense of consuming the memory
+	// consumption at the nodes.
+	//
+	// The default value is 10MB, and for applications running on the
+	// cloud, it can not be increased beyond this default.
+	MaxServerMemoryConsumption int64 `json:"maxServerMemoryConsumption"`
+
 	// FPArithSpec specifies the desired representation in terms of decimal
 	// precision (number of digits) and rounding rules for the floating-point
 	// values as arithematic operation results.
@@ -1754,18 +1773,19 @@ func (r *QueryRequest) doesWrites() bool {
 // copyInternal creates an internal QueryRequest out of the application provided QueryRequest.
 func (r *QueryRequest) copyInternal() *QueryRequest {
 	return &QueryRequest{
-		Timeout:              r.Timeout,
-		Limit:                r.Limit,
-		MaxReadKB:            r.MaxReadKB,
-		MaxWriteKB:           r.MaxWriteKB,
-		MaxMemoryConsumption: r.MaxMemoryConsumption,
-		Consistency:          r.Consistency,
-		Durability:           r.Durability,
-		PreparedStatement:    r.PreparedStatement,
-		driver:               r.driver,
-		traceLevel:           r.traceLevel,
-		TableName:            r.TableName,
-		isInternal:           true,
+		Timeout:                    r.Timeout,
+		Limit:                      r.Limit,
+		MaxReadKB:                  r.MaxReadKB,
+		MaxWriteKB:                 r.MaxWriteKB,
+		MaxMemoryConsumption:       r.MaxMemoryConsumption,
+		MaxServerMemoryConsumption: r.MaxServerMemoryConsumption,
+		Consistency:                r.Consistency,
+		Durability:                 r.Durability,
+		PreparedStatement:          r.PreparedStatement,
+		driver:                     r.driver,
+		traceLevel:                 r.traceLevel,
+		TableName:                  r.TableName,
+		isInternal:                 true,
 	}
 }
 
@@ -1830,6 +1850,20 @@ func (r *QueryRequest) GetMaxMemoryConsumption() int64 {
 	}
 
 	return r.MaxMemoryConsumption
+}
+
+// The default value of maximum memory, in bytes, allowed to be
+// consumed by a query at server, that is 10MB
+const defaultMaxServerMem int64 = 10 * 1024 * 1024
+
+// GetMaxServerMemoryConsumption returns the maximum number of memory bytes that
+// may be consumed by the query at the server.
+func (r *QueryRequest) GetMaxServerMemoryConsumption() int64 {
+	if r.MaxServerMemoryConsumption == 0 {
+		r.MaxServerMemoryConsumption = defaultMaxServerMem
+	}
+
+	return r.MaxServerMemoryConsumption
 }
 
 func (r *QueryRequest) topologySeqNum() int {
