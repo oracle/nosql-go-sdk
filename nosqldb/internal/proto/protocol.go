@@ -20,8 +20,13 @@ const (
 	// value when connected to older servers.
 	DefaultSerialVersion int16 = 4
 
-	// QueryVersion represents the version used for query requests.
-	QueryVersion int16 = 3
+	// DefaultQueryVersion represents the version used for query requests.
+	// Like the serial version above, the client may reduce this when connected to
+	// older servers.
+	DefaultQueryVersion int16 = 4
+
+	// QueryV3 is the query version that is used by v3 and previous protocols.
+	QueryV3 int16 = 3
 )
 
 const (

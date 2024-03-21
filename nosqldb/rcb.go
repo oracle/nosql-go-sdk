@@ -13,9 +13,9 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"sort"
 	"strconv"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
@@ -96,6 +96,9 @@ type runtimeControlBlock struct {
 	// Client, QueryRequest and PreparedStatement.
 	*queryDriver
 
+	// baseTopology holds the topology to use for the query execution
+	baseTopology *common.TopologyInfo
+
 	// externalVars specifies a slice of values of the external variables set
 	// for the operation.
 	externalVars []types.FieldValue
@@ -141,6 +144,7 @@ func newRCB(driver *queryDriver, rootIter planIter, numIterators, numRegisters i
 		iterStates:   make([]planIterState, numIterators),
 		registers:    make([]types.FieldValue, numRegisters),
 		externalVars: externalVars,
+		baseTopology: driver.getClient().getTopologyInfo(),
 	}
 }
 
@@ -163,6 +167,11 @@ func (rcb runtimeControlBlock) setRegValue(regID int, value types.FieldValue) {
 // getRegValue retrieves the value associated with the specified register id from RCB.
 func (rcb *runtimeControlBlock) getRegValue(regID int) types.FieldValue {
 	return rcb.registers[regID]
+}
+
+// getBaseTopology retrieves the base topology held by the RCB
+func (rcb *runtimeControlBlock) getBaseTopology() *common.TopologyInfo {
+	return rcb.baseTopology
 }
 
 // getExternalVar retrieves the value of external variable associated with the
@@ -325,50 +334,6 @@ func dataSize(v reflect.Value, ignoreTypeSize ...bool) int {
 	}
 }
 
-// topologyInfo represents the NoSQL database topology information required for
-// query execution.
-type topologyInfo struct {
-	// seqNum represents the sequence number of the topology.
-	seqNum int
-
-	// shardIDs specifies a slice of int values that represent the shard IDs.
-	shardIDs []int
-}
-
-// equals checks if ti equals to the specified otherTopo.
-func (ti *topologyInfo) equals(otherTopo *topologyInfo) bool {
-	if ti == otherTopo {
-		return true
-	}
-
-	if ti == nil || otherTopo == nil {
-		return ti == otherTopo
-	}
-
-	if ti.seqNum != otherTopo.seqNum {
-		return false
-	}
-
-	if ti.getNumShards() != otherTopo.getNumShards() {
-		return false
-	}
-
-	// Sort the slice of shard IDs and compare.
-	sort.Ints(ti.shardIDs)
-	sort.Ints(otherTopo.shardIDs)
-	return reflect.DeepEqual(ti.shardIDs, otherTopo.shardIDs)
-}
-
-// getNumShards returns the number of shards.
-func (ti *topologyInfo) getNumShards() int {
-	return len(ti.shardIDs)
-}
-
-// getShardID returns the shard id associated with the specified index.
-func (ti *topologyInfo) getShardID(index int) int {
-	return ti.shardIDs[index]
-}
-
 // dummyContKey is a dummy value of the continuation key.
 var dummyContKey = []byte{0}
 
@@ -384,9 +349,6 @@ type queryDriver struct {
 
 	// The continuation key of the query request.
 	continuationKey []byte
-
-	// The NoSQL database topology information required for query execution.
-	topologyInfo *topologyInfo
 
 	// The compilation cost consumed for preparing the query statement.
 	prepareCost int
@@ -428,12 +390,6 @@ func (d *queryDriver) getClient() *Client {
 // getRequest returns the query request with which this driver is associated.
 func (d *queryDriver) getRequest() *QueryRequest {
 	return d.request
-}
-
-// getTopologyInfo returns the NoSQL database topology information that is
-// required for query execution.
-func (d *queryDriver) getTopologyInfo() *topologyInfo {
-	return d.topologyInfo
 }
 
 // setQueryResult sets the query results cached in the query driver for the

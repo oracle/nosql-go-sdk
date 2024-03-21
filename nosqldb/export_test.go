@@ -14,18 +14,18 @@ import (
 
 // This file exports functions/methods that are used in test codes.
 
-type HandleResponse func(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error)
+type HandleResponse func(httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error)
 
 func (c *Client) SetResponseHandler(fn HandleResponse) {
 	c.handleResponse = fn
 }
 
-func (c *Client) ProcessRequest(req Request) (data []byte, serialVerUsed int16, err error) {
+func (c *Client) ProcessRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
 	return c.processRequest(req)
 }
 
-func (c *Client) DoExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16) (Result, error) {
-	return c.doExecute(ctx, req, data, serialVerUsed)
+func (c *Client) DoExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16) (Result, error) {
+	return c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed)
 }
 
 func (p *PreparedStatement) GetStatement() []byte {

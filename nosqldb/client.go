@@ -68,7 +68,7 @@ type Client struct {
 	// handleResponse specifies a function that is used to handle the response
 	// returned from server.
 	// This is used internally by tests for customizing response processing.
-	handleResponse func(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error)
+	handleResponse func(httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error)
 
 	// isCloud represents whether the client connects to the cloud service or
 	// cloud simulator.
@@ -83,6 +83,12 @@ type Client struct {
 
 	// (possibly negotiated) version of the protocol in use
 	serialVersion int16
+
+	// separate version for queries
+	queryVersion int16
+
+	// latest topology from any request/response opearation
+	topology *common.TopologyInfo
 
 	// for managing one-time messaging
 	oneTimeMessages map[string]struct{}
@@ -140,6 +146,8 @@ func NewClient(cfg Config) (*Client, error) {
 		logger:        cfg.Logger,
 		isCloud:       cfg.IsCloud() || cfg.IsCloudSim(),
 		serialVersion: proto.DefaultSerialVersion,
+		queryVersion:  proto.DefaultQueryVersion,
+		topology:      nil,
 	}
 	c.handleResponse = c.processResponse
 	c.queryLogger, err = newQueryLogger()
@@ -870,9 +878,9 @@ func (c *Client) nextRequestID() int32 {
 // processRequest processes the specified request before it is sent to server.
 // This method applies default configurations such as timeout and consistency
 // values for the request if they are not specified for the request.
-func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, err error) {
+func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
 	if req == nil {
-		return nil, 0, errNilRequest
+		return nil, 0, 0, errNilRequest
 	}
 
 	// Set default values for the request with the global request configurations
@@ -882,17 +890,17 @@ func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, 
 
 	// Validates the request, returns immediately if validation fails.
 	if err = req.validate(); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
-	data, serialVerUsed, err = c.serializeRequest(req)
+	data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
 	if err != nil || !c.isCloud {
 		return
 	}
 
 	// check request size for cloud
 	if err = checkRequestSizeLimit(req, len(data)); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	return
@@ -907,15 +915,15 @@ func (c *Client) execute(req Request) (Result, error) {
 }
 
 func (c *Client) executeWithContext(ctx context.Context, req Request) (Result, error) {
-	data, serialVerUsed, err := c.processRequest(req)
+	data, serialVerUsed, queryVerUsed, err := c.processRequest(req)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.doExecute(ctx, req, data, serialVerUsed)
+	return c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed)
 }
 
-func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16) (result Result, err error) {
+func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16) (result Result, err error) {
 	if req == nil {
 		return nil, errNilRequest
 	}
@@ -925,6 +933,8 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	}
 
 	if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isInternalRequest() {
+
+		req.SetTopology(c.topology)
 
 		// If the QueryRequest represents an advanced query, it will be bound
 		// with a queryDriver the first time the execute() is called for the query.
@@ -945,7 +955,6 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			c.logger.Debug("the QueryRequest is prepared, but is not bound with a QueryDriver")
 			driver := newQueryDriver(queryReq)
 			driver.client = c
-			driver.topologyInfo = queryReq.getTopologyInfo()
 			return newQueryResult(queryReq, false), nil
 		}
 
@@ -1056,7 +1065,16 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 					return nil, err
 				}
 				// if serial version mismatch, we must re-serialize the request
-				data, serialVerUsed, err = c.serializeRequest(req)
+				data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
+				if err != nil {
+					return nil, err
+				}
+			} else if nosqlerr.Is(err, nosqlerr.UnsupportedQueryVersion) {
+				if !c.decrementQueryVersion(queryVerUsed) {
+					return nil, err
+				}
+				// if query version mismatch, we must re-serialize the request
+				data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
 				if err != nil {
 					return nil, err
 				}
@@ -1110,6 +1128,11 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 				}
 				rateDelayedTime += ms
 			}
+		}
+
+		// set the topology in the request, if not set already
+		if queryReq, ok := req.(*QueryRequest); !ok || queryReq.isInternalRequest() {
+			req.SetTopology(c.topology)
 		}
 
 		// Handle errors that may occur when retrieving authorization string.
@@ -1192,7 +1215,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			continue
 		}
 
-		result, err = c.handleResponse(httpResp, req, serialVerUsed)
+		result, err = c.handleResponse(httpResp, req, serialVerUsed, queryVerUsed)
 		// Cancel request context after response body has been read.
 		reqCancel()
 		if err != nil {
@@ -1202,6 +1225,8 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		if result == nil {
 			return result, nil
 		}
+
+		c.setTopologyInfo(result.GetTopologyInfo())
 
 		if tResult, ok := result.(*TableResult); ok && c.rateLimiterMap != nil {
 			// update rate limiter settings for table
@@ -1223,6 +1248,15 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		result.Delayed().setRetryTime(req.GetRetryTime())
 
 		return result, nil
+	}
+}
+
+func (c *Client) setTopologyInfo(ti *common.TopologyInfo) {
+	if ti == nil {
+		return
+	}
+	if c.topology == nil || c.topology.SeqNum < ti.SeqNum {
+		c.topology = ti
 	}
 }
 
@@ -1455,24 +1489,25 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 // serializeRequest serializes the specified request into a slice of bytes that
 // will be sent to the server. The serial version is always written followed by
 // the actual request payload.
-func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16, err error) {
+func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
 	serialVerUsed = c.serialVersion
+	queryVerUsed = c.queryVersion
 	wr := binary.NewWriter()
 	if _, err = wr.WriteSerialVersion(serialVerUsed); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	if serialVerUsed >= 4 {
-		if err = req.serialize(wr, serialVerUsed); err != nil {
-			return nil, 0, err
+		if err = req.serialize(wr, serialVerUsed, queryVerUsed); err != nil {
+			return nil, 0, 0, err
 		}
 	} else {
 		if err = req.serializeV3(wr, serialVerUsed); err != nil {
-			return nil, 0, err
+			return nil, 0, 0, err
 		}
 	}
 
-	return wr.Bytes(), serialVerUsed, nil
+	return wr.Bytes(), serialVerUsed, queryVerUsed, nil
 }
 
 // processResponse processes the http response returned from server.
@@ -1480,7 +1515,7 @@ func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16
 // If the http response status code is 200, this method reads in response
 // content and parses them as an appropriate result suitable for the request.
 // Otherwise, it returns the http error.
-func (c *Client) processResponse(httpResp *http.Response, req Request, serialVerUsed int16) (Result, error) {
+func (c *Client) processResponse(httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error) {
 	data, err := io.ReadAll(httpResp.Body)
 	httpResp.Body.Close()
 	if err != nil {
@@ -1489,19 +1524,19 @@ func (c *Client) processResponse(httpResp *http.Response, req Request, serialVer
 
 	if httpResp.StatusCode == http.StatusOK {
 		c.setSessionCookie(httpResp.Header)
-		return c.processOKResponse(data, req, serialVerUsed)
+		return c.processOKResponse(data, req, serialVerUsed, queryVerUsed)
 	}
 
 	return nil, c.processNotOKResponse(data, httpResp.StatusCode)
 }
 
-func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16) (res Result, err error) {
+func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16, queryVerUsed int16) (res Result, err error) {
 	buf := bytes.NewBuffer(data)
 	rd := binary.NewReader(buf)
 
 	var code int
 	if serialVerUsed >= 4 {
-		if res, code, err = req.deserialize(rd, serialVerUsed); err != nil {
+		if res, code, err = req.deserialize(rd, serialVerUsed, queryVerUsed); err != nil {
 			return nil, wrapResponseErrors(int(code), err.Error())
 		}
 		if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isSimpleQuery() {
@@ -1686,6 +1721,38 @@ func (c *Client) GetSerialVersion() int16 {
 // SetSerialVersion is used for tests. Do not use this in regular client code.
 func (c *Client) SetSerialVersion(sVer int16) {
 	c.serialVersion = sVer
+}
+
+// decrementQueryVersion attempts to reduce the query version used for
+// communicating with the server. If the version is already at its lowest
+// value, it will not be decremented and false will be returned.
+func (c *Client) decrementQueryVersion(queryVerUsed int16) bool {
+	c.lockMux.Lock()
+	defer c.lockMux.Unlock()
+	if c.queryVersion != queryVerUsed {
+		return true
+	}
+	if c.queryVersion > 3 {
+		c.queryVersion--
+		c.logger.Fine("Decremented query version to %d\n", c.queryVersion)
+		return true
+	}
+	return false
+}
+
+// getTopologyInfo returns the topology info stored in the client
+func (c *Client) getTopologyInfo() *common.TopologyInfo {
+	return c.topology
+}
+
+// GetQueryVersion is used for tests.
+func (c *Client) GetQueryVersion() int16 {
+	return c.queryVersion
+}
+
+// SetQueryVersion is used for tests. Do not use this in regular client code.
+func (c *Client) SetQueryVersion(qVer int16) {
+	c.queryVersion = qVer
 }
 
 func (c *Client) oneTimeMessage(msg string) {
