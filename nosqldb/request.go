@@ -1713,6 +1713,9 @@ type QueryRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// virtualScan is used for internal queru requests only.
+	virtualScan *virtualScan
+
 	common.InternalRequestData
 }
 
@@ -1770,22 +1773,26 @@ func (r *QueryRequest) doesWrites() bool {
 	return true
 }
 
+func (r *QueryRequest) getVirtualScan() *virtualScan {
+	return r.virtualScan
+}
+
 // copyInternal creates an internal QueryRequest out of the application provided QueryRequest.
 func (r *QueryRequest) copyInternal() *QueryRequest {
 	return &QueryRequest{
-		Timeout:                    r.Timeout,
-		Limit:                      r.Limit,
-		MaxReadKB:                  r.MaxReadKB,
-		MaxWriteKB:                 r.MaxWriteKB,
-		MaxMemoryConsumption:       r.MaxMemoryConsumption,
-		MaxServerMemoryConsumption: r.MaxServerMemoryConsumption,
-		Consistency:                r.Consistency,
-		Durability:                 r.Durability,
-		PreparedStatement:          r.PreparedStatement,
-		driver:                     r.driver,
-		traceLevel:                 r.traceLevel,
-		TableName:                  r.TableName,
-		isInternal:                 true,
+		Timeout:              r.Timeout,
+		Limit:                r.Limit,
+		MaxReadKB:            r.MaxReadKB,
+		MaxWriteKB:           r.MaxWriteKB,
+		MaxMemoryConsumption: r.MaxMemoryConsumption,
+		Consistency:          r.Consistency,
+		Durability:           r.Durability,
+		PreparedStatement:    r.PreparedStatement,
+		driver:               r.driver,
+		traceLevel:           r.traceLevel,
+		TableName:            r.TableName,
+		InternalRequestData:  r.InternalRequestData,
+		isInternal:           true,
 	}
 }
 
@@ -1810,16 +1817,6 @@ func (r *QueryRequest) isSimpleQuery() bool {
 // and submitted for execution by the receiveIter.
 func (r *QueryRequest) isInternalRequest() bool {
 	return r.isInternal
-}
-
-// getTopologyInfo returns the Oracle NoSQL database server topology information
-// that is required for query execution.
-func (r *QueryRequest) getTopologyInfo() *topologyInfo {
-	if r.PreparedStatement == nil {
-		return nil
-	}
-
-	return r.PreparedStatement.topologyInfo
 }
 
 func (r *QueryRequest) setShardID(shardID int) {
@@ -1864,14 +1861,6 @@ func (r *QueryRequest) GetMaxServerMemoryConsumption() int64 {
 	}
 
 	return r.MaxServerMemoryConsumption
-}
-
-func (r *QueryRequest) topologySeqNum() int {
-	if r.PreparedStatement == nil {
-		return -1
-	}
-
-	return r.PreparedStatement.topologySeqNum()
 }
 
 func (r *QueryRequest) setContKey(contKey []byte) {
@@ -1932,12 +1921,6 @@ type PreparedStatement struct {
 	// This is only used for advanced queries.
 	driverQueryPlan planIter
 
-	// topologyInfo represents the NoSQL database topology information that
-	// are required for query execution.
-	//
-	// This is only used for advanced queries.
-	topologyInfo *topologyInfo
-
 	// statement represents the serialized PreparedStatement created at the backend store.
 	// It is opaque for the driver.
 	// It is received from the NoSQL database proxy and sent back to the proxy
@@ -1975,7 +1958,7 @@ type PreparedStatement struct {
 // This is used for sanity check.
 const minSerializedStmtLen = 10
 
-func newPreparedStatement(sqlText, queryPlan string, topologyInfo *topologyInfo,
+func newPreparedStatement(sqlText, queryPlan string,
 	statement []byte, driverPlan planIter, numIterators, numRegisters int,
 	variableToIDs map[string]int) (*PreparedStatement, error) {
 
@@ -1986,7 +1969,6 @@ func newPreparedStatement(sqlText, queryPlan string, topologyInfo *topologyInfo,
 	return &PreparedStatement{
 		sqlText:         sqlText,
 		queryPlan:       queryPlan,
-		topologyInfo:    topologyInfo,
 		statement:       statement,
 		driverQueryPlan: driverPlan,
 		numIterators:    numIterators,
@@ -2015,14 +1997,6 @@ func (p *PreparedStatement) SetVariable(name string, value interface{}) error {
 
 func (p *PreparedStatement) isSimpleQuery() bool {
 	return p.driverQueryPlan == nil
-}
-
-func (p *PreparedStatement) topologySeqNum() int {
-	if p.topologyInfo == nil {
-		return -1
-	}
-
-	return p.topologyInfo.seqNum
 }
 
 func (p *PreparedStatement) getBoundVarValues() []types.FieldValue {

@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2023 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -28,6 +29,9 @@ type Result interface {
 	ConsumedCapacity() (*Capacity, error)
 
 	Delayed() *DelayInfo
+
+	GetTopologyInfo() *common.TopologyInfo
+	SetTopology(*common.TopologyInfo)
 }
 
 // DelayInfo contains information about the amount of time a request was delayed.
@@ -116,6 +120,7 @@ type GetResult struct {
 	ModificationTime int64 `json:"modificationTime"`
 
 	DelayInfo
+	common.InternalResultData
 }
 
 // String returns a JSON string representation of the GetResult.
@@ -162,6 +167,7 @@ func (r GetResult) RowExists() bool {
 type SystemResult struct {
 	noCapacity
 	DelayInfo
+	common.InternalResultData
 
 	// State represents the current state of the operation.
 	State types.OperationState `json:"state"`
@@ -262,6 +268,7 @@ func (r *SystemResult) WaitForCompletion(client *Client, timeout, pollInterval t
 type TableResult struct {
 	noCapacity
 	DelayInfo
+	common.InternalResultData
 
 	// TableName represents the name of target table.
 	TableName string `json:"tableName"`
@@ -413,6 +420,9 @@ func (r *TableResult) WaitForCompletion(client *Client, timeout, pollInterval ti
 			r.Limits = res.Limits
 			r.Schema = res.Schema
 			r.DDL = res.DDL
+			r.IsLocalReplicaInitialized = res.IsLocalReplicaInitialized
+			r.SchemaFrozen = res.SchemaFrozen
+			r.Replicas = res.Replicas
 			return r, nil
 		}
 
@@ -435,6 +445,7 @@ func (r *TableResult) WaitForCompletion(client *Client, timeout, pollInterval ti
 type ListTablesResult struct {
 	noCapacity
 	DelayInfo
+	common.InternalResultData
 
 	// Tables represents a slice of string that contains table names returned
 	// by the operation, in alphabetical order.
@@ -501,6 +512,7 @@ type ReplicaStats struct {
 type ReplicaStatsResult struct {
 	noCapacity
 	DelayInfo
+	common.InternalResultData
 
 	// TableName represents the name of the table. It should match that given in
 	// the ReplicaStatsRequest.
@@ -527,6 +539,7 @@ func (r ReplicaStatsResult) String() string {
 type GetIndexesResult struct {
 	noCapacity
 	DelayInfo
+	common.InternalResultData
 
 	// Indexes represents a slice of IndexInfo that contains index information
 	// returned by the operation.
@@ -593,6 +606,7 @@ func (r WriteResult) ExistingValueAsJSON() string {
 type DeleteResult struct {
 	Capacity
 	DelayInfo
+	common.InternalResultData
 
 	// WriteResult is used to get the information about the existing row such as
 	// ExistingValue and ExistingVersion on operation failure.
@@ -618,6 +632,7 @@ func (r DeleteResult) String() string {
 type PutResult struct {
 	Capacity
 	DelayInfo
+	common.InternalResultData
 
 	// WriteResult is used to get the information about the existing row such as
 	// ExistingValue and ExistingVersion on operation failure.
@@ -698,6 +713,7 @@ func (r TableUsage) String() string {
 type TableUsageResult struct {
 	noCapacity
 	DelayInfo
+	common.InternalResultData
 
 	// TableName represents table name used by the operation.
 	TableName string `json:"tableName"`
@@ -731,6 +747,7 @@ func (r TableUsageResult) String() string {
 type WriteMultipleResult struct {
 	Capacity
 	DelayInfo
+	common.InternalResultData
 
 	// ResultSet represents the list of execution results for the operations.
 	ResultSet []OperationResult `json:"resultSet"`
@@ -803,6 +820,7 @@ func (r OperationResult) String() string {
 type MultiDeleteResult struct {
 	Capacity
 	DelayInfo
+	common.InternalResultData
 
 	// ContinuationKey represents the continuation key where the next
 	// MultiDelete request resumes from.
@@ -824,6 +842,7 @@ func (r MultiDeleteResult) String() string {
 type PrepareResult struct {
 	Capacity
 	DelayInfo
+	common.InternalResultData
 
 	// PreparedStatement represents the value of the prepared statement.
 	PreparedStatement PreparedStatement `json:"preparedStatement"`
@@ -853,6 +872,7 @@ func (r PrepareResult) String() string {
 type QueryResult struct {
 	Capacity
 	DelayInfo
+	common.InternalResultData
 
 	// The query request with which this query result is associated.
 	request *QueryRequest
@@ -886,6 +906,8 @@ type QueryResult struct {
 	partitionIDs      []int
 	numResultsPerPart []int
 	contKeysPerPart   [][]byte
+
+	virtualScans []*virtualScan
 }
 
 func newQueryResult(req *QueryRequest, isComputed bool) *QueryResult {

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -840,7 +841,8 @@ func (req *PrepareRequest) serializeV3(w proto.Writer, serialVersion int16) (err
 	}
 
 	// Write query version.
-	if _, err = w.WriteInt16(proto.QueryVersion); err != nil {
+	// V2/3 protocol always use query version 3
+	if _, err = w.WriteInt16(proto.QueryV3); err != nil {
 		return
 	}
 
@@ -857,7 +859,7 @@ func (req *PrepareRequest) deserializeV3(r proto.Reader, serialVersion int16) (r
 		return
 	}
 
-	prepStmt, err := deserializeV3PrepStmt(r, req.Statement, req.GetQueryPlan)
+	prepStmt, topoInfo, err := deserializeV3PrepStmt(r, req.Statement, req.GetQueryPlan)
 	if err != nil {
 		return
 	}
@@ -866,11 +868,12 @@ func (req *PrepareRequest) deserializeV3(r proto.Reader, serialVersion int16) (r
 		Capacity:          *c,
 		PreparedStatement: *prepStmt,
 	}
+	res.SetTopology(topoInfo)
 
 	return
 }
 
-func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (prepStmt *PreparedStatement, err error) {
+func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (prepStmt *PreparedStatement, topoInfo *common.TopologyInfo, err error) {
 	stmt, err := r.ReadByteArrayWithInt()
 	if err != nil {
 		return
@@ -880,7 +883,6 @@ func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (p
 	var queryPlan string
 	var numIterators, numRegisters int
 	var extVariables map[string]int
-	var topoInfo *topologyInfo
 
 	if getQueryPlan {
 		p, err = r.ReadString()
@@ -942,12 +944,12 @@ func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (p
 		}
 	}
 
-	return newPreparedStatement(sqlText, queryPlan, topoInfo, stmt, driverPlanIter,
+	prepStmt, err = newPreparedStatement(sqlText, queryPlan, stmt, driverPlanIter,
 		numIterators, numRegisters, extVariables)
-
+	return
 }
 
-func deserializeV3TopologyInfo(r proto.Reader) (topoInfo *topologyInfo, err error) {
+func deserializeV3TopologyInfo(r proto.Reader) (topoInfo *common.TopologyInfo, err error) {
 	seqNum, err := r.ReadPackedInt()
 	if err != nil {
 		return nil, err
@@ -967,9 +969,9 @@ func deserializeV3TopologyInfo(r proto.Reader) (topoInfo *topologyInfo, err erro
 		return
 	}
 
-	return &topologyInfo{
-		seqNum:   seqNum,
-		shardIDs: shardIDs,
+	return &common.TopologyInfo{
+		SeqNum:   seqNum,
+		ShardIDs: shardIDs,
 	}, nil
 }
 
@@ -998,7 +1000,8 @@ func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err e
 		return
 	}
 
-	if _, err = w.WriteInt16(proto.QueryVersion); err != nil {
+	// V2/3 protocol always use query version 3
+	if _, err = w.WriteInt16(proto.QueryV3); err != nil {
 		return
 	}
 
@@ -1014,7 +1017,7 @@ func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err e
 		return
 	}
 
-	if _, err = w.WritePackedInt(req.topologySeqNum()); err != nil {
+	if _, err = w.WritePackedInt(req.GetTopoSeqNum()); err != nil {
 		return
 	}
 
@@ -1194,21 +1197,27 @@ func (req *QueryRequest) deserializeV3(r proto.Reader, serialVersion int16) (Res
 	req.setContKey(res.continuationKey)
 
 	prepStmt := req.PreparedStatement
-	isPrepared := prepStmt != nil
+	isPrepared := false
+	if prepStmt != nil {
+		isPrepared = true
+	}
 
 	if !isPrepared {
-		prepStmt, err = deserializeV3PrepStmt(r, req.Statement, false)
+		prepStmt, topoInfo, err := deserializeV3PrepStmt(r, req.Statement, false)
 		if err != nil {
 			return nil, err
 		}
 
 		req.PreparedStatement = prepStmt
+		if topoInfo != nil {
+			req.SetTopology(topoInfo)
+			res.SetTopology(topoInfo)
+		}
 	}
 
 	if prepStmt != nil && !prepStmt.isSimpleQuery() {
 		if !isPrepared {
 			driver := newQueryDriver(req)
-			driver.topologyInfo = prepStmt.topologyInfo
 			c, err := res.ConsumedCapacity()
 			if err != nil {
 				return nil, err
@@ -1228,8 +1237,8 @@ func (req *QueryRequest) deserializeV3(r proto.Reader, serialVersion int16) (Res
 			}
 
 			if topoInfo != nil {
-				prepStmt.topologyInfo = topoInfo
-				req.driver.topologyInfo = topoInfo
+				req.SetTopology(topoInfo)
+				res.SetTopology(topoInfo)
 			}
 		}
 	}

@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ### Changed
 - Changed copyrights to 2024
+- Modified internal query processing to better support elasticity operations
 
 ## 1.4.2 - 2023-09-25
 

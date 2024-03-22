@@ -12,7 +12,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"math/big"
-	"sort"
 	"strings"
 	"time"
 
@@ -69,7 +68,7 @@ type receiveIterState struct {
 	// for query execution.
 	//
 	// This is used for sorting all-shard queries only.
-	topologyInfo *topologyInfo
+	//topologyInfo *common.TopologyInfo
 
 	// scanner represents the remote scanner used for non-sorting queries.
 	scanner *remoteScanner
@@ -116,14 +115,16 @@ type receiveIterState struct {
 	// sort-phase-2 request for a sorting, all-partition query.
 	totalResultSize int64
 	totalNumResults int64
+
+	// baseVSID is used to detect changes in the topology during a query execution
+	baseVSID int
 }
 
 func newReceiveIterState(rcb *runtimeControlBlock, iter *receiveIter) *receiveIterState {
-	topoInfo := rcb.getTopologyInfo()
 	state := &receiveIterState{
 		iterState:      newIterState(),
 		isInSortPhase1: true,
-		topologyInfo:   topoInfo,
+		baseVSID:       -1,
 	}
 
 	if iter.doesDupElim() {
@@ -135,19 +136,21 @@ func newReceiveIterState(rcb *runtimeControlBlock, iter *receiveIter) *receiveIt
 
 	switch {
 	case !iter.doesSort() || iter.distKind == singlePartition:
-		state.scanner = newRemoteScanner(rcb, state, false, -1, iter)
+		state.scanner = newRemoteScanner(rcb, state, false, -1, iter, nil)
 
 	case iter.distKind == allPartitions:
 		scanners := make([]*remoteScanner, 0, 1000)
 		state.sortedScanners = remoteScannerHeap(scanners)
 
 	case iter.distKind == allShards:
-		numShards := topoInfo.getNumShards()
+		baseTopo := rcb.getBaseTopology()
+		numShards := baseTopo.GetNumShards()
 		scanners := make([]*remoteScanner, numShards)
 		for i := 0; i < numShards; i++ {
-			scanners[i] = newRemoteScanner(rcb, state, true, topoInfo.getShardID(i), iter)
+			scanners[i] = newRemoteScanner(rcb, state, true, baseTopo.GetShardID(i), iter, nil)
 		}
 		state.sortedScanners = remoteScannerHeap(scanners)
+		state.baseVSID = baseTopo.GetLastShardID() + 1
 	}
 
 	return state
@@ -402,6 +405,7 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 
 			return false, err
 		}
+		iter.handleVirtualScans(rcb, state, scanner)
 
 		// Re-check after a remote fetch.
 		// If there are no remote results available, remove the scanner,
@@ -414,7 +418,7 @@ func (iter *receiveIter) sortingNext(rcb *runtimeControlBlock, state *receiveIte
 			heap.Fix(&state.sortedScanners, 0)
 		}
 
-		iter.handleTopologyChange(rcb, state)
+		//iter.handleTopologyChange(rcb, state)
 
 		// For simplicity, we do not want to allow the possibility of another
 		// remote fetch during the same batch, so whether or not the batch
@@ -550,7 +554,7 @@ func (iter *receiveIter) initPartitionSort(rcb *runtimeControlBlock, state *rece
 		contKey := queryRes.contKeysPerPart[i]
 		partitionResults := queryRes.results[off : off+n]
 		off += n
-		scanner := newRemoteScanner(rcb, state, false, partID, iter)
+		scanner := newRemoteScanner(rcb, state, false, partID, iter, nil)
 		scanner.addResults(partitionResults, contKey)
 		heap.Push(&state.sortedScanners, scanner)
 	}
@@ -565,52 +569,23 @@ func (iter *receiveIter) initPartitionSort(rcb *runtimeControlBlock, state *rece
 	return nil
 }
 
-// handleTopologyChange checks if the new topology differs from the current
-// topology received earlier. If so, updates the topology.
-func (iter *receiveIter) handleTopologyChange(rcb *runtimeControlBlock, state *receiveIterState) {
-	newTopoInfo := rcb.getTopologyInfo()
-	if iter.distKind == allPartitions || newTopoInfo.equals(state.topologyInfo) {
+// handleVirtualScans checks for virtual scans and if found, adjusts the scanners to
+// suit the virtual scans.
+func (iter *receiveIter) handleVirtualScans(rcb *runtimeControlBlock, state *receiveIterState, scanner *remoteScanner) {
+	if iter.distKind == allPartitions || scanner.virtualScans == nil {
 		return
 	}
 
-	// As a side effect of the "newTopoInfo.equals(state.topologyInfo)" invocation,
-	// the shard IDs have been sorted.
-	newShards := newTopoInfo.shardIDs
-	currShards := state.topologyInfo.shardIDs
-
-	var i int
-	n := len(currShards)
-	// shardIDs stores current shard IDs that exists in the new topology.
-	shardIDs := make(map[int]bool, n)
-	for _, newShardID := range newShards {
-		i = sort.SearchInts(currShards, newShardID)
-		// This is a new shard.
-		if i >= n || currShards[i] != newShardID {
-			scanner := newRemoteScanner(rcb, state, true, newShardID, iter)
-			state.sortedScanners = append(state.sortedScanners, scanner)
-		} else {
-			shardIDs[currShards[i]] = true
-		}
+	for i := 0; i < len(scanner.virtualScans); i++ {
+		vsid := state.baseVSID
+		state.baseVSID += 1
+		scanner := newRemoteScanner(rcb, state, true, vsid, iter, scanner.virtualScans[i])
+		state.sortedScanners = append(state.sortedScanners, scanner)
 	}
+	scanner.virtualScans = nil
 
 	// Re-build the heap.
 	heap.Init(&state.sortedScanners)
-
-	for _, currShardID := range currShards {
-		if shardIDs[currShardID] {
-			continue
-		}
-
-		// This shard does not exist any more.
-		for j, scanner := range state.sortedScanners {
-			if scanner.shardOrPartID == currShardID {
-				heap.Remove(&state.sortedScanners, j)
-				break
-			}
-		}
-	}
-
-	state.topologyInfo = newTopoInfo
 }
 
 func (iter *receiveIter) getPlan() string {
@@ -648,6 +623,21 @@ func (iter *receiveIter) displayContent(sb *strings.Builder, f *planFormatter) {
 	}
 }
 
+// virtualScan represents data for a virtual scan.
+type virtualScan struct {
+	firstBatch         bool
+	shardID            int
+	partitionID        int
+	primResumeKey      []byte
+	secResumeKey       []byte
+	moveAfterResumeKey bool
+	descResumeKey      []byte
+	joinPathTables     []int
+	joinPathKey        []byte
+	joinPathSecKey     []byte
+	joinPathMatched    bool
+}
+
 // remoteScanner fetches results from the Oracle NoSQL database server.
 //
 // For all-shard, ordering queries, there is one remoteScanner per shard.
@@ -673,12 +663,14 @@ type remoteScanner struct {
 	nextResultPos     int
 	continuationKey   []byte
 	moreRemoteResults bool
+	virtualScan       *virtualScan
+	virtualScans      []*virtualScan
 
 	*receiveIter
 }
 
 func newRemoteScanner(rcb *runtimeControlBlock, state *receiveIterState,
-	isForShard bool, shardOrPartID int, iter *receiveIter) *remoteScanner {
+	isForShard bool, shardOrPartID int, iter *receiveIter, vs *virtualScan) *remoteScanner {
 
 	return &remoteScanner{
 		rcb:               rcb,
@@ -687,6 +679,7 @@ func newRemoteScanner(rcb *runtimeControlBlock, state *receiveIterState,
 		shardOrPartID:     shardOrPartID,
 		moreRemoteResults: true,
 		receiveIter:       iter,
+		virtualScan:       vs,
 	}
 }
 
@@ -777,11 +770,19 @@ func (s *remoteScanner) fetch() (err error) {
 		req.Limit = uint(numResults)
 	}
 
+	if s.virtualScan != nil {
+		req.virtualScan = s.virtualScan
+	}
+
 	s.rcb.trace(1, "remoteScanner : executing remote request. shardOrPartID = %d", s.shardOrPartID)
 
 	res, err := s.rcb.getClient().Query(req)
 	if err != nil {
 		return
+	}
+
+	if s.virtualScan != nil {
+		s.virtualScan.firstBatch = false;
 	}
 
 	s.results = res.results

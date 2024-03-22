@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
@@ -92,6 +93,7 @@ const (
 	PREPARED_STATEMENT         = "ps"
 	PROXY_TOPO_SEQNUM          = "pn"
 	QUERY                      = "q"
+	QUERY_NAME                 = "qn"
 	QUERY_OPERATION            = "qo"
 	QUERY_PLAN_STRING          = "qs"
 	QUERY_RESULTS              = "qr"
@@ -138,11 +140,24 @@ const (
 	TOPOLOGY_INFO              = "tp"
 	TOPO_SEQ_NUM               = "ts"
 	TRACE_LEVEL                = "tl"
+	TRACE_AT_LOG_FILES         = "tf"
 	TTL                        = "tt"
 	TYPE                       = "y"
 	UPDATE_TTL                 = "ut"
 	VALUE                      = "l"
 	VERSION                    = "v"
+	VSCAN                      = "vs"
+	VSCANS                     = "vssa"
+	VSCAN_JOIN_DESC_RESUME_KEY = "vsjdrk"
+	VSCAN_JOIN_PATH_TABLES     = "vsjpt"
+	VSCAN_JOIN_PATH_KEY        = "vsjpk"
+	VSCAN_JOIN_PATH_SEC_KEY    = "vsjpsk"
+	VSCAN_JOIN_PATH_MATCHED    = "vsjpm"
+	VSCAN_MOVE_AFTER           = "vsma"
+	VSCAN_PID                  = "vspid"
+	VSCAN_PRIM_KEY             = "vspk"
+	VSCAN_SEC_KEY              = "vssk"
+	VSCAN_SID                  = "vssid"
 	WM_FAILURE                 = "wf"
 	WM_FAIL_INDEX              = "wi"
 	WM_FAIL_RESULT             = "wr"
@@ -175,12 +190,12 @@ func SetNsonDebug(d bool) {
 //	TableName
 //	Consistency
 //	Key
-func (req *GetRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *GetRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.Get, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.Get, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -199,7 +214,7 @@ func (req *GetRequest) serialize(w proto.Writer, serialVersion int16) (err error
 	return nil
 }
 
-func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -217,6 +232,8 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16) (Result,
 			res.Capacity, err = readNsonConsumedCapacity(r)
 		case ROW:
 			err = readNsonRow(r, res)
+		case TOPOLOGY_INFO:
+			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -235,12 +252,12 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16) (Result,
 //	Timeout
 //	TableName
 //	OperationID
-func (req *GetTableRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *GetTableRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.GetTable, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.GetTable, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -257,16 +274,16 @@ func (req *GetTableRequest) serialize(w proto.Writer, serialVersion int16) (err 
 	return
 }
 
-func (req *GetTableRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *GetTableRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	return deserializeTableResult(r, serialVersion)
 }
 
-func (req *SystemRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *SystemRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.SystemRequest, req.Timeout, ""); err != nil {
+	if err = ns.writeHeader(proto.SystemRequest, req.Timeout, "", req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -281,15 +298,15 @@ func (req *SystemRequest) serialize(w proto.Writer, serialVersion int16) (err er
 	return
 }
 
-func (req *SystemRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *SystemRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	return deserializeSystemResult(r)
 }
 
-func (req *SystemStatusRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *SystemStatusRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	ns.startHeader()
-	if err = ns.writeHeader(proto.SystemStatusRequest, req.Timeout, ""); err != nil {
+	if err = ns.writeHeader(proto.SystemStatusRequest, req.Timeout, "", req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -307,7 +324,7 @@ func (req *SystemStatusRequest) serialize(w proto.Writer, serialVersion int16) (
 	return
 }
 
-func (req *SystemStatusRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *SystemStatusRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	return deserializeSystemResult(r)
 }
 
@@ -322,12 +339,12 @@ func (req *SystemStatusRequest) deserialize(r proto.Reader, serialVersion int16)
 //	TableLimits: skip if it is not set.
 //	A bool flag: indicates if table name is set.
 //	TableName: skip if it is not set.
-func (req *TableRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *TableRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.TableRequest, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.TableRequest, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -389,7 +406,7 @@ func (req *TableRequest) serialize(w proto.Writer, serialVersion int16) (err err
 	return
 }
 
-func (req *TableRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *TableRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	return deserializeTableResult(r, serialVersion)
 }
 
@@ -403,12 +420,12 @@ func (req *TableRequest) deserialize(r proto.Reader, serialVersion int16) (Resul
 //	Replica name
 //	Read/Write units
 //	ETag
-func (req *AddReplicaRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *AddReplicaRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.AddReplica, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.AddReplica, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -438,7 +455,7 @@ func (req *AddReplicaRequest) serialize(w proto.Writer, serialVersion int16) (er
 	return
 }
 
-func (req *AddReplicaRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *AddReplicaRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	return deserializeTableResult(r, serialVersion)
 }
 
@@ -451,12 +468,12 @@ func (req *AddReplicaRequest) deserialize(r proto.Reader, serialVersion int16) (
 //	Tablename
 //	Replica name
 //	ETag
-func (req *DropReplicaRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *DropReplicaRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.DropReplica, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.DropReplica, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -476,7 +493,7 @@ func (req *DropReplicaRequest) serialize(w proto.Writer, serialVersion int16) (e
 	return
 }
 
-func (req *DropReplicaRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *DropReplicaRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	return deserializeTableResult(r, serialVersion)
 }
 
@@ -490,12 +507,12 @@ func (req *DropReplicaRequest) deserialize(r proto.Reader, serialVersion int16) 
 //	Region
 //	StartTime
 //	Limit
-func (req *ReplicaStatsRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *ReplicaStatsRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.GetReplicaStats, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.GetReplicaStats, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -520,7 +537,7 @@ func (req *ReplicaStatsRequest) serialize(w proto.Writer, serialVersion int16) (
 	return
 }
 
-func (req *ReplicaStatsRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *ReplicaStatsRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -619,12 +636,12 @@ func (res *ReplicaStatsResult) readReplicaStats(r proto.Reader) error {
 //	StartIndex
 //	Limit
 //	Namespace
-func (req *ListTablesRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *ListTablesRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.ListTables, req.Timeout, ""); err != nil {
+	if err = ns.writeHeader(proto.ListTables, req.Timeout, "", req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -648,7 +665,7 @@ func (req *ListTablesRequest) serialize(w proto.Writer, serialVersion int16) (er
 	return
 }
 
-func (req *ListTablesRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *ListTablesRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -705,12 +722,12 @@ func (req *ListTablesRequest) deserialize(r proto.Reader, serialVersion int16) (
 //	TableName
 //	A bool flag: indicates if index name is set.
 //	IndexName: skip if index name is not set.
-func (req *GetIndexesRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *GetIndexesRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.GetIndexes, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.GetIndexes, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -726,7 +743,7 @@ func (req *GetIndexesRequest) serialize(w proto.Writer, serialVersion int16) (er
 	return
 }
 
-func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -781,7 +798,7 @@ func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16) (
 //	ReturnRow
 //	Key
 //	MatchVersion: skip if it is nil
-func (req *DeleteRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *DeleteRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	return req.serializeInternal(w, serialVersion, true)
 }
 
@@ -814,7 +831,7 @@ func (req *DeleteRequest) serializeInternal(w proto.Writer, _ int16, addTableNam
 	} else {
 		// header
 		ns.startHeader()
-		if err = ns.writeHeader(op, req.Timeout, req.TableName); err != nil {
+		if err = ns.writeHeader(op, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 			return
 		}
 		ns.endHeader()
@@ -858,7 +875,7 @@ func (req *DeleteRequest) serializeInternal(w proto.Writer, _ int16, addTableNam
 	return
 }
 
-func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -878,6 +895,8 @@ func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Resu
 			res.Success, err = readNsonBoolean(r)
 		case RETURN_INFO:
 			res.WriteResult, err = readNsonWriteResult(r)
+		case TOPOLOGY_INFO:
+			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -902,7 +921,7 @@ func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Resu
 //	UpdateTTL: this is true if UseTableTTL or TTL is set.
 //	TTL
 //	MatchVersion: skip if it is nil.
-func (req *PutRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *PutRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	return req.serializeInternal(w, serialVersion, true)
 }
 
@@ -937,7 +956,7 @@ func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName b
 	} else {
 		// header
 		ns.startHeader()
-		if err = ns.writeHeader(op, req.Timeout, req.TableName); err != nil {
+		if err = ns.writeHeader(op, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 			return
 		}
 		ns.endHeader()
@@ -1002,7 +1021,7 @@ func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName b
 	return
 }
 
-func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -1018,6 +1037,8 @@ func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16) (Result,
 			}
 		case CONSUMED:
 			res.Capacity, err = readNsonConsumedCapacity(r)
+		case TOPOLOGY_INFO:
+			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
 		case ROW_VERSION:
 			res.Version, err = readNsonVersion(r)
 		case RETURN_INFO:
@@ -1044,11 +1065,11 @@ func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16) (Result,
 //	StartTime
 //	EndTime
 //	Limit
-func (req *TableUsageRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *TableUsageRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	ns.startHeader()
-	if err = ns.writeHeader(proto.GetTableUsage, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.GetTableUsage, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -1072,7 +1093,7 @@ func (req *TableUsageRequest) serialize(w proto.Writer, serialVersion int16) (er
 	return
 }
 
-func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -1132,12 +1153,12 @@ func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16) (
 //	FieldRange
 //	MaxWriteKB
 //	ContinuationKey
-func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.MultiDelete, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.MultiDelete, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -1170,7 +1191,7 @@ func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16) (e
 	return nil
 }
 
-func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -1186,6 +1207,8 @@ func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16) 
 			}
 		case CONSUMED:
 			res.Capacity, err = readNsonConsumedCapacity(r)
+		case TOPOLOGY_INFO:
+			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
 		case NUM_DELETIONS:
 			res.NumDeleted, err = readNsonInt(r, name)
 		case CONTINUATION_KEY:
@@ -1209,7 +1232,7 @@ func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16) 
 //	TableName
 //	Number of operations
 //	All sub operations: either put or delete operation
-func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// if all sub-operations are on the same table, place that table name in the header.
@@ -1233,7 +1256,7 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) 
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.WriteMultiple, req.Timeout, tableName); err != nil {
+	if err = ns.writeHeader(proto.WriteMultiple, req.Timeout, tableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -1287,7 +1310,7 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16) 
 	return nil
 }
 
-func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16) (Result, int, error) {
+func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
@@ -1305,6 +1328,8 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16
 			}
 		case CONSUMED:
 			res.Capacity, err = readNsonConsumedCapacity(r)
+		case TOPOLOGY_INFO:
+			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
 		case WM_SUCCESS:
 			// success is an array of map
 			res.FailedOperationIndex = -1
@@ -1366,12 +1391,12 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16
 //	Statement
 //	QueryVersion
 //	GetQueryPlan
-func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.Prepare, req.Timeout, ""); err != nil {
+	if err = ns.writeHeader(proto.Prepare, req.Timeout, "", req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -1379,7 +1404,7 @@ func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16) (err e
 	// payload
 	ns.startPayload()
 
-	if err = ns.writeField(QUERY_VERSION, proto.QueryVersion); err != nil {
+	if err = ns.writeField(QUERY_VERSION, queryVersion); err != nil {
 		return
 	}
 	if err = ns.writeField(STATEMENT, req.Statement); err != nil {
@@ -1402,18 +1427,18 @@ func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16) (err e
 	return nil
 }
 
-func (req *PrepareRequest) deserialize(r proto.Reader, serialVersion int16) (res Result, code int, err error) {
+func (req *PrepareRequest) deserialize(r proto.Reader, serialVersion int16, queryVersion int16) (res Result, code int, err error) {
 	pres := &PrepareResult{}
-	code, err = readNsonPrepareOrQuery(nil, nil, req, pres, r, serialVersion)
+	code, err = readNsonPrepareOrQuery(nil, nil, req, pres, r, serialVersion, queryVersion)
 	return pres, code, err
 }
 
-func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err error) {
+func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.Query, req.Timeout, req.TableName); err != nil {
+	if err = ns.writeHeader(proto.Query, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -1442,7 +1467,7 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err err
 		return
 	}
 
-	if err = ns.writeField(QUERY_VERSION, proto.QueryVersion); err != nil {
+	if err = ns.writeField(QUERY_VERSION, queryVersion); err != nil {
 		return
 	}
 
@@ -1488,8 +1513,13 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err err
 			return
 		}
 	}
-	if req.topologySeqNum() != -1 { // default
-		if err = ns.writeField(TOPO_SEQ_NUM, req.topologySeqNum()); err != nil {
+	if queryVersion >= 4 {
+		// TODO req.queryName
+		if err = ns.writeVirtualScan(req.getVirtualScan()); err != nil {
+			return
+		}
+	} else if req.GetTopologyInfo() != nil {
+		if err = ns.writeField(TOPO_SEQ_NUM, req.GetTopologyInfo().SeqNum); err != nil {
 			return
 		}
 	}
@@ -1497,6 +1527,27 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16) (err err
 	ns.endPayload()
 
 	endRequest(ns)
+	return nil
+}
+
+func (ns *NsonSerializer) writeVirtualScan(vs *virtualScan) (err error) {
+	if vs == nil {
+		return nil
+	}
+	ns.startMap(VSCAN)
+	ns.writeField(VSCAN_SID, vs.shardID)
+	ns.writeField(VSCAN_PID, vs.partitionID)
+	if vs.firstBatch {
+		ns.writeField(VSCAN_PRIM_KEY, vs.primResumeKey)
+		ns.writeField(VSCAN_SEC_KEY, vs.secResumeKey)
+		ns.writeField(VSCAN_MOVE_AFTER, vs.moveAfterResumeKey)
+		ns.writeField(VSCAN_JOIN_DESC_RESUME_KEY, vs.descResumeKey)
+		ns.writeField(VSCAN_JOIN_PATH_KEY, vs.joinPathKey)
+		ns.writeField(VSCAN_JOIN_PATH_TABLES, vs.joinPathTables)
+		ns.writeField(VSCAN_JOIN_PATH_SEC_KEY, vs.joinPathSecKey)
+		ns.writeField(VSCAN_JOIN_PATH_MATCHED, vs.joinPathMatched)
+	}
+	ns.endMap(VSCAN)
 	return nil
 }
 
@@ -1551,9 +1602,9 @@ func (ns *NsonSerializer) writeMathContext(mathCtx *FPArithSpec) (err error) {
 	return ns.writeField(MATH_CONTEXT_CODE, val)
 }
 
-func (req *QueryRequest) deserialize(r proto.Reader, serialVersion int16) (res Result, code int, err error) {
+func (req *QueryRequest) deserialize(r proto.Reader, serialVersion int16, queryVersion int16) (res Result, code int, err error) {
 	qres := newQueryResult(req, true)
-	code, err = readNsonPrepareOrQuery(req, qres, nil, nil, r, serialVersion)
+	code, err = readNsonPrepareOrQuery(req, qres, nil, nil, r, serialVersion, queryVersion)
 	return qres, code, err
 }
 
@@ -1967,8 +2018,10 @@ func (ns *NsonSerializer) incrSize(delta int) {
 	ns.sizeStack[off-1] = value
 }
 
-func (ns *NsonSerializer) writeHeader(op proto.OpCode, timeout time.Duration, tableName string) (err error) {
-	// TODO writeMapField(ns, VERSION, V4_VERSION);
+func (ns *NsonSerializer) writeHeader(op proto.OpCode, timeout time.Duration, tableName string, topo *common.TopologyInfo) (err error) {
+	if err = ns.writeField(VERSION, 4); err != nil {
+		return
+	}
 	if err = ns.writeField(OP_CODE, int(op)); err != nil {
 		return
 	}
@@ -1982,6 +2035,14 @@ func (ns *NsonSerializer) writeHeader(op proto.OpCode, timeout time.Duration, ta
 		if err = ns.writeField(TABLE_NAME, tableName); err != nil {
 			return
 		}
+	}
+
+	seqNum := -1
+	if topo != nil {
+		seqNum = topo.SeqNum
+	}
+	if err = ns.writeField(TOPO_SEQ_NUM, seqNum); err != nil {
+		return
 	}
 
 	return
@@ -2261,6 +2322,65 @@ func readNsonConsumedCapacity(r proto.Reader) (Capacity, error) {
 	return *c, err
 }
 
+func readNsonVirtualScan(r proto.Reader) (*virtualScan, error) {
+	vs := &virtualScan{}
+	lw, _, err := newMapWalker(r)
+	for err == nil && lw.hasNext() {
+		lw.next()
+		switch name := lw.getCurrentName(); name {
+		case VSCAN_SID:
+			vs.shardID, err = readNsonInt(r, name)
+		case VSCAN_PID:
+			vs.partitionID, err = readNsonInt(r, name)
+		case VSCAN_PRIM_KEY:
+			vs.primResumeKey, err = readNsonBinary(r)
+		case VSCAN_SEC_KEY:
+			vs.secResumeKey, err = readNsonBinary(r)
+		case VSCAN_MOVE_AFTER:
+			vs.moveAfterResumeKey, err = readNsonBoolean(r)
+		case VSCAN_JOIN_DESC_RESUME_KEY:
+			vs.descResumeKey, err = readNsonBinary(r)
+		case VSCAN_JOIN_PATH_TABLES:
+			vs.joinPathTables, err = readNsonIntArray(r)
+		case VSCAN_JOIN_PATH_KEY:
+			vs.joinPathKey, err = readNsonBinary(r)
+		case VSCAN_JOIN_PATH_SEC_KEY:
+			vs.joinPathSecKey, err = readNsonBinary(r)
+		case VSCAN_JOIN_PATH_MATCHED:
+			vs.joinPathMatched, err = readNsonBoolean(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return vs, nil
+}
+
+func readNsonTopologyInfo(r proto.Reader) (*common.TopologyInfo, error) {
+	ti := &common.TopologyInfo{SeqNum: -1, ShardIDs: nil}
+	lw, _, err := newMapWalker(r)
+	for err == nil && lw.hasNext() {
+		lw.next()
+		switch name := lw.getCurrentName(); name {
+		case PROXY_TOPO_SEQNUM:
+			ti.SeqNum, err = readNsonInt(r, name)
+		case SHARD_IDS:
+			ti.ShardIDs, err = readNsonIntArray(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ti.SeqNum < 0 || ti.ShardIDs == nil {
+		return nil, errors.New("topology info missing seqNum or shardIDs")
+	}
+	return ti, nil
+}
+
 func readNsonWriteResult(r proto.Reader) (WriteResult, error) {
 	res := &WriteResult{}
 	lw, _, err := newMapWalker(r)
@@ -2466,7 +2586,7 @@ type driverPlanInfo struct {
 // Either qreq/qres are given, or preq/pres are given.
 func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	preq *PrepareRequest, pres *PrepareResult,
-	r proto.Reader, _ int16) (code int, err error) {
+	r proto.Reader, _ int16, _ int16) (code int, err error) {
 
 	isPreparedRequest := false
 	if qreq != nil && qreq.PreparedStatement != nil {
@@ -2476,10 +2596,12 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	var proxyPreparedQuery []byte
 	var contKey []byte
 	var queryPlan string
-	var proxyTopoSeqNum int
+	var proxyTopoSeqNum int = -1
 	var shardIDs []int
 	var dpi *driverPlanInfo
 	var capacity Capacity
+	var topo *common.TopologyInfo
+	var virtualScans []*virtualScan
 
 	// TODO
 	var tableName string
@@ -2500,6 +2622,12 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 			}
 		case CONSUMED:
 			capacity, err = readNsonConsumedCapacity(r)
+		case TOPOLOGY_INFO:
+			topo, err = readNsonTopologyInfo(r)
+			if topo != nil {
+				proxyTopoSeqNum = topo.SeqNum
+				shardIDs = topo.ShardIDs
+			}
 		case QUERY_RESULTS:
 			if qres != nil {
 				err = readNsonQueryResults(r, qres)
@@ -2536,6 +2664,9 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 			proxyTopoSeqNum, err = readNsonInt(r, name)
 		case SHARD_IDS:
 			shardIDs, err = readNsonIntArray(r)
+		// added in query V4
+		case VSCANS:
+			virtualScans, err = readNsonVirtualScans(r)
 		case TABLE_NAME:
 			tableName, err = readNsonString(r)
 		case NAMESPACE:
@@ -2562,6 +2693,7 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 		qres.continuationKey = contKey
 		qreq.setContKey(qres.continuationKey)
 		qres.Capacity = capacity
+		qres.virtualScans = virtualScans
 	}
 
 	if isPreparedRequest {
@@ -2571,11 +2703,11 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 		return 0, nil
 	}
 
-	var ti *topologyInfo
+	var ti *common.TopologyInfo
 	if proxyTopoSeqNum >= 0 {
-		ti = &topologyInfo{
-			seqNum:   proxyTopoSeqNum,
-			shardIDs: shardIDs,
+		ti = &common.TopologyInfo{
+			SeqNum:   proxyTopoSeqNum,
+			ShardIDs: shardIDs,
 		}
 	}
 
@@ -2587,14 +2719,13 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	}
 
 	prep := &PreparedStatement{
-		sqlText:      sqlText,
-		queryPlan:    queryPlan,
-		querySchema:  querySchema,
-		topologyInfo: ti,
-		statement:    proxyPreparedQuery,
-		tableName:    tableName,
-		namespace:    namespace,
-		operation:    operation,
+		sqlText:     sqlText,
+		queryPlan:   queryPlan,
+		querySchema: querySchema,
+		statement:   proxyPreparedQuery,
+		tableName:   tableName,
+		namespace:   namespace,
+		operation:   operation,
 	}
 
 	if dpi != nil {
@@ -2609,13 +2740,18 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	if pres != nil {
 		pres.PreparedStatement = *prep
 		pres.Capacity = capacity
+		if ti != nil {
+			pres.SetTopology(ti)
+		}
 	} else if qreq != nil {
 		qreq.PreparedStatement = prep
 		if !prep.isSimpleQuery() {
 			driver := newQueryDriver(qreq)
-			driver.topologyInfo = prep.topologyInfo
 			driver.prepareCost = qres.Capacity.ReadKB
 			qres.isComputed = false
+		}
+		if ti != nil {
+			qres.SetTopology(ti)
 		}
 	}
 
@@ -2697,6 +2833,30 @@ func readNsonIntArray(r proto.Reader) (arr []int, err error) {
 			return nil, err
 		}
 		arr = append(arr, val)
+	}
+	return
+}
+
+func readNsonVirtualScans(r proto.Reader) (scans []*virtualScan, err error) {
+	// array of virtual scans
+	if err = readNsonType(r, types.Array); err != nil {
+		return nil, err
+	}
+	// length in bytes: ignored
+	if _, err = r.ReadInt(); err != nil {
+		return nil, err
+	}
+	numElements, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	scans = make([]*virtualScan, 0, numElements)
+	for i := 0; i < numElements; i++ {
+		val, err := readNsonVirtualScan(r)
+		if err != nil {
+			return nil, err
+		}
+		scans = append(scans, val)
 	}
 	return
 }

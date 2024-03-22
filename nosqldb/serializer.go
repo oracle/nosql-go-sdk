@@ -18,8 +18,8 @@ import (
 
 type serializer interface {
 	// NSON serialization: default
-	serialize(w proto.Writer, serialVersion int16) error
-	deserialize(r proto.Reader, serialVersion int16) (Result, int, error)
+	serialize(w proto.Writer, serialVersion int16, queryVersion int16) error
+	deserialize(r proto.Reader, serialVersion int16, queryVersion int16) (Result, int, error)
 	// V3/2 serialization: previous
 	serializeV3(w proto.Writer, serialVersion int16) error
 	deserializeV3(r proto.Reader, serialVersion int16) (Result, error)
