@@ -1620,6 +1620,9 @@ func wrapResponseErrors(code int, msg string) error {
 		if strings.Contains(msg, "Invalid driver serial version") {
 			return nosqlerr.New(nosqlerr.UnsupportedProtocol, msg)
 		}
+		if strings.Contains(msg, "Invalid query version") {
+			return nosqlerr.New(nosqlerr.UnsupportedQueryVersion, msg)
+		}
 		return nosqlerr.NewIllegalArgument("bad protocol message: %s", msg)
 
 	default:
