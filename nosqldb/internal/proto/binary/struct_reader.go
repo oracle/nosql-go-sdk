@@ -209,6 +209,8 @@ func setLong(v reflect.Value, val int64) error {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32,
 		reflect.Int64:
 		v.SetInt(val)
+	case reflect.Interface:
+		v.Set(reflect.ValueOf(&val))
 	default:
 		return fmt.Errorf("invalid value type, expect integer: %v", v.Type().Kind())
 	}

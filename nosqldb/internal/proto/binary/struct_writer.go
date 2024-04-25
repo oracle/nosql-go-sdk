@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -413,7 +414,18 @@ type structFields struct {
 }
 
 func (se structEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
-	fmt.Fprintf(os.Stdout, "structEncoder: v=%v\n", v)
+	fmt.Fprintf(os.Stdout, "structEncoder: type=%v, name=%v/%v, v=%v\n", v.Type(), v.Type().PkgPath(), v.Type().Name(), v)
+	// special case: time.Time
+	if v.Type().PkgPath() == "time" && v.Type().Name() == "Time" {
+		fmt.Fprintf(os.Stdout, "Found a timestamp field\n")
+		tv := v.Interface().(time.Time)
+		_, err := e.writeTimestampValue(tv)
+		if err != nil {
+			e.error(fmt.Errorf("nosql: error writing timestamp: %v", err))
+		}
+		return
+	}
+	// TODO: big.Rat??
 	if _, err := e.writeOneByte(byte(types.Map)); err != nil {
 		e.error(fmt.Errorf("nosql: error writing: %v", err))
 	}
@@ -483,6 +495,7 @@ FieldLoop:
 }
 
 func newStructEncoder(t reflect.Type) encoderFunc {
+	fmt.Fprintf(os.Stdout, "Finding encoder for type=%v\n", t)
 	se := structEncoder{fields: cachedTypeFields(t)}
 	return se.encode
 }
@@ -956,7 +969,6 @@ func typeFields(t reflect.Type) structFields {
 		}
 	}
 	return structFields{fields, exactNameIndex, foldedNameIndex}
-	//return structFields{fields}
 }
 
 // dominantField looks through the fields, all of which are known to

@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/suite"
@@ -532,6 +533,11 @@ func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
 		F []byte
 		G []int16
 	}
+	type s2 struct {
+		s1
+		S2A interface{}
+		S2B time.Time
+	}
 	w := NewWriter()
 	var eval int64 = 123456789
 	fval := [8]byte{1, 2, 3, 4, 5, 6, 7, 0}
@@ -542,7 +548,13 @@ func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
 		{A: 0, B: 34.56, C: "", d: false, E: nil, F: nil, G: nil},
 		{A: 12345678, B: -123.45, C: "foobar", d: false},
 	}
+	s2tests := []s2{
+		{tests[0], &eval, time.Now().UTC()},
+	}
 	for _, v := range tests {
+		MarshalToWriter(v, w)
+	}
+	for _, v := range s2tests {
 		MarshalToWriter(v, w)
 	}
 
@@ -555,7 +567,16 @@ func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
 			suite.Equalf(in, *out, "UnmarshalFromReader() got unexpected value")
 		}
 	}
+	for _, in := range s2tests {
+		out := &s2{}
+		err := UnmarshalFromReader(out, r)
+		if suite.NoErrorf(err, "UnmarshalFromReader() got error %v", err) {
+			// TODO: deepEqual
+			suite.Equalf(in, *out, "UnmarshalFromReader() got unexpected value")
+		}
+	}
 
 	_, err := r.ReadInt()
 	suite.Equalf(io.EOF, err, "ReadInt() got unexpected error")
+
 }
