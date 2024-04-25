@@ -537,11 +537,15 @@ func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
 		s1
 		S2A interface{}
 		S2B time.Time
+		S2C *float64
+		S2D *string
 	}
 	w := NewWriter()
 	var eval int64 = 123456789
 	fval := [8]byte{1, 2, 3, 4, 5, 6, 7, 0}
 	gval := [5]int16{0, 0, 0, 2345, -1234}
+	var cfval float64 = 98765.12345
+	tstr := "another string"
 
 	tests := []s1{
 		{A: 25, B: 1234.56, C: "test string", d: false, E: &eval, F: fval[:], G: gval[:]},
@@ -549,7 +553,9 @@ func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
 		{A: 12345678, B: -123.45, C: "foobar", d: false},
 	}
 	s2tests := []s2{
-		{tests[0], &eval, time.Now().UTC()},
+		{tests[0], &eval, time.Now().UTC(), &cfval, nil},
+		{tests[1], &cfval, time.Now().UTC(), &cfval, &tstr},
+		{tests[2], &tstr, time.Now().UTC(), &cfval, &tstr},
 	}
 	for _, v := range tests {
 		MarshalToWriter(v, w)

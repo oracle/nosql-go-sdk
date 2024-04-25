@@ -259,14 +259,22 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
-		v.Set(reflect.ValueOf(val))
+		if v.Type().Kind() == reflect.Interface {
+			v.Set(reflect.ValueOf(&val))
+		} else {
+			v.Set(reflect.ValueOf(val))
+		}
 
 	case types.Double:
 		val, err := sr.reader.ReadDouble()
 		if err != nil {
 			return err
 		}
-		v.Set(reflect.ValueOf(val))
+		if v.Type().Kind() == reflect.Interface {
+			v.Set(reflect.ValueOf(&val))
+		} else {
+			v.Set(reflect.ValueOf(val))
+		}
 
 	case types.Integer:
 		val, err := sr.reader.ReadPackedInt()
@@ -288,10 +296,13 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 			return err
 		}
 		if s == nil {
-			// TODO: nil Value?
-			v.SetString("")
+			v.SetZero()
 		} else {
-			v.SetString(*s)
+			if v.Type().Kind() == reflect.Interface {
+				v.Set(reflect.ValueOf(s))
+			} else {
+				v.SetString(*s)
+			}
 		}
 
 	case types.Timestamp:
@@ -306,7 +317,11 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
-		v.Set(reflect.ValueOf(val))
+		if v.Type().Kind() == reflect.Interface {
+			v.Set(reflect.ValueOf(&val))
+		} else {
+			v.Set(reflect.ValueOf(val))
+		}
 
 	case types.Number:
 		s, err := sr.reader.ReadString()
