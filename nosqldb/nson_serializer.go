@@ -989,8 +989,16 @@ func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName b
 		return
 	}
 
-	if err = ns.writeField(VALUE, req.Value); err != nil {
-		return
+	if req.Value != nil {
+		if err = ns.writeField(VALUE, req.Value); err != nil {
+			return
+		}
+	} else if req.StructValue != nil {
+		if err = ns.writeStructField(VALUE, req.StructValue); err != nil {
+			return
+		}
+	} else {
+		return fmt.Errorf("missing Value in PutRequest")
 	}
 
 	if req.updateTTL() {
@@ -1896,6 +1904,15 @@ func (ns *NsonSerializer) endArrayField(_ int) {
 func (ns *NsonSerializer) writeField(key string, value types.FieldValue) (err error) {
 	ns.startField(key)
 	if _, err = ns.writer.WriteFieldValue(value); err != nil {
+		return
+	}
+	ns.endField(key)
+	return nil
+}
+
+func (ns *NsonSerializer) writeStructField(key string, value any) (err error) {
+	ns.startField(key)
+	if _, err = ns.writer.WriteStructValue(value); err != nil {
 		return
 	}
 	ns.endField(key)

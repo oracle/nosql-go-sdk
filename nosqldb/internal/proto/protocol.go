@@ -280,6 +280,9 @@ type Writer interface {
 	// WriteSerialVersion writes a serial version.
 	WriteSerialVersion(serialVersion int16) (int, error)
 
+	// WriteStructValue writes a native struct
+	WriteStructValue(value any) (n int, err error)
+
 	// Size reports the number of bytes written by the writer.
 	Size() int
 

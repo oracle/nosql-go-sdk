@@ -521,3 +521,41 @@ func genString(n int) string {
 	}
 	return string(b)
 }
+
+func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
+	type s1 struct {
+		A int32   `nosql:"columna"`
+		B float64 `json:"columnb"`
+		C string
+		d bool
+		E *int64
+		F []byte
+		G []int16
+	}
+	w := NewWriter()
+	var eval int64 = 123456789
+	fval := [8]byte{1, 2, 3, 4, 5, 6, 7, 0}
+	gval := [5]int16{0, 0, 0, 2345, -1234}
+
+	tests := []s1{
+		{A: 25, B: 1234.56, C: "test string", d: false, E: &eval, F: fval[:], G: gval[:]},
+		{A: 0, B: 34.56, C: "", d: false, E: nil, F: nil, G: nil},
+		{A: 12345678, B: -123.45, C: "foobar", d: false},
+	}
+	for _, v := range tests {
+		MarshalToWriter(v, w)
+	}
+
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
+	for _, in := range tests {
+		out := &s1{}
+		err := UnmarshalFromReader(out, r)
+		if suite.NoErrorf(err, "UnmarshalFromReader() got error %v", err) {
+			// TODO: deepEqual
+			suite.Equalf(in, *out, "UnmarshalFromReader() got unexpected value")
+		}
+	}
+
+	_, err := r.ReadInt()
+	suite.Equalf(io.EOF, err, "ReadInt() got unexpected error")
+}

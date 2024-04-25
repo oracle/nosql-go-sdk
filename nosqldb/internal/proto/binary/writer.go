@@ -675,3 +675,15 @@ func (w *Writer) writeOneByte(b byte) (n int, err error) {
 	}
 	return
 }
+
+func (w *Writer) WriteStructValue(value any) (n int, err error) {
+	// get previous size of writer buffer
+	psize := w.Size()
+	err = MarshalToWriter(value, w)
+	if err != nil {
+		return 0, err
+	}
+	// get size after writing
+	nsize := w.Size()
+	return nsize - psize, nil
+}

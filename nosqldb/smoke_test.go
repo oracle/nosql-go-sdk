@@ -112,6 +112,25 @@ func (suite SmokeTestSuite) TestSmoke() {
 	retStr, _ := getRes.Value.GetString("cstr")
 	suite.Require().Equalf(cstr, retStr, "unexpected value for \"cstr\"")
 
+	// Put a native struct row
+	type MyStruct struct {
+		Id       int     `nosql:"id"`
+		SecondId int     `nosql:"sid"`
+		Cstr     string  `nosql:"cstr"`
+		Clong    int64   `nosql:"clong"`
+		MyDouble float64 `nosql:"cdoub"`
+		// cts: time.Time,
+	}
+
+	sval := &MyStruct{Id: 10, SecondId: 20, Cstr: "Test string", Clong: 123456789123, MyDouble: 1234.23456}
+	putReq = &nosqldb.PutRequest{
+		TableName:   tableName,
+		StructValue: sval,
+	}
+	putRes, err = suite.Client.Put(putReq)
+	suite.Require().NoErrorf(err, "Put(id=%d, sid=%d): %v", 10, 20, err)
+	suite.Require().NotNilf(putRes.Version, "Put(id=%d, sid=%d) returns nil Version", 10, 20)
+
 	// PutIfPresent
 	cstr = "row-PutIfPresent-" + strconv.Itoa(id)
 	value.Put("cstr", cstr)

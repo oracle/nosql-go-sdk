@@ -1179,6 +1179,9 @@ type PutRequest struct {
 	// It is required and must be non-nil.
 	Value *types.MapValue `json:"value"`
 
+	// Use StructValue to use a native struct as a record value.
+	StructValue any
+
 	// PutOption specifies the put option for the operation.
 	//
 	// It is optional and performs an unconditional put by default.
