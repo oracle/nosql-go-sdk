@@ -54,6 +54,7 @@ func (suite SmokeTestSuite) TestSmoke() {
 	// Create table.
 	stmt = fmt.Sprintf("CREATE TABLE %s (id INTEGER, sid INTEGER, "+
 		"cstr STRING, clong LONG, cdoub DOUBLE, cts TIMESTAMP(9), "+
+		"foobar LONG, blatz DOUBLE, "+
 		"PRIMARY KEY(SHARD(sid), id))", tableName)
 	tableLimits := &nosqldb.TableLimits{
 		ReadUnits:  6000,
@@ -119,10 +120,12 @@ func (suite SmokeTestSuite) TestSmoke() {
 		Cstr     string  `nosql:"cstr"`
 		Clong    int64   `nosql:"clong"`
 		MyDouble float64 `nosql:"cdoub"`
-		// cts: time.Time,
+		Cts      time.Time
 	}
 
-	sval := &MyStruct{Id: 10, SecondId: 20, Cstr: "Test string", Clong: 123456789123, MyDouble: 1234.23456}
+	tval := time.Now().UTC()
+	sval := &MyStruct{Id: 10, SecondId: 20, Cstr: "Test string", Clong: 123456789123,
+		MyDouble: 1234.23456, Cts: tval}
 	putReq = &nosqldb.PutRequest{
 		TableName:   tableName,
 		StructValue: sval,
@@ -130,6 +133,16 @@ func (suite SmokeTestSuite) TestSmoke() {
 	putRes, err = suite.Client.Put(putReq)
 	suite.Require().NoErrorf(err, "Put(id=%d, sid=%d): %v", 10, 20, err)
 	suite.Require().NotNilf(putRes.Version, "Put(id=%d, sid=%d) returns nil Version", 10, 20)
+
+	nval := &MyStruct{Id: 10, SecondId: 20}
+	getReq1 := &nosqldb.GetRequest{
+		TableName:   tableName,
+		StructValue: nval,
+	}
+	getRes1, err := suite.Client.Get(getReq1)
+	suite.Require().NoErrorf(err, "Get(id=%d, sid=%d): %v", 10, 20, err)
+	suite.Require().Equalf(sval, nval, "Native structs do not match")
+	suite.Require().Truef(getRes1.RowExists(), "Get(id=%d, sid=%d) failed to get the row", 10, 20)
 
 	// PutIfPresent
 	cstr = "row-PutIfPresent-" + strconv.Itoa(id)

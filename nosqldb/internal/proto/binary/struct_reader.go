@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -33,6 +34,33 @@ func NewStructReader(b *bytes.Buffer) *StructReader {
 	return &StructReader{
 		reader: NewReader(b),
 	}
+}
+
+// DisardMap reads and discards a map value. It is used when skipping over
+// unused/unknown fields.
+func (sr *StructReader) DiscardMap() error {
+	_, err := sr.reader.ReadInt()
+	if err != nil {
+		return err
+	}
+	// The number of entries in the map.
+	size, err := sr.reader.ReadInt()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < size; i++ {
+		// field name
+		key, err := sr.reader.ReadString()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stdout, "Disacrding field '%s'\n", *key)
+		err = sr.ReadFieldValue(reflect.Value{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ReadMap reads a structured byte sequences that represent the encoding of a
@@ -93,6 +121,7 @@ func (sr *StructReader) ReadMap(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		fmt.Fprintf(os.Stdout, "Handling field '%s'\n", *key)
 
 		// Figure out field corresponding to key.
 		var subv reflect.Value
@@ -130,8 +159,8 @@ func (sr *StructReader) ReadMap(v reflect.Value) error {
 					}
 					subv = subv.Field(i)
 				}
-				//} else if d.disallowUnknownFields {
-				//d.saveError(fmt.Errorf("json: unknown field %q", key))
+			} else {
+				fmt.Fprintf(os.Stdout, "nosql: unknown field '%s'\n", *key)
 			}
 		}
 
@@ -151,6 +180,25 @@ func (sr *StructReader) ReadMap(v reflect.Value) error {
 		}
 	}
 
+	return nil
+}
+
+// DiscardArray reads a structured byte sequences that represent the encoding of an
+// array, decodes the bytes and discards them. It is used when skipping over unused or
+// unknown struct fields.
+func (sr *StructReader) DiscardArray() error {
+	if _, err := sr.reader.ReadInt(); err != nil {
+		return err
+	}
+	size, err := sr.reader.ReadInt()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < size; i++ {
+		if err := sr.ReadFieldValue(reflect.Value{}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -228,6 +276,9 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 	// Handle nil values differently
 	switch types.DbType(t) {
 	case types.JSONNull, types.Null, types.Empty:
+		if !v.IsValid() {
+			return nil
+		}
 		v = indirect(v, true)
 		v.SetZero()
 		//switch v.Kind() {
@@ -238,13 +289,21 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		return nil
 	}
 
-	v = indirect(v, false)
+	if v.IsValid() {
+		v = indirect(v, false)
+	}
 
 	switch types.DbType(t) {
 	case types.Array:
+		if !v.IsValid() {
+			return sr.DiscardArray()
+		}
 		return sr.ReadArray(v)
 
 	case types.Map:
+		if !v.IsValid() {
+			return sr.DiscardMap()
+		}
 		return sr.ReadMap(v)
 
 	case types.Binary:
@@ -252,12 +311,18 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		if !v.IsValid() {
+			return nil
+		}
 		v.Set(reflect.ValueOf(val))
 
 	case types.Boolean:
 		val, err := sr.reader.ReadBoolean()
 		if err != nil {
 			return err
+		}
+		if !v.IsValid() {
+			return nil
 		}
 		if v.Type().Kind() == reflect.Interface {
 			v.Set(reflect.ValueOf(&val))
@@ -270,6 +335,9 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		if !v.IsValid() {
+			return nil
+		}
 		if v.Type().Kind() == reflect.Interface {
 			v.Set(reflect.ValueOf(&val))
 		} else {
@@ -281,6 +349,9 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		if !v.IsValid() {
+			return nil
+		}
 		return setLong(v, int64(val))
 
 	case types.Long:
@@ -288,12 +359,18 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
+		if !v.IsValid() {
+			return nil
+		}
 		return setLong(v, val)
 
 	case types.String:
 		s, err := sr.reader.ReadString()
 		if err != nil {
 			return err
+		}
+		if !v.IsValid() {
+			return nil
 		}
 		if s == nil {
 			v.SetZero()
@@ -313,6 +390,9 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		if s == nil {
 			return errors.New("binary.StructReader: invalid Timestamp value")
 		}
+		if !v.IsValid() {
+			return nil
+		}
 		val, err := types.ParseDateTime(*s)
 		if err != nil {
 			return err
@@ -330,6 +410,9 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 		}
 		if s == nil {
 			return errors.New("binary.StructReader: invalid Number value")
+		}
+		if !v.IsValid() {
+			return nil
 		}
 		number, ok := new(big.Rat).SetString(*s)
 		if ok {

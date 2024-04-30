@@ -33,6 +33,11 @@ type GetRequest struct {
 	// It is required and must be non-nil.
 	Key *types.MapValue `json:"key"`
 
+	// Use StructValue to use a native struct as a record value.
+	// This value must be a pointer to a struct, with the struct fields
+	// that make up the primary key already filled in.
+	StructValue any
+
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an
@@ -68,8 +73,12 @@ func (r *GetRequest) validate() (err error) {
 		return
 	}
 
-	if err = validateKey(r.Key); err != nil {
-		return
+	if r.StructValue == nil {
+		if err = validateKey(r.Key); err != nil {
+			return
+		}
+	} else {
+		// TODO: validate r.StructValue is a pointer to a struct
 	}
 
 	if err = validateTimeout(r.Timeout); err != nil {

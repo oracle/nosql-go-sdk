@@ -205,8 +205,16 @@ func (req *GetRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (
 	if err = ns.writeConsistency(req.Consistency); err != nil {
 		return
 	}
-	if err = ns.writeField(KEY, req.Key); err != nil {
-		return
+	if req.Key != nil {
+		if err = ns.writeField(KEY, req.Key); err != nil {
+			return
+		}
+	} else if req.StructValue != nil {
+		if err = ns.writeStructField(KEY, req.StructValue); err != nil {
+			return
+		}
+	} else {
+		return fmt.Errorf("missing Key or StructValue in GetRequest")
 	}
 	ns.endPayload()
 
@@ -231,6 +239,9 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 		case CONSUMED:
 			res.Capacity, err = readNsonConsumedCapacity(r)
 		case ROW:
+			if req.StructValue != nil {
+				res.StructValue = req.StructValue
+			}
 			err = readNsonRow(r, res)
 		case TOPOLOGY_INFO:
 			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
@@ -2447,7 +2458,11 @@ func readNsonRow(r proto.Reader, res *GetResult) error {
 		case ROW_VERSION:
 			res.Version, err = readNsonVersion(r)
 		case VALUE:
-			res.Value, err = readNsonRowValue(r)
+			if res.StructValue != nil {
+				err = r.ReadStructValue(res.StructValue)
+			} else {
+				res.Value, err = readNsonRowValue(r)
+			}
 		default:
 			err = skipNsonField(r, name)
 		}

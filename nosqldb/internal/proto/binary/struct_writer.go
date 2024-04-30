@@ -15,7 +15,6 @@ package binary
 import (
 	"encoding/binary"
 	"fmt"
-	"os"
 	"reflect"
 	"slices"
 	"sort"
@@ -298,7 +297,6 @@ func valueEncoder(v reflect.Value) encoderFunc {
 }
 
 func typeEncoder(t reflect.Type) encoderFunc {
-	fmt.Fprintf(os.Stdout, "typeEncoder: t=%v\n", t)
 	if fi, ok := encoderCache.Load(t); ok {
 		return fi.(encoderFunc)
 	}
@@ -330,7 +328,6 @@ func typeEncoder(t reflect.Type) encoderFunc {
 // newTypeEncoder constructs an encoderFunc for a type.
 // The returned encoder only checks CanAddr when allowAddr is true.
 func newTypeEncoder(t reflect.Type) encoderFunc {
-	fmt.Fprintf(os.Stdout, "newTypeEncoder: t=%v kind=%v\n", t, t.Kind())
 	switch t.Kind() {
 	case reflect.Bool:
 		return boolEncoder
@@ -414,10 +411,8 @@ type structFields struct {
 }
 
 func (se structEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
-	fmt.Fprintf(os.Stdout, "structEncoder: type=%v, name=%v/%v, v=%v\n", v.Type(), v.Type().PkgPath(), v.Type().Name(), v)
 	// special case: time.Time
 	if v.Type().PkgPath() == "time" && v.Type().Name() == "Time" {
-		fmt.Fprintf(os.Stdout, "Found a timestamp field\n")
 		tv := v.Interface().(time.Time)
 		_, err := e.writeTimestampValue(tv)
 		if err != nil {
@@ -448,7 +443,6 @@ func (se structEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
 		e.error(fmt.Errorf("nosql: error writing: %v", err))
 	}
 
-	fmt.Fprintf(os.Stdout, " structEncoder: fields=%v\n", se.fields.list)
 	numFields := 0
 FieldLoop:
 	for i := range se.fields.list {
@@ -471,14 +465,12 @@ FieldLoop:
 		}
 
 		// write field name
-		fmt.Fprintf(os.Stdout, "Writing name '%s'\n", f.name)
 		_, err = e.WriteString(&f.name)
 		if err != nil {
 			e.error(fmt.Errorf("nosql: error writing: %v", err))
 		}
 
 		// write field value
-		fmt.Fprintf(os.Stdout, "  Writing value '%v'\n", fv)
 		f.encoder(e, fv, opts)
 		numFields += 1
 	}
@@ -495,7 +487,6 @@ FieldLoop:
 }
 
 func newStructEncoder(t reflect.Type) encoderFunc {
-	fmt.Fprintf(os.Stdout, "Finding encoder for type=%v\n", t)
 	se := structEncoder{fields: cachedTypeFields(t)}
 	return se.encode
 }
@@ -793,7 +784,6 @@ func (x byIndex) Less(i, j int) bool {
 // The algorithm is breadth-first search over the set of structs to include - the top struct
 // and then any reachable anonymous structs.
 func typeFields(t reflect.Type) structFields {
-	fmt.Fprintf(os.Stdout, "typeFields(%v)\n", t)
 	// Anonymous fields to explore at the current level and the next.
 	current := []field{}
 	next := []field{{typ: t}}
@@ -812,7 +802,6 @@ func typeFields(t reflect.Type) structFields {
 		count, nextCount = nextCount, map[reflect.Type]int{}
 
 		for _, f := range current {
-			fmt.Fprintf(os.Stdout, " typeFields: f=%v\n", f)
 			if visited[f.typ] {
 				continue
 			}

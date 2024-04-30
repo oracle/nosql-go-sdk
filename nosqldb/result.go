@@ -104,6 +104,11 @@ type GetResult struct {
 	// Value represents the value of the returned row, or nil if the row does not exist.
 	Value *types.MapValue `json:"value"`
 
+	// StructValue represents the struct that was set into a GetRequest. If used,
+	// it will contain the value of the returned row.
+	// TODO: how to tell if not exist?
+	StructValue any
+
 	// Version represents the version of the row if the operation was
 	// successful, or nil if the row does not exist.
 	Version types.Version `json:"version"`
