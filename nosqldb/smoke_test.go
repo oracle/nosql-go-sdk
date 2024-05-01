@@ -12,6 +12,7 @@ package nosqldb_test
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -138,11 +139,13 @@ func (suite SmokeTestSuite) TestSmoke() {
 	getReq1 := &nosqldb.GetRequest{
 		TableName:   tableName,
 		StructValue: nval,
+		StructType:  reflect.TypeOf((*MyStruct)(nil)).Elem(),
 	}
 	getRes1, err := suite.Client.Get(getReq1)
 	suite.Require().NoErrorf(err, "Get(id=%d, sid=%d): %v", 10, 20, err)
-	suite.Require().Equalf(sval, nval, "Native structs do not match")
+	suite.Require().Equalf(sval, getRes1.StructValue, "Native structs do not match")
 	suite.Require().Truef(getRes1.RowExists(), "Get(id=%d, sid=%d) failed to get the row", 10, 20)
+	suite.Require().Equalf(int64(0), nval.Clong, "Expected nval to not change")
 
 	// PutIfPresent
 	cstr = "row-PutIfPresent-" + strconv.Itoa(id)

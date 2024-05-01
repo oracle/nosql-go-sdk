@@ -444,6 +444,10 @@ func (sr *StructReader) Unmarshal(v any) (err error) {
 			}
 		}
 	}()
+	// if already passed a reflect.Value, use that directly
+	if rv, ok := v.(reflect.Value); ok {
+		return sr.ReadFieldValue(rv)
+	}
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return fmt.Errorf("invalid value type passed to Unmarshal: %v", reflect.TypeOf(v))

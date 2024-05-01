@@ -38,6 +38,13 @@ type GetRequest struct {
 	// that make up the primary key already filled in.
 	StructValue any
 
+	// StructType specifies the type of struct to return in the
+	// GetResult. It is used if its value is non-nil and the
+	// StructValue field is nil.
+	// If used, the GetResult will allocate the given type of struct and
+	// fill in its fields with the row value, in the StructValue field.
+	StructType reflect.Type
+
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
 	// If set, it must be greater than or equal to 1 millisecond, otherwise an

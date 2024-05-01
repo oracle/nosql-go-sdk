@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -239,7 +240,12 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 		case CONSUMED:
 			res.Capacity, err = readNsonConsumedCapacity(r)
 		case ROW:
-			if req.StructValue != nil {
+			if req.StructType != nil {
+				fmt.Fprintf(os.Stdout, "Allocating new %v\n", req.StructType)
+				res.StructValue = reflect.New(req.StructType).Interface()
+				fmt.Fprintf(os.Stdout, "Allocated type=%v\n", reflect.TypeOf(res.StructValue))
+			} else if req.StructValue != nil {
+				fmt.Fprintf(os.Stdout, "Using existing %v\n", reflect.TypeOf(req.StructValue))
 				res.StructValue = req.StructValue
 			}
 			err = readNsonRow(r, res)
