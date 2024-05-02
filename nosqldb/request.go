@@ -36,6 +36,8 @@ type GetRequest struct {
 	// Use StructValue to use a native struct as a record value.
 	// This value must be a pointer to a struct, with the struct fields
 	// that make up the primary key already filled in.
+	// On successful return, the remaining fields of the struct will be
+	// populated with the values from the returned row.
 	StructValue any
 
 	// StructType specifies the type of struct to return in the
@@ -1734,6 +1736,12 @@ type QueryRequest struct {
 
 	// virtualScan is used for internal queru requests only.
 	virtualScan *virtualScan
+
+	// StructType is an optional field that specifies the type of struct to
+	// return in the QueryResult. if non-nil, the query results will be directly
+	// filled in to an array of structures of the given type, and can
+	// be accessed by the GetStructResults method of QueryResult.
+	StructType reflect.Type
 
 	common.InternalRequestData
 }
