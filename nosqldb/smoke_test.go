@@ -12,6 +12,7 @@ package nosqldb_test
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -352,6 +353,35 @@ func (suite SmokeTestSuite) TestSmoke() {
 		suite.Require().Equalf(sid, retSid, "unexpected value for \"sid\"")
 
 		clong++
+	}
+
+	// Query with native structs returned
+	stmt = fmt.Sprintf("SELECT * FROM %s", tableName)
+	queryReq = &nosqldb.QueryRequest{
+		Statement:   stmt,
+		StructType:  reflect.TypeOf((*MyStruct)(nil)).Elem(),
+		Consistency: types.Absolute,
+	}
+	queryRes, err = suite.Client.Query(queryReq)
+	suite.Require().NoErrorf(err, "StructQuery(stmt=%s): %v", stmt, err)
+
+	structResults, err := queryRes.GetStructResults()
+	suite.Require().NoErrorf(err, "StructQuery.GetStructResults() got error %v", err)
+	suite.Require().Equalf(11, len(structResults), "unexpected number of results")
+
+	// find the one struct we wrote in natively
+	for i := 0; i < len(structResults); i++ {
+		if v, ok := structResults[i].(*MyStruct); ok {
+			// got a MyStruct
+			fmt.Fprintf(os.Stdout, "Got struct: %v\n", v)
+			if v.Id == 10 && v.SecondId == 20 {
+				suite.Require().Equalf(sval, v, "Mismatched struct result")
+			}
+		} else {
+			rt := reflect.TypeOf(structResults[i])
+			fmt.Fprintf(os.Stderr, "Got unexpected result: %v (type=%v kind=%v)\n", structResults[i], rt, rt.Kind())
+			suite.Fail("Didn't get a MyStruct")
+		}
 	}
 
 	// MultiDelete

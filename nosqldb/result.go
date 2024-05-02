@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
-	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -974,7 +974,7 @@ func (r *QueryResult) GetStructResults() (res []any, err error) {
 	arr := make([]any, size, size)
 	for i := 0; i < size; i++ {
 		arr[i] = reflect.New(r.request.StructType).Interface()
-		if err = sdkutil.DecodeMapValue(arr[i], r.results[i]); err != nil {
+		if err = binary.DecodeMapValue(arr[i], r.results[i]); err != nil {
 			return
 		}
 	}
