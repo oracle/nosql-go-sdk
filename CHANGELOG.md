@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 - Added support for array_collect() and count(distinct) in queries. These
   require server side support which is only available in Oracle NoSQL releases
   23.3 and higher and will not be immediately available in the cloud service
+- Native Structs: Added capability to use native structs in get/put/query. See [Native Structs](https://github.com/oracle/nosql-go-sdk/blob/master/native_structs.md) for details.
 
 ### Changed
 - Changed copyrights to 2024

@@ -30,7 +30,8 @@ type GetRequest struct {
 	TableName string `json:"tableName"`
 
 	// Key specifies the primary key used for the get operation.
-	// It is required and must be non-nil.
+	// It is required and must be non-nil, unless StructValue or StructType
+	// are used.
 	Key *types.MapValue `json:"key"`
 
 	// Use StructValue to use a native struct as a record value.
@@ -38,13 +39,14 @@ type GetRequest struct {
 	// that make up the primary key already filled in.
 	// On successful return, the remaining fields of the struct will be
 	// populated with the values from the returned row.
+	// GetResult.StructValue will be a pointer to this same struct.
 	StructValue any
 
 	// StructType specifies the type of struct to return in the
-	// GetResult. It is used if its value is non-nil and the
-	// StructValue field is nil.
-	// If used, the GetResult will allocate the given type of struct and
-	// fill in its fields with the row value, in the StructValue field.
+	// GetResult. This method can be used to force allocation of a new
+	// struct to be returned.
+	// On a successful get(), the GetResult.StructValue will have an allocated
+	// struct of the given type with its fields filled in with the row value.
 	StructType reflect.Type
 
 	// Timeout specifies the timeout value for the request.
@@ -87,7 +89,7 @@ func (r *GetRequest) validate() (err error) {
 			return
 		}
 	} else {
-		// TODO: validate r.StructValue is a pointer to a struct
+		// Struct validation performed in execution
 	}
 
 	if err = validateTimeout(r.Timeout); err != nil {
@@ -1194,10 +1196,14 @@ type PutRequest struct {
 	TableName string `json:"tableName"`
 
 	// Value specifies the value of the row to put.
-	// It is required and must be non-nil.
+	// It is required and must be non-nil, unless StructValue is used.
 	Value *types.MapValue `json:"value"`
 
 	// Use StructValue to use a native struct as a record value.
+	// Fields in the struct are mapped to NoSQL row columns based on the
+	// annotations in the struct definition.
+	// Only exported (capitalized) fields in the struct will be used, similar
+	// to json encoding.
 	StructValue any
 
 	// PutOption specifies the put option for the operation.
