@@ -107,7 +107,7 @@ func (sr *structDecoder) decodeMap(m map[string]interface{}, v reflect.Value) er
 					subv = subv.Field(i)
 				}
 			} else {
-				fmt.Fprintf(os.Stdout, "nosql: unknown field '%s'\n", key)
+				//fmt.Fprintf(os.Stdout, "nosql: unknown field '%s'\n", key)
 			}
 		}
 
