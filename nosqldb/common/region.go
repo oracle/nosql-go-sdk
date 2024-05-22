@@ -87,8 +87,10 @@ const (
 	RegionILJerusalem1 Region = "il-jerusalem-1"
 	// RegionAFJohannesburg represents the region for Johannesburg
 	RegionAFJohannesburg Region = "af-johannesburg-1"
-	// RegionAPSignapore represents the region for singapore
-	RegionAPSignapore Region = "ap-singapore-1"
+	// RegionAPSingapore represents the region for singapore
+	RegionAPSingapore Region = "ap-singapore-1"
+	// RegionAPSingapore2 represents the second region for singapore
+	RegionAPSingapore2 Region = "ap-singapore-2"
 	// RegionEUMarseille represents the region for Marseille
 	RegionEUMarseille Region = "eu-marseille-1"
 	// RegionEUStockholm represents the region for Stockholm
@@ -206,6 +208,8 @@ const (
 
 	// RegionAPDCCTokyo1 represents the dedicated region for Tokyo
 	RegionAPDCCTokyo1 Region = "ap-dcc-tokyo-1"
+	// RegionAPDCCOsaka1 represents the dedicated region for Osaka
+	RegionAPDCCOsaka1 Region = "ap-dcc-osaka-1"
 
 	// OC26 REGIONS
 
@@ -288,7 +292,8 @@ var regionRealm = map[Region]string{
 	RegionSAVinhedo1:     "oc1",
 	RegionSAValparaiso1:  "oc1",
 	RegionAFJohannesburg: "oc1",
-	RegionAPSignapore:    "oc1",
+	RegionAPSingapore:    "oc1",
+	RegionAPSingapore2:   "oc1",
 	RegionEUMarseille:    "oc1",
 	RegionMEAbudhabi:     "oc1",
 	RegionEUStockholm:    "oc1",
@@ -339,6 +344,7 @@ var regionRealm = map[Region]string{
 	RegionEUDCCZurich1: "oc24",
 
 	RegionAPDCCTokyo1: "oc25",
+	RegionAPDCCOsaka1: "oc25",
 
 	RegionMEAbudhabi3: "oc26",
 
@@ -388,7 +394,8 @@ var shortNameRegion = map[string]Region{
 	"mtz": RegionILJerusalem1,
 	"syd": RegionAPSydney1,
 	"jnb": RegionAFJohannesburg,
-	"sin": RegionAPSignapore,
+	"sin": RegionAPSingapore,
+	"xsp": RegionAPSingapore2,
 	"mrs": RegionEUMarseille,
 	"auh": RegionMEAbudhabi,
 	"arn": RegionEUStockholm,
@@ -420,6 +427,7 @@ var shortNameRegion = map[string]Region{
 	"nap": RegionEUDCCRome1,
 	"avz": RegionEUDCCZurich1,
 	"tyo": RegionAPDCCTokyo1,
+	"uky": RegionAPDCCOsaka1,
 	"ahu": RegionMEAbudhabi3,
 	"ozz": RegionUSDCCSWJordan1,
 	"drs": RegionUSDCCSWJordan2,
