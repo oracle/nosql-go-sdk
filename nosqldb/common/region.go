@@ -79,6 +79,8 @@ const (
 	RegionMEJeddah1 Region = "me-jeddah-1"
 	// RegionMEDubai1 represents the region for Saudi Arabia East (Dubai).
 	RegionMEDubai1 Region = "me-dubai-1"
+	// RegionMERiyadh1 represents the region for Riyadh
+	RegionMERiyadh1 Region = "me-riyadh-1"
 	// RegionMXQueretaro1 represents the region for Mexico (Queretaro).
 	RegionMXQueretaro1 Region = "mx-queretaro-1"
 	// RegionMXMonterrey1 represents the region for Mexico (Monterrey).
@@ -199,6 +201,13 @@ const (
 	// RegionEUJovanovac1 represents the dedicated region for Rome
 	RegionEUDCCRome1 Region = "eu-dcc-rome-1"
 
+	// OC23 REGIONS
+
+	// RegionUSSomerset1 represents the US somerset region
+	RegionUSSomerset1 Region = "us-somerset-1"
+	// RegionUSThames1 represents the US thames region
+	RegionUSThames1 Region = "us-thames-1"
+
 	// OC24 REGIONS
 
 	// RegionEUDCCZurich1 represents the dedicated region for Zurich
@@ -226,6 +235,13 @@ const (
 	// RegionUSDCCSWJordan1 represents the dedicated region for SWJordan2
 	RegionUSDCCSWJordan2 Region = "us-dcc-swjordan-2"
 
+	// OC29 REGIONS
+
+	// RegionMEAbudhabi2 represents the region for abudhabi 2
+	RegionMEAbudhabi2 Region = "me-abudhabi-2"
+	// RegionMEAbudhabi4 represents the region for abudhabi 4
+	RegionMEAbudhabi4 Region = "me-abudhabi-4"
+
 	// OC31 REGIONS
 
 	// RegionAPHobsonville1 represents the dedicated region for Hobsonville
@@ -249,11 +265,13 @@ var realm = map[string]string{
 	"oc20": "oraclecloud20.com",
 	"oc21": "oraclecloud21.com",
 	"oc22": "psn-pco.it",
+	"oc23": "oraclecloud23.com",
 	"oc24": "oraclecloud24.com",
 	"oc25": "nricloud.jp",
 	"oc26": "oraclecloud26.com",
 	"oc27": "oraclecloud27.com",
 	"oc28": "oraclecloud28.com",
+	"oc29": "oraclecloud29.com",
 	"oc31": "sovereigncloud.nz",
 }
 
@@ -278,6 +296,7 @@ var regionRealm = map[Region]string{
 	RegionAPMelbourne1:   "oc1",
 	RegionMEJeddah1:      "oc1",
 	RegionMEDubai1:       "oc1",
+	RegionMERiyadh1:      "oc1",
 	RegionMXQueretaro1:   "oc1",
 	RegionMXMonterrey1:   "oc1",
 	RegionILJerusalem1:   "oc1",
@@ -341,6 +360,9 @@ var regionRealm = map[Region]string{
 
 	RegionEUDCCRome1: "oc22",
 
+	RegionUSSomerset1: "oc23",
+	RegionUSThames1:   "oc23",
+
 	RegionEUDCCZurich1: "oc24",
 
 	RegionAPDCCTokyo1: "oc25",
@@ -351,6 +373,9 @@ var regionRealm = map[Region]string{
 	RegionUSDCCSWJordan1: "oc27",
 
 	RegionUSDCCSWJordan2: "oc28",
+
+	RegionMEAbudhabi2: "oc29",
+	RegionMEAbudhabi4: "oc29",
 
 	RegionAPHobsonville1: "oc31",
 }
@@ -389,6 +414,7 @@ var shortNameRegion = map[string]Region{
 	"yyz": RegionCAToronto1,
 	"jed": RegionMEJeddah1,
 	"dxb": RegionMEDubai1,
+	"ruh": RegionMERiyadh1,
 	"qro": RegionMXQueretaro1,
 	"mty": RegionMXMonterrey1,
 	"mtz": RegionILJerusalem1,
@@ -425,12 +451,16 @@ var shortNameRegion = map[string]Region{
 	"doh": RegionMEDCCDoha1,
 	"beg": RegionEUJovanovac1,
 	"nap": RegionEUDCCRome1,
+	"ebb": RegionUSSomerset1,
+	"ebl": RegionUSThames1,
 	"avz": RegionEUDCCZurich1,
 	"tyo": RegionAPDCCTokyo1,
 	"uky": RegionAPDCCOsaka1,
 	"ahu": RegionMEAbudhabi3,
 	"ozz": RegionUSDCCSWJordan1,
 	"drs": RegionUSDCCSWJordan2,
+    "rkt": RegionMEAbudhabi2,
+    "shj": RegionMEAbudhabi4,
 	"izq": RegionAPHobsonville1,
 }
 
