@@ -12,16 +12,16 @@ The Oracle NoSQL go SDK supports directly writing and reading data to/from the N
         StructValue: sval,
     }
 ```
-The fields in the struct will be mapped to NoSQL row columns based on their field names, and optional annotations given in the struct fields. All column names will be lower-cased. The annotation `nosql:"nnnn"` can be used to specify a database field name to map the struct field to. If the struct already uses JSON annotations, those can be used as well without the need to add `nosql` annotations:
+The fields in the struct will be mapped to NoSQL row columns based on their field names, and optional annotations given in the struct fields. The annotation `nosql:"nnnn"` can be used to specify a database field name to map the struct field to, similar to the go `encoding/json` methods as documented for the [json Marshal function](https://pkg.go.dev/encoding/json#Marshal). If the struct already uses JSON annotations, those will be used if there are no additional `nosql` annotations:
 ```
     type MyStruct struct {
-        // Will be written as column "id"
+        // Will be written as column "Id"
         Id         int
-        // Will be written as field "phone_number"
+        // Will be written as column "phone_number"
         Phone      string  `nosql:"phone_number"`
-        // Json annotations can be used as well
+        // Json annotations can be used as well: will be written as column "userAge"
         Age        int   `json:"userAge"`
-        // Timestamp values are supported
+        // Timestamp values are supported: this will be written as column "StartDate"
         StartDate  time.Time
     }
 ```
