@@ -12,7 +12,7 @@ The Oracle NoSQL go SDK supports directly writing and reading data to/from the N
         StructValue: sval,
     }
 ```
-The fields in the struct will be mapped to NoSQL row columns based on their field names, and optional annotations given in the struct fields. All column names will be lower-cased:
+The fields in the struct will be mapped to NoSQL row columns based on their field names, and optional annotations given in the struct fields. All column names will be lower-cased. The annotation `nosql:"nnnn"` can be used to specify a database field name to map the struct field to. If the struct already uses JSON annotations, those can be used as well without the need to add `nosql` annotations:
 ```
     type MyStruct struct {
         // Will be written as column "id"
@@ -102,12 +102,12 @@ import "reflect"
     }
     queryRes, err := client.Query(queryReq)
     if err != nil {
-		// retrieve slice of direct structs using GetStructResults:
-    	res, err := queryRes.GetStructResults()
-		if err != nil {
-			// res is a slice of MyStruct
-		}
-	}
+        // retrieve slice of direct structs using GetStructResults:
+        res, err := queryRes.GetStructResults()
+        if err != nil {
+            // res is a slice of MyStruct
+        }
+    }
 ```
 Unlike Put and Get, query results will be internally converted from `types.MapValue` to native structs after all query processing is complete.
 
