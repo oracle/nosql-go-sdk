@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- Native Structs: Added capability to use native structs in get/put/query. See [Native Structs](https://github.com/oracle/nosql-go-sdk/blob/main/native_structs.md) for details.
+
+
 ## 1.4.3 - 2024-07-01
 
 ### Added
@@ -18,7 +24,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 - Added support for array_collect() and count(distinct) in queries. These
   require server side support which is only available in Oracle NoSQL releases
   23.3 and higher and will not be immediately available in the cloud service
-- Native Structs: Added capability to use native structs in get/put/query. See [Native Structs](https://github.com/oracle/nosql-go-sdk/blob/master/native_structs.md) for details.
 
 ### Changed
 - Changed copyrights to 2024
