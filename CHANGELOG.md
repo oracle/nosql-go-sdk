@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- Native Structs: Added capability to use native structs in get/put/query. See [Native Structs](https://github.com/oracle/nosql-go-sdk/blob/main/native_structs.md) for details.
+
+### Changed
+- Now requires Go 1.18 or higher
+
+
 ## 1.4.3 - 2024-07-01
 
 ### Added

@@ -342,6 +342,12 @@ func (r *Reader) ReadFieldValue() (types.FieldValue, error) {
 	}
 }
 
+// ReadStructValue deserializes data into a native struct.
+// The passed in value must be a pointer to a struct.
+func (r *Reader) ReadStructValue(v any) error {
+	return UnmarshalFromReader(v, r)
+}
+
 // ReadByteArray reads byte sequences and returns as a slice of byte or any error encountered.
 // The returned bytes could be nil.
 func (r *Reader) ReadByteArray() ([]byte, error) {

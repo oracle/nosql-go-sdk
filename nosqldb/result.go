@@ -10,9 +10,11 @@ package nosqldb
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -103,6 +105,11 @@ type GetResult struct {
 
 	// Value represents the value of the returned row, or nil if the row does not exist.
 	Value *types.MapValue `json:"value"`
+
+	// StructValue represents the struct that was set into a GetRequest. If used,
+	// it will contain the value of the returned row.
+	// TODO: how to tell if not exist?
+	StructValue any
 
 	// Version represents the version of the row if the operation was
 	// successful, or nil if the row does not exist.
@@ -947,6 +954,31 @@ func (r *QueryResult) GetResults() (res []*types.MapValue, err error) {
 		return
 	}
 	return r.results, nil
+}
+
+// GetStructResults returns query results as a slice of pointers to allocated
+// structures of the type given in the StructType field of the QueryRequest.
+// QueryRequest.StructType must have been set before execution of the query for
+// this method to be of use.
+//
+// It is possible to return an empty result even though the query is not finished.
+func (r *QueryResult) GetStructResults() (res []any, err error) {
+	if err = r.compute(); err != nil {
+		return
+	}
+	size := len(r.results)
+	if size == 0 {
+		return nil, nil
+	}
+	// make an array of any
+	arr := make([]any, size, size)
+	for i := 0; i < size; i++ {
+		arr[i] = reflect.New(r.request.StructType).Interface()
+		if err = binary.DecodeMapValue(arr[i], r.results[i]); err != nil {
+			return
+		}
+	}
+	return arr, nil
 }
 
 func (r *QueryResult) getContinuationKey() ([]byte, error) {

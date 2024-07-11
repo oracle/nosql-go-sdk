@@ -30,8 +30,24 @@ type GetRequest struct {
 	TableName string `json:"tableName"`
 
 	// Key specifies the primary key used for the get operation.
-	// It is required and must be non-nil.
+	// It is required and must be non-nil, unless StructValue or StructType
+	// are used.
 	Key *types.MapValue `json:"key"`
+
+	// Use StructValue to use a native struct as a record value.
+	// This value must be a pointer to a struct, with the struct fields
+	// that make up the primary key already filled in.
+	// On successful return, the remaining fields of the struct will be
+	// populated with the values from the returned row.
+	// GetResult.StructValue will be a pointer to this same struct.
+	StructValue any
+
+	// StructType specifies the type of struct to return in the
+	// GetResult. This method can be used to force allocation of a new
+	// struct to be returned.
+	// On a successful get(), the GetResult.StructValue will have an allocated
+	// struct of the given type with its fields filled in with the row value.
+	StructType reflect.Type
 
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
@@ -68,8 +84,12 @@ func (r *GetRequest) validate() (err error) {
 		return
 	}
 
-	if err = validateKey(r.Key); err != nil {
-		return
+	if r.StructValue == nil {
+		if err = validateKey(r.Key); err != nil {
+			return
+		}
+	} else {
+		// Struct validation performed in execution
 	}
 
 	if err = validateTimeout(r.Timeout); err != nil {
@@ -1176,8 +1196,15 @@ type PutRequest struct {
 	TableName string `json:"tableName"`
 
 	// Value specifies the value of the row to put.
-	// It is required and must be non-nil.
+	// It is required and must be non-nil, unless StructValue is used.
 	Value *types.MapValue `json:"value"`
+
+	// Use StructValue to use a native struct as a record value.
+	// Fields in the struct are mapped to NoSQL row columns based on the
+	// annotations in the struct definition.
+	// Only exported (capitalized) fields in the struct will be used, similar
+	// to json encoding.
+	StructValue any
 
 	// PutOption specifies the put option for the operation.
 	//
@@ -1715,6 +1742,12 @@ type QueryRequest struct {
 
 	// virtualScan is used for internal queru requests only.
 	virtualScan *virtualScan
+
+	// StructType is an optional field that specifies the type of struct to
+	// return in the QueryResult. if non-nil, the query results will be directly
+	// filled in to an array of structures of the given type, and can
+	// be accessed by the GetStructResults method of QueryResult.
+	StructType reflect.Type
 
 	common.InternalRequestData
 }

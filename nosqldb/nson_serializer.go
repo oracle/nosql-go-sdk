@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -205,8 +206,16 @@ func (req *GetRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (
 	if err = ns.writeConsistency(req.Consistency); err != nil {
 		return
 	}
-	if err = ns.writeField(KEY, req.Key); err != nil {
-		return
+	if req.Key != nil {
+		if err = ns.writeField(KEY, req.Key); err != nil {
+			return
+		}
+	} else if req.StructValue != nil {
+		if err = ns.writeStructField(KEY, req.StructValue); err != nil {
+			return
+		}
+	} else {
+		return fmt.Errorf("missing Key or StructValue in GetRequest")
 	}
 	ns.endPayload()
 
@@ -231,6 +240,11 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 		case CONSUMED:
 			res.Capacity, err = readNsonConsumedCapacity(r)
 		case ROW:
+			if req.StructType != nil {
+				res.StructValue = reflect.New(req.StructType).Interface()
+			} else if req.StructValue != nil {
+				res.StructValue = req.StructValue
+			}
 			err = readNsonRow(r, res)
 		case TOPOLOGY_INFO:
 			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
@@ -989,8 +1003,16 @@ func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName b
 		return
 	}
 
-	if err = ns.writeField(VALUE, req.Value); err != nil {
-		return
+	if req.Value != nil {
+		if err = ns.writeField(VALUE, req.Value); err != nil {
+			return
+		}
+	} else if req.StructValue != nil {
+		if err = ns.writeStructField(VALUE, req.StructValue); err != nil {
+			return
+		}
+	} else {
+		return fmt.Errorf("missing Value in PutRequest")
 	}
 
 	if req.updateTTL() {
@@ -1902,6 +1924,15 @@ func (ns *NsonSerializer) writeField(key string, value types.FieldValue) (err er
 	return nil
 }
 
+func (ns *NsonSerializer) writeStructField(key string, value any) (err error) {
+	ns.startField(key)
+	if _, err = ns.writer.WriteStructValue(value); err != nil {
+		return
+	}
+	ns.endField(key)
+	return nil
+}
+
 func (ns *NsonSerializer) writeNZField(key string, value int) (err error) {
 	if value <= 0 {
 		return nil
@@ -2168,7 +2199,6 @@ func (mw *mapWalker) handleErrorCode() (int, error) {
 			if nsondebug {
 				fmt.Fprintf(os.Stderr, "Got error code %d from server: %s\n", code, msg)
 			}
-		// TODO: CONSUMED
 		default:
 			err = skipNsonField(mw.reader, name)
 		}
@@ -2430,7 +2460,11 @@ func readNsonRow(r proto.Reader, res *GetResult) error {
 		case ROW_VERSION:
 			res.Version, err = readNsonVersion(r)
 		case VALUE:
-			res.Value, err = readNsonRowValue(r)
+			if res.StructValue != nil {
+				err = r.ReadStructValue(res.StructValue)
+			} else {
+				res.Value, err = readNsonRowValue(r)
+			}
 		default:
 			err = skipNsonField(r, name)
 		}

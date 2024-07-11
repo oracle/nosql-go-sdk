@@ -31,7 +31,6 @@ import (
 // and there is no default value, Eventual consistency is used.
 //
 // Consistency can be specified as an optional argument to all read operations.
-//
 type Consistency int
 
 const (
@@ -106,7 +105,7 @@ const (
 // Durability defines the durability characteristics associated with a standalone write
 // (put or update) operation.
 //
-// Added in SDK Version 1.3.0
+// # Added in SDK Version 1.3.0
 //
 // This is currently only supported in On-Prem installations. It is ignored
 // in the cloud service.
@@ -150,7 +149,7 @@ func (dt *DefinedTags) AddTag(namespace, key, value string) (err error) {
 	}
 	nsMap, ok := dt.Tags.GetMapValue(namespace)
 	if !ok {
-		return fmt.Errorf("Invalid internal value for namespace %s", namespace)
+		return fmt.Errorf("invalid internal value for namespace %s", namespace)
 	}
 	nsMap.Put(key, value)
 	return nil
@@ -186,7 +185,7 @@ func (dt *DefinedTags) IsEmpty() bool {
 	// walk each namespace looking for any key/value pair
 	tagMap := dt.Tags.Map()
 	for k := range tagMap {
-		if mv, ok := dt.Tags.GetMapValue(k); ok == true {
+		if mv, ok := dt.Tags.GetMapValue(k); ok {
 			if mv.Len() > 0 {
 				return false
 			}
@@ -280,12 +279,11 @@ const (
 //
 // The available table states are:
 //
-//   Active
-//   Creating
-//   Dropped
-//   Dropping
-//   Updating
-//
+//	Active
+//	Creating
+//	Dropped
+//	Dropping
+//	Updating
 type TableState int
 
 const (
@@ -357,10 +355,9 @@ type Version []byte
 // PutOption represents an option for the put operation. It is used by PutRequest.
 // The available put options are:
 //
-//   PutIfAbsent
-//   PutIfPresent
-//   PutIfVersion
-//
+//	PutIfAbsent
+//	PutIfPresent
+//	PutIfVersion
 type PutOption int
 
 const (
@@ -477,12 +474,12 @@ func ParseDateTime(datestr string) (time.Time, error) {
 // that is not fully specified. For example, if the primary key for a table is
 // defined as the tuple:
 //
-//   <a, b, c>
+//	<a, b, c>
 //
 // A FieldRange can be specified for:
 //
-//   "a" if the primary key supplied is empty.
-//   "b" if the primary key supplied to the operation has a concrete value for "a" but not for "b" or "c".
+//	"a" if the primary key supplied is empty.
+//	"b" if the primary key supplied to the operation has a concrete value for "a" but not for "b" or "c".
 //
 // This object is used to scope a Client.MultiDelete() operation.
 // The FieldPath specified must name a field in a table's primary key.

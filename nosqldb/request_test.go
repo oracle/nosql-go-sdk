@@ -8,6 +8,8 @@
 package nosqldb
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -417,4 +419,23 @@ func (suite *RequestTestSuite) TestGetRequest() {
 		}
 	}
 
+}
+
+func (suite *RequestTestSuite) TestReflectStruct() {
+	r := GetRequest{}
+	t := reflect.TypeOf(r)
+	if t.Kind() != reflect.Struct {
+		suite.Fail("GetRequest not a struct")
+	}
+	fmt.Printf("Type=%v Kind=%v numField=%d\n", t.Name(), t.Kind(), t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		tag := field.Tag.Get("json")
+		if field.Type.Kind() == reflect.Pointer || field.Type.Kind() == reflect.Array {
+			elem := field.Type.Elem()
+			fmt.Printf("%d %v (kind=%v to %v) tag='%v'\n", i+1, field.Name, field.Type.Kind(), elem.Name(), tag)
+		} else {
+			fmt.Printf("%d %v (%v, kind=%v) tag='%v'\n", i+1, field.Name, field.Type.Name(), field.Type.Kind(), tag)
+		}
+	}
 }

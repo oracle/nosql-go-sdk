@@ -192,6 +192,9 @@ type Reader interface {
 	// ReadFieldValue reads a field value.
 	ReadFieldValue() (types.FieldValue, error)
 
+	// ReadStructValue reads a native struct
+	ReadStructValue(value any) error
+
 	// ReadByteArray reads an array of bytes.
 	// The returned bytes may be nil.
 	ReadByteArray() ([]byte, error)
@@ -279,6 +282,9 @@ type Writer interface {
 
 	// WriteSerialVersion writes a serial version.
 	WriteSerialVersion(serialVersion int16) (int, error)
+
+	// WriteStructValue writes a native struct
+	WriteStructValue(value any) (int, error)
 
 	// Size reports the number of bytes written by the writer.
 	Size() int
