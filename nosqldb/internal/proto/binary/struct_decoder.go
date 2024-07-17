@@ -10,7 +10,6 @@ package binary
 import (
 	"fmt"
 	"math/big"
-	"os"
 	"reflect"
 	"time"
 
