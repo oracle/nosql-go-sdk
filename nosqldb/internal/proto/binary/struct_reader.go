@@ -131,7 +131,7 @@ func (sr *StructReader) ReadMap(v reflect.Value) error {
 			if !mapElem.IsValid() {
 				mapElem = reflect.New(elemType).Elem()
 			} else {
-				mapElem.SetZero()
+				mapElem.Set(reflect.Zero(elemType))
 			}
 			subv = mapElem
 		} else {
@@ -226,7 +226,9 @@ func (sr *StructReader) ReadArray(v reflect.Value) error {
 
 	if v.Kind() == reflect.Slice {
 		if size >= v.Cap() {
-			v.Grow(size - v.Cap())
+			newv := reflect.MakeSlice(v.Type(), v.Len(), size)
+			reflect.Copy(newv, v)
+			v.Set(newv)
 		}
 		if size > v.Len() {
 			v.SetLen(size)
@@ -280,10 +282,10 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 			return nil
 		}
 		v = indirect(v, true)
-		v.SetZero()
+		v.Set(reflect.Zero(v.Type()))
 		//switch v.Kind() {
 		//case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice:
-		//v.SetZero()
+		//v.Set(reflect.Zero(v.Type()))
 		// otherwise, ignore null for primitives/string (same as json library)
 		//}
 		return nil
@@ -373,7 +375,7 @@ func (sr *StructReader) ReadFieldValue(v reflect.Value) error {
 			return nil
 		}
 		if s == nil {
-			v.SetZero()
+			v.Set(reflect.Zero(v.Type()))
 		} else {
 			if v.Type().Kind() == reflect.Interface {
 				v.Set(reflect.ValueOf(s))

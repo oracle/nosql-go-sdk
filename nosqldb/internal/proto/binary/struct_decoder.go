@@ -77,7 +77,7 @@ func (sr *structDecoder) decodeMap(m map[string]interface{}, v reflect.Value) er
 			if !mapElem.IsValid() {
 				mapElem = reflect.New(elemType).Elem()
 			} else {
-				mapElem.SetZero()
+				mapElem.Set(reflect.Zero(elemType))
 			}
 			subv = mapElem
 		} else {
@@ -144,7 +144,9 @@ func (sr *structDecoder) decodeArray(a []types.FieldValue, v reflect.Value) erro
 
 	if v.Kind() == reflect.Slice {
 		if size >= v.Cap() {
-			v.Grow(size - v.Cap())
+			newv := reflect.MakeSlice(v.Type(), v.Len(), size)
+			reflect.Copy(newv, v)
+			v.Set(newv)
 		}
 		if size > v.Len() {
 			v.SetLen(size)
@@ -174,13 +176,13 @@ func (sr *structDecoder) decodeFieldValue(mv any, v reflect.Value) error {
 	// Handle nil values differently
 	if mv == nil {
 		v = indirect(v, true)
-		v.SetZero()
+		v.Set(reflect.Zero(v.Type()))
 		return nil
 	}
 	switch mv.(type) {
 	case *types.EmptyValue, *types.NullValue, *types.JSONNullValue:
 		v = indirect(v, true)
-		v.SetZero()
+		v.Set(reflect.Zero(v.Type()))
 		return nil
 	}
 
