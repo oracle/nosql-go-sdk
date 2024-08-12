@@ -16,7 +16,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -524,8 +523,8 @@ func (me mapEncoder) encode(e *encodeState, v reflect.Value, opts encOpts) {
 		}
 		sv[i].v = mi.Value()
 	}
-	slices.SortFunc(sv, func(i, j reflectWithString) int {
-		return strings.Compare(i.ks, j.ks)
+	sort.Slice(sv, func(i, j int) bool {
+		return sv[i].ks < sv[j].ks
 	})
 
 	if _, err := e.writeOneByte(byte(types.Map)); err != nil {
