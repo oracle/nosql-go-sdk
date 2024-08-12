@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## 1.4.6 - 2024-08-12
+
+### Fixed
+- Fixed go incompatibility with pre-1.21 go version, stemming from 1.4.4 and 1.4.5 releases.
+
 ## 1.4.5 - 2024-08-12
 
 ### Fixed
