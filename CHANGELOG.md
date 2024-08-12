@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## 1.4.5 - 2024-08-12
+
+### Fixed
+- Fixed a go version incompatibility issue with the "slices" module that was introduced in 1.4.4 release.
+
+
 ## 1.4.4 - 2024-08-01
 
 ### Added

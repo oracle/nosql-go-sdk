@@ -50,11 +50,11 @@ func (sr *StructReader) DiscardMap() error {
 	}
 	for i := 0; i < size; i++ {
 		// field name
-		key, err := sr.reader.ReadString()
+		_, err := sr.reader.ReadString()
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stdout, "Disacrding field '%s'\n", *key)
+		//fmt.Fprintf(os.Stdout, "Discarding field '%s'\n", *key)
 		err = sr.ReadFieldValue(reflect.Value{})
 		if err != nil {
 			return err
@@ -121,7 +121,7 @@ func (sr *StructReader) ReadMap(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stdout, "Handling field '%s'\n", *key)
+		//fmt.Fprintf(os.Stdout, "Handling field '%s'\n", *key)
 
 		// Figure out field corresponding to key.
 		var subv reflect.Value
