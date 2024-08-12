@@ -71,11 +71,15 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	var putReq *nosqldb.PutRequest
 	var delReq *nosqldb.DeleteRequest
 	var key, value *types.MapValue
-	var shouldSucceed, rowPresent []bool
+	var shouldSucceed, rowPresent, shouldReturnExisting []bool
 	var versionId2, versionId7 types.Version
+
+	// return of existing row semantics changed in V5
+	isV5 := suite.Client.GetServerSerialVersion() > 4
 
 	shouldSucceed = make([]bool, 0, n)
 	rowPresent = make([]bool, 0, n)
+	shouldReturnExisting = make([]bool, 0, n)
 	// Put 10 rows.
 	wmReq = &nosqldb.WriteMultipleRequest{
 		TableName: suite.table,
@@ -89,17 +93,19 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 		wmReq.AddPutRequest(putReq, true)
 		shouldSucceed = append(shouldSucceed, true)
 		rowPresent = append(rowPresent, false)
+		shouldReturnExisting = append(shouldReturnExisting, false)
 	}
 
 	wmRes, err = suite.Client.WriteMultiple(wmReq)
 	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
-		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, recordKB)
+		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, shouldReturnExisting, recordKB)
 		versionId2 = wmRes.ResultSet[2].Version
 		versionId7 = wmRes.ResultSet[7].Version
 	}
 
 	shouldSucceed = make([]bool, 0, n)
 	rowPresent = make([]bool, 0, n)
+	shouldReturnExisting = make([]bool, 0, n)
 	wmReq = &nosqldb.WriteMultipleRequest{
 		TableName: suite.table,
 	}
@@ -114,6 +120,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddPutRequest(putReq, false)
 	shouldSucceed = append(shouldSucceed, false)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, true)
 
 	// PutIfPresent, ReturnRow = true
 	value = suite.genRow(sid, 1, recordKB, true)
@@ -126,6 +133,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddPutRequest(putReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, isV5)
 
 	// PutIfVersion, ReturnRow = true
 	value = suite.genRow(sid, 2, recordKB, true)
@@ -139,6 +147,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddPutRequest(putReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, false)
 
 	// PutIfAbsent, ReturnRow = false
 	value = suite.genRow(sid, 10, recordKB, true)
@@ -151,6 +160,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddPutRequest(putReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, false)
+	shouldReturnExisting = append(shouldReturnExisting, false)
 
 	// Put, ReturnRow = true
 	value = suite.genRow(sid, 3, recordKB, true)
@@ -162,6 +172,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddPutRequest(putReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, isV5)
 
 	// Put, ReturnRow = false
 	value = suite.genRow(sid, 4, recordKB, true)
@@ -173,6 +184,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddPutRequest(putReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, false)
 
 	// Delete, ReturnRow = true
 	key = suite.genKey(sid, 5)
@@ -184,6 +196,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddDeleteRequest(delReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, isV5)
 
 	// Delete, ReturnRow = false
 	key = suite.genKey(sid, 6)
@@ -195,6 +208,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddDeleteRequest(delReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, false)
 
 	// DeleteIfVersion, ReturnRow = true
 	key = suite.genKey(sid, 7)
@@ -207,6 +221,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddDeleteRequest(delReq, false)
 	shouldSucceed = append(shouldSucceed, true)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, false)
 
 	// DeleteIfVersion, ReturnRow = true
 	key = suite.genKey(sid, 8)
@@ -219,6 +234,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddDeleteRequest(delReq, false)
 	shouldSucceed = append(shouldSucceed, false)
 	rowPresent = append(rowPresent, true)
+	shouldReturnExisting = append(shouldReturnExisting, true)
 
 	// Delete, ReturnRow = true
 	key = suite.genKey(sid, 100)
@@ -230,10 +246,11 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 	wmReq.AddDeleteRequest(delReq, false)
 	shouldSucceed = append(shouldSucceed, false)
 	rowPresent = append(rowPresent, false)
+	shouldReturnExisting = append(shouldReturnExisting, false)
 
 	wmRes, err = suite.Client.WriteMultiple(wmReq)
 	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
-		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, recordKB)
+		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, shouldReturnExisting, recordKB)
 	}
 
 	// test writemultiple with parent/child tables
@@ -290,7 +307,7 @@ func (suite *WriteMultipleTestSuite) TestOpSucceed() {
 		}
 	}
 	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
-		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, recordKB)
+		suite.verifyResult(wmRes, wmReq, shouldSucceed, rowPresent, rowPresent, recordKB)
 	}
 }
 
@@ -607,7 +624,7 @@ func (suite *WriteMultipleTestSuite) TestOpWithTTL() {
 
 	wmRes, err = suite.Client.WriteMultiple(wmReq)
 	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
-		suite.verifyResult(wmRes, wmReq, shouldSucceed, nil, recordKB)
+		suite.verifyResult(wmRes, wmReq, shouldSucceed, nil, nil, recordKB)
 	}
 
 	// Verify expiration time
@@ -656,7 +673,7 @@ func (suite *WriteMultipleTestSuite) TestOpWithTTL() {
 
 	wmRes, err = suite.Client.WriteMultiple(wmReq)
 	if suite.NoErrorf(err, "WriteMultiple() failed, got error: %v", err) {
-		suite.verifyResult(wmRes, wmReq, shouldSucceed, nil, recordKB)
+		suite.verifyResult(wmRes, wmReq, shouldSucceed, nil, nil, recordKB)
 	}
 
 	// Verify expiration time
@@ -761,7 +778,7 @@ func (suite *WriteMultipleTestSuite) runOpAbortedTest(requests []nosqldb.Request
 }
 
 func (suite *WriteMultipleTestSuite) verifyResult(res *nosqldb.WriteMultipleResult, req *nosqldb.WriteMultipleRequest,
-	shouldSucceedList, rowPresentList []bool, recordKB int) {
+	shouldSucceedList, rowPresentList, shouldReturnExisting []bool, recordKB int) {
 
 	if !suite.Truef(res.IsSuccess(), "WriteMultiple should have succeeded.") {
 		return
@@ -795,23 +812,28 @@ func (suite *WriteMultipleTestSuite) verifyResult(res *nosqldb.WriteMultipleResu
 		if len(rowPresentList) == 0 {
 			continue
 		}
+		if len(shouldReturnExisting) == 0 {
+			continue
+		}
 
 		rowPresent := rowPresentList[i]
-		var shouldReturnRow bool
+		//var shouldReturnRow bool
 		if putReq != nil {
-			shouldReturnRow = putReq.ReturnRow
-			rdKB, wrKB := getPutReadWriteCost(putReq, shouldSucceed, rowPresent, recordKB)
+			//shouldReturnRow = putReq.ReturnRow
+			rdKB, wrKB := getPutReadWriteCost(putReq, shouldSucceed, rowPresent, shouldReturnExisting[i], recordKB)
 			expReadKB += rdKB
 			expWriteKB += wrKB
 
 		} else if delReq != nil {
-			shouldReturnRow = delReq.ReturnRow
-			rdKB, wrKB := getDeleteReadWriteCost(delReq, shouldSucceed, rowPresent, recordKB)
+			//shouldReturnRow = delReq.ReturnRow
+			rdKB, wrKB := getDeleteReadWriteCost(delReq, shouldSucceed, rowPresent, shouldReturnExisting[i], recordKB)
 			expReadKB += rdKB
 			expWriteKB += wrKB
 		}
+fmt.Printf("op %d, expR=%d expW=%d\n", i, expReadKB, expWriteKB)
 
-		hasReturnRow := !opRes.Success && shouldReturnRow && rowPresentList[i]
+		//hasReturnRow := !opRes.Success && shouldReturnRow && rowPresentList[i]
+		hasReturnRow := shouldReturnExisting[i]
 		if hasReturnRow {
 			suite.NotNilf(opRes.ExistingVersion,
 				"the %s operation should have returned a non-nil version for existing row", ordinal(i))
@@ -876,9 +898,9 @@ func (suite *WriteMultipleTestSuite) verifyResultAborted(res *nosqldb.WriteMulti
 
 		var rdKB, wrKB int
 		if r.PutRequest != nil {
-			rdKB, wrKB = getPutReadWriteCost(r.PutRequest, shouldSucceed, rowPresentList[i], recordKB)
+			rdKB, wrKB = getPutReadWriteCost(r.PutRequest, shouldSucceed, rowPresentList[i], rowPresentList[i], recordKB)
 		} else if r.DeleteRequest != nil {
-			rdKB, wrKB = getDeleteReadWriteCost(r.DeleteRequest, shouldSucceed, rowPresentList[i], recordKB)
+			rdKB, wrKB = getDeleteReadWriteCost(r.DeleteRequest, shouldSucceed, rowPresentList[i], rowPresentList[i], recordKB)
 		}
 
 		expReadKB += rdKB
@@ -889,13 +911,13 @@ func (suite *WriteMultipleTestSuite) verifyResultAborted(res *nosqldb.WriteMulti
 
 }
 
-func getPutReadWriteCost(req *nosqldb.PutRequest, shouldSucceed, rowPresent bool, recordKB int) (readKB, writeKB int) {
+func getPutReadWriteCost(req *nosqldb.PutRequest, shouldSucceed, rowPresent, shouldReturnExisting bool, recordKB int) (readKB, writeKB int) {
 	minRead := test.MinReadKB
-	readReturnRow := !shouldSucceed && rowPresent && req.ReturnRow
+	//readReturnRow := !shouldSucceed && rowPresent && req.ReturnRow
 
 	switch req.PutOption {
 	case types.PutIfAbsent:
-		if readReturnRow {
+		if shouldReturnExisting {
 			readKB = recordKB
 		} else {
 			readKB = minRead
@@ -906,15 +928,17 @@ func getPutReadWriteCost(req *nosqldb.PutRequest, shouldSucceed, rowPresent bool
 		}
 
 	case types.PutIfPresent:
-		// PutIfPresent never return previous row but cost MIN_READ for
-		// searching existing row
-		readKB = minRead
+		if shouldReturnExisting {
+			readKB = recordKB
+		} else {
+			readKB = minRead
+		}
 		if shouldSucceed {
 			writeKB = recordKB + recordKB // old + new record size
 		}
 
 	case types.PutIfVersion:
-		if readReturnRow {
+		if shouldReturnExisting {
 			readKB = recordKB
 		} else {
 			readKB = minRead
@@ -925,8 +949,11 @@ func getPutReadWriteCost(req *nosqldb.PutRequest, shouldSucceed, rowPresent bool
 		}
 
 	default:
-		// Put never return previous row.
-		readKB = 0
+		if shouldReturnExisting {
+			readKB = recordKB
+		} else {
+			readKB = 0
+		}
 		if shouldSucceed {
 			writeKB = recordKB
 			if rowPresent {
@@ -938,25 +965,13 @@ func getPutReadWriteCost(req *nosqldb.PutRequest, shouldSucceed, rowPresent bool
 	return
 }
 
-func getDeleteReadWriteCost(req *nosqldb.DeleteRequest, shouldSucceed, rowPresent bool, recordKB int) (readKB, writeKB int) {
+func getDeleteReadWriteCost(req *nosqldb.DeleteRequest, shouldSucceed, rowPresent, shouldReturnExisting bool, recordKB int) (readKB, writeKB int) {
 	readKB = test.MinReadKB
-	// Delete never return previous row.
-	if req.MatchVersion == nil {
-		if shouldSucceed {
-			writeKB = recordKB
-		}
-
-	} else {
-		// The record is present but the version does not matched, read
-		// cost is recordKB, otherwise MIN_READ.
-		readReturnRow := !shouldSucceed && rowPresent && req.ReturnRow
-		if readReturnRow {
-			readKB = recordKB
-		}
-
-		if shouldSucceed {
-			writeKB = recordKB
-		}
+	if shouldReturnExisting {
+		readKB = recordKB
+	}
+	if shouldSucceed {
+		writeKB = recordKB
 	}
 	return
 
