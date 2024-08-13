@@ -3,6 +3,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Changed
+- Internal: updated tests for upcoming new "return existing row" semantics
+
 ## 1.4.6 - 2024-08-12
 
 ### Fixed

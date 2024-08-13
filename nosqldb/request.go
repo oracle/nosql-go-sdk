@@ -1032,16 +1032,14 @@ func (l *TableLimits) validate() (err error) {
 //
 // This request can be used to perform unconditional and conditional deletes:
 //
-// 1. Delete any existing row. This is the default.
-//
-// 2. Delete only if the row exists and its version matches a specific version.
+//  1. Delete any existing row. This is the default.
+//  2. Delete only if the row exists and its version matches a specific version.
 //
 // For the latter case, a MatchVersion for the request must be specified.
-// Using this option in conjunction with specifying the ReturnRow allows
-// information about the existing row to be returned if the operation fails
-// because of a version mismatch. On success no information is returned.
-// Specifying the ReturnRow may incur additional cost and affect operation
-// latency.
+//
+// The existing row, including its version and modification time, can be
+// optionally returned using the ReturnRow option. Specifying the ReturnRow
+// may incur additional cost and affect operation latency.
 //
 // This request is used as the input to a Client.Delete() operation, which
 // returns a DeleteResult. If the operation succeeds, DeleteResult.Success
@@ -1057,11 +1055,15 @@ type DeleteRequest struct {
 	Key *types.MapValue `json:"key"`
 
 	// ReturnRow specifies whether information about the existing row should be
-	// returned on failure because of a version mismatch.
-	// If a match version has not been specified via MatchVersion, this
-	// parameter is ignored and there will be no return information.
+	// returned. The existing row information, including the value, version, and
+	// modification time, will only be returned if ReturnRow is true and one of
+	// the following occurs:
+	//  - MatchVersion is used and the operation fails because the row exists
+	//    and its version does not match.
+	//  - MatchVersion is not used and the operation succeeds, provided that
+	//    the server supports providing the existing row.
 	//
-	// It is optional and defaults to false.
+	// This parameter is optional and defaults to false.
 	//
 	// Using this option may incur additional cost.
 	ReturnRow bool `json:"returnRow"`
@@ -1169,22 +1171,18 @@ func (r *DeleteRequest) doesWrites() bool {
 //
 // This request can be used to perform unconditional and conditional puts:
 //
-// 1. Overwrite any existing row. This is the default.
-//
-// 2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
-// PutOption parameter for this case.
-//
-// 3. Succeed only if the row exists. Specify types.PutIfPresent for the
-// PutOption parameter for this case.
-//
-// 4. Succeed only if the row exists and its version matches a specific version.
-// Specify types.PutIfVersion for the PutOption parameter and a desired version
-// for the MatchVersion parameter for this case.
+//   1. Overwrite any existing row. This is the default.
+//   2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
+//      PutOption parameter for this case.
+//   3. Succeed only if the row exists. Specify types.PutIfPresent for the
+//      PutOption parameter for this case.
+//   4. Succeed only if the row exists and its version matches a specific version.
+//      Specify types.PutIfVersion for the PutOption parameter and a desired version
+//      for the MatchVersion parameter for this case.
 //
 // Information about the existing row can be returned on failure of a put
-// operation using types.PutIfAbsent or types.PutIfVersion by using the
-// ReturnRow option. Use of the ReturnRow option incurs additional cost and
-// may affect operation latency.
+// operation by using the ReturnRow option. Use of the ReturnRow option incurs
+// additional cost and may affect operation latency.
 //
 // This request is used as the input to a Client.Put() operation, which returns
 // a PutResult. On a successful operation the returned PutResult.Version is
@@ -1213,8 +1211,17 @@ type PutRequest struct {
 	PutOption types.PutOption `json:"putOption"`
 
 	// ReturnRow specifies whether information about the existing row should be
-	// returned on failure because of a version mismatch or failure of a
-	// PutIfAbsent operation.
+	// returned. The existing row information, including the value, version, and
+	// modification time, will only be returned if ReturnRow is true and one of
+	// the following occurs:
+	//   - PutOption==IfAbsent and the operation fails because the row already exists
+	//   - PutOption==IfVersion and the operation fails because the row exists and
+	//     its version does not match
+	//   - PutOption==IfPresent and the operation succeeds, provided that the server
+	//     supports providing the existing row
+	//   - PutOption==0 (default) and the operation replaces the existing row, provided
+	//     that the server supports providing the existing row
+	// This parameter is optional and defaults to false. Its use may incur additional cost.
 	ReturnRow bool `json:"returnRow"`
 
 	// TTL specifies the time to live (TTL) value, causing the time to live on

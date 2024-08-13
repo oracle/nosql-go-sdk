@@ -608,7 +608,7 @@ func (r WriteResult) ExistingValueAsJSON() string {
 // DeleteResult represents the result of a Client.Delete() operation.
 //
 // If the delete succeeded DeleteResult.Success returns true. Information about
-// the existing row on failure may be available using DeleteResult.ExistingValue
+// the existing row may be available using DeleteResult.ExistingValue
 // and DeleteResult.ExistingVersion, depending on the use of DeleteRequest.ReturnRow.
 type DeleteResult struct {
 	Capacity
@@ -616,7 +616,7 @@ type DeleteResult struct {
 	common.InternalResultData
 
 	// WriteResult is used to get the information about the existing row such as
-	// ExistingValue and ExistingVersion on operation failure.
+	// ExistingValue and ExistingVersion.
 	WriteResult
 
 	// Success represents if the delete operation succeeded or not.
@@ -632,7 +632,7 @@ func (r DeleteResult) String() string {
 //
 // On a successful operation the value returned by PutResult.Version is non-nil.
 //
-// On failure that value is nil. Information about the existing row on failure
+// On failure that value is nil. Information about the existing row
 // may be available using PutResult.ExistingValue and PutResult.ExistingVersion,
 // depending on the use of PutRequest.ReturnRow and whether the put had set the
 // PutIfAbsent or PutIfVersion option.
@@ -642,7 +642,7 @@ type PutResult struct {
 	common.InternalResultData
 
 	// WriteResult is used to get the information about the existing row such as
-	// ExistingValue and ExistingVersion on operation failure.
+	// ExistingValue and ExistingVersion.
 	WriteResult
 
 	// Version represents the version of the new row if the operation was
@@ -790,7 +790,7 @@ func (r WriteMultipleResult) GetFailedOperationResult() *OperationResult {
 // individual operation in the request.
 type OperationResult struct {
 	// WriteResult is used to get the information about the existing row such as
-	// ExistingValue and ExistingVersion on operation failure.
+	// ExistingValue and ExistingVersion.
 	WriteResult
 
 	// Success represents whether the operation succeeded.

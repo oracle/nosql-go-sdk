@@ -61,7 +61,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 
 	var putReq *nosqldb.PutRequest
 	var putRes *nosqldb.PutResult
-	var oldVersion, ifVersion, newVersion types.Version
+	var curVersion, oldVersion, ifVersion, newVersion types.Version
 	recordKB := 2
 	name := test.GenString((recordKB - 1) * 1024)
 	value := &types.MapValue{}
@@ -79,20 +79,25 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			true,  // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
+		curVersion = putRes.Version
 	}
 
-	// Put row again with ReturnRow=true, expect no existing row returned.
+	// Put row again with ReturnRow=true
+	// If server serial version > V4, expect previous row data returned.
+	// Otherwise no row data should be returned.
 	putReq.ReturnRow = true
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
 			true, // shouldSucceed
 			true, // rowPresent
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
+			value,  // expPrevValue
+			curVersion,  // expPrevVersion
 			recordKB)
 		oldVersion = putRes.Version
 	}
@@ -108,6 +113,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			false, // shouldSucceed
 			true,  // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -120,6 +126,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			false,      // shouldSucceed
 			true,       // rowPresent
+			true, // returnPrevRow
 			value,      // expPrevValue
 			oldVersion, // expPrevVersion
 			recordKB)
@@ -136,20 +143,25 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			false, // returnPrevRow
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
+		oldVersion = putRes.Version
 	}
 
-	// PutIfPresent succeed + ReturnRow=true, expect no existing row returned.
+	// PutIfPresent succeed + ReturnRow=true
+	// If server serial version > V4, expect previous row data returned.
+	// Otherwise no row data should be returned.
 	putReq.ReturnRow = true
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
 			true, // shouldSucceed
 			true, // rowPresent
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
+			value,  // expPrevValue
+			oldVersion,  // expPrevVersion
 			recordKB)
 		ifVersion = putRes.Version
 	}
@@ -165,18 +177,20 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			false, // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
 	}
 
-	// PutIfPresent fail + ReturnRow=true, expect no existing row returned.
+	// PutIfPresent fail + ReturnRow=true, expect no previous row
 	putReq.ReturnRow = true
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
 			false, // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -193,6 +207,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			true,  // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -210,18 +225,20 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			false, // shouldSucceed
 			true,  // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
 	}
 
-	// PutIfVersion fails + ReturnRow=true, expect no existing row returned.
+	// PutIfVersion fails + ReturnRow=true
 	putReq.ReturnRow = true
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
 			false,     // shouldSucceed
 			true,      // rowPresent
+			true,      // returnPrevRow
 			value,     // expPrevValue
 			ifVersion, // expPrevVersion
 			recordKB)
@@ -239,13 +256,14 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			false, // returnPrevRow
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
 		ifVersion = putRes.Version
 	}
 
-	// PutIfVersion succeed + ReturnRow=true, expect no existing row returned.
+	// PutIfVersion succeed + ReturnRow=true
 	putReq.MatchVersion = ifVersion
 	putReq.ReturnRow = true
 	putRes, err = suite.Client.Put(putReq)
@@ -253,6 +271,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			false, // returnPrevRow
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
@@ -336,6 +355,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			true,  // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -384,6 +404,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			false, // shouldReturnPrev
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
@@ -397,13 +418,14 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	_, err = suite.Client.Put(putReq)
 	suite.NoError(err)
 
-	// Delete succeed + ReturnRow=true, no existing row returned.
+	// Delete succeed + ReturnRow=true
 	delReq.ReturnRow = true
 	delRes, err = suite.Client.Delete(delReq)
 	if suite.NoError(err) {
 		suite.checkDeleteResult(delReq, delRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
@@ -415,6 +437,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			false, // shouldSucceed
 			false, // rowPresent
+			false, // shouldReturnPrev
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -441,6 +464,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			false, // shouldSucceed
 			true,  // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -453,6 +477,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			false,     // shouldSucceed
 			true,      // rowPresent
+			true,      // returnPrevRow
 			value,     // expPrevValue
 			ifVersion, // expPrevVersion
 			recordKB)
@@ -469,6 +494,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			false, // returnPrevRow
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
@@ -497,6 +523,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			true, // shouldSucceed
 			true, // rowPresent
+			false, // returnPrevRow
 			nil,  // expPrevValue
 			nil,  // expPrevVersion
 			recordKB)
@@ -513,6 +540,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			false, // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -526,6 +554,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkDeleteResult(delReq, delRes,
 			false, // shouldSucceed
 			false, // rowPresent
+			false, // shouldReturnPrev
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -572,6 +601,7 @@ func (suite *DataOpsTestSuite) TestPutExactMatch() {
 		suite.checkPutResult(req, res,
 			true,  // shouldSucceed
 			false, // rowPresent
+			false, // returnPrevRow
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
@@ -1802,7 +1832,7 @@ func (suite *DataOpsTestSuite) runPut(tableName, targetField string,
 }
 
 func (suite *DataOpsTestSuite) checkPutResult(req *nosqldb.PutRequest, res *nosqldb.PutResult,
-	shouldSucceed, rowPresent bool, expPrevValue *types.MapValue,
+	shouldSucceed, rowPresent, shouldReturnPrev bool, expPrevValue *types.MapValue,
 	expPrevVersion types.Version, recordKB int) {
 
 	if shouldSucceed {
@@ -1811,8 +1841,7 @@ func (suite *DataOpsTestSuite) checkPutResult(req *nosqldb.PutRequest, res *nosq
 		suite.Nilf(res.Version, "Put(req=%v) should have failed and returned a nil version.", req)
 	}
 
-	suite.checkExistingValueVersion(&res.WriteResult, req.ReturnRow, shouldSucceed,
-		rowPresent, expPrevValue, expPrevVersion)
+	suite.checkExistingValueVersion(&res.WriteResult, shouldReturnPrev, expPrevValue, expPrevVersion)
 
 	expReadKB, expWriteKB := 0, 0
 	if test.IsCloud() {
@@ -1871,7 +1900,7 @@ func (suite *DataOpsTestSuite) checkGetResult(req *nosqldb.GetRequest, res *nosq
 }
 
 func (suite *DataOpsTestSuite) checkDeleteResult(req *nosqldb.DeleteRequest, res *nosqldb.DeleteResult,
-	shouldSucceed, rowPresent bool, expPrevValue *types.MapValue,
+	shouldSucceed, rowPresent, shouldReturnPrev bool, expPrevValue *types.MapValue,
 	expPrevVersion types.Version, recordKB int) {
 
 	if shouldSucceed {
@@ -1880,8 +1909,7 @@ func (suite *DataOpsTestSuite) checkDeleteResult(req *nosqldb.DeleteRequest, res
 		suite.Falsef(res.Success, "Delete(req=%v) should have failed.", req)
 	}
 
-	suite.checkExistingValueVersion(&res.WriteResult, req.ReturnRow, shouldSucceed,
-		rowPresent, expPrevValue, expPrevVersion)
+	suite.checkExistingValueVersion(&res.WriteResult, shouldReturnPrev, expPrevValue, expPrevVersion)
 
 	expReadKB, expWriteKB := 0, 0
 	if test.IsCloud() {
@@ -1895,11 +1923,10 @@ func (suite *DataOpsTestSuite) checkDeleteResult(req *nosqldb.DeleteRequest, res
 }
 
 func (suite *DataOpsTestSuite) checkExistingValueVersion(res *nosqldb.WriteResult,
-	returnRow, shouldSucceed, rowPresent bool, expPrevValue *types.MapValue,
+	shouldReturnPrev bool, expPrevValue *types.MapValue,
 	expPrevVersion types.Version) {
 
-	hasReturnRow := !shouldSucceed && rowPresent && returnRow
-	if hasReturnRow {
+	if shouldReturnPrev {
 		suite.NotNilf(res.ExistingValue, "previous value should have been non-nil")
 		if expPrevValue != nil {
 			suite.Truef(test.CompareMapValue(expPrevValue, res.ExistingValue, false), "unexpected previous value")
@@ -1950,9 +1977,12 @@ func (suite *DataOpsTestSuite) getPutReadWriteCost(req *nosqldb.PutRequest,
 		}
 
 	case types.PutIfPresent:
-		// PutIfPresent never returns previous row but cost minReadKB for
+		// PutIfPresent may return previous row, or cost minReadKB for
 		// searching existing row
 		readKB = minReadKB
+		if suite.Client.GetServerSerialVersion() > 4 && req.ReturnRow && rowPresent {
+			readKB = recordKB
+		}
 		if shouldSucceed {
 			writeKB = recordKB + recordKB // old + new record size
 		} else {
@@ -1960,8 +1990,11 @@ func (suite *DataOpsTestSuite) getPutReadWriteCost(req *nosqldb.PutRequest,
 		}
 
 	default:
-		// Put never returns previous row
+		// Put might return previous row
 		readKB = 0
+		if suite.Client.GetServerSerialVersion() > 4 && req.ReturnRow && rowPresent {
+			readKB = recordKB
+		}
 		if shouldSucceed {
 			writeKB = recordKB
 			if rowPresent {
@@ -1997,8 +2030,12 @@ func (suite *DataOpsTestSuite) getDeleteReadWriteCost(req *nosqldb.DeleteRequest
 		}
 
 	} else {
-		// Delete never returns previous row
-		readKB = minReadKB
+		// Delete returns previous only if ReturnRow is true and server protocol > 4
+		if suite.Client.GetServerSerialVersion() > 4 && req.ReturnRow && rowPresent {
+			readKB = recordKB
+		} else {
+			readKB = minReadKB
+		}
 		if shouldSucceed {
 			writeKB = recordKB
 		} else {

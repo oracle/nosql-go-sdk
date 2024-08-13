@@ -102,6 +102,9 @@ type Client struct {
 	// InTest is used for internal SDK testing. It controls logic that may be
 	// specific to testing only.
 	InTest bool
+
+	// Internal: used by tests. This is _not_ the wire protocol version.
+	serverSerialVersion int
 }
 
 var (
@@ -1524,6 +1527,7 @@ func (c *Client) processResponse(httpResp *http.Response, req Request, serialVer
 
 	if httpResp.StatusCode == http.StatusOK {
 		c.setSessionCookie(httpResp.Header)
+		c.setServerSerialVersion(httpResp.Header)
 		return c.processOKResponse(data, req, serialVerUsed, queryVerUsed)
 	}
 
@@ -1597,6 +1601,39 @@ func (c *Client) setSessionCookie(header http.Header) {
 	c.logger.LogWithFn(logger.Fine, func() string {
 		return fmt.Sprintf("Set session cookie to \"%s\"", c.sessionStr)
 	})
+}
+
+// setServerSerialVersion sets the server serial version (not the protocol version)
+// in the client, if not already set.
+// Note that if the client is connected to multiple proxies via a load balancer, this
+// may set an inconsistent value. But this value is only used internally for testing,
+// in which case only a single proxy is used.
+func (c *Client) setServerSerialVersion(header http.Header) {
+	if header == nil || c.serverSerialVersion > 0 {
+		return
+	}
+	v := header.Get("x-nosql-serial-version")
+	if v == "" {
+		return
+	}
+	c.lockMux.Lock()
+	defer c.lockMux.Unlock()
+	i, err := strconv.Atoi(v)
+	if err == nil {
+		c.serverSerialVersion = i
+		c.logger.LogWithFn(logger.Fine, func() string {
+			return fmt.Sprintf("Set server serial version to %d", c.serverSerialVersion)
+		})
+	} else {
+		c.logger.LogWithFn(logger.Fine, func() string {
+			return fmt.Sprintf("Set server serial version failed: %v", err)
+		})
+	}
+}
+
+// GetServerSerialVersion is used by tests to determine feature capabilities.
+func (c *Client) GetServerSerialVersion() int {
+	return c.serverSerialVersion
 }
 
 // processNotOKResponse processes the http response whose status code is not 200.
