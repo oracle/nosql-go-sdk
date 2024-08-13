@@ -8,7 +8,7 @@ Database Go SDK. There are several supported environments:
 ## Prerequisites
 
 The Go SDK requires:
-* Go 1.16 or later
+* Go 1.18 or later
 * For the Oracle NoSQL Cloud Service
   - An Oracle Cloud Infrastructure account
   - A user created in that account, in a group with a policy that grants the desired permissions.

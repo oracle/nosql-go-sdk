@@ -3,29 +3,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 1.4.7 - 2024-08-13
 
 ### Changed
 - Internal: updated tests for upcoming new "return existing row" semantics
 
 ## 1.4.6 - 2024-08-12
 
-### Fixed
-- Fixed go incompatibility with pre-1.21 go version, stemming from 1.4.4 and 1.4.5 releases.
-
-## 1.4.5 - 2024-08-12
-
-### Fixed
-- Fixed a go version incompatibility issue with the "slices" module that was introduced in 1.4.4 release.
-
-
-## 1.4.4 - 2024-08-01
-
 ### Added
 - Native Structs: Added capability to use native structs in get/put/query. See [Native Structs](https://github.com/oracle/nosql-go-sdk/blob/main/native_structs.md) for details.
 
 ### Changed
 - Now requires Go 1.18 or higher
+
+note: releases 1.4.4 and 1.4.5 were removed due to version incompatibilities.
 
 
 ## 1.4.3 - 2024-07-01
