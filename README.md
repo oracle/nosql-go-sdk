@@ -11,10 +11,10 @@ and to [the Oracle NoSQL Cloud Simulator](https://www.oracle.com/downloads/cloud
 This project is open source and maintained by Oracle Corp.
 
 ## Prerequisites
-- Go 1.16 or later
-  - Download a [Go](https://golang.org/dl/) 1.16+ binary release suitable for your system.
+- Go 1.18 or later
+  - Download a [Go](https://golang.org/dl/) 1.18+ binary release suitable for your system.
   - Install on your system following the [installation instructions](https://golang.org/doc/install).
-  - Go for Oracle Linux 7 can be installed via `yum`: [Go Packages for Oracle Linux](http://yum.oracle.com/oracle-linux-golang.html).
+  - Go for Oracle Linux can be installed via `yum`: [Go Packages for Oracle Linux](http://yum.oracle.com/oracle-linux-golang.html).
   - Add the directory that contains the `go` executable into your system PATH, for example:
     ```bash
     export PATH=/usr/local/go/bin:$PATH
