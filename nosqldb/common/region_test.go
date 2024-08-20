@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -30,33 +31,33 @@ var regionTests = []regionEP{
 	{Region(""), ""},
 	{Region("RegionNA"), ""},
 	// realm: oc1
-	{RegionCAToronto1, "nosql.ca-toronto-1.oci.oraclecloud.com"},
-	{RegionCAMontreal1, "nosql.ca-montreal-1.oci.oraclecloud.com"},
-	{RegionPHX, "nosql.us-phoenix-1.oci.oraclecloud.com"},
-	{RegionIAD, "nosql.us-ashburn-1.oci.oraclecloud.com"},
-	{RegionFRA, "nosql.eu-frankfurt-1.oci.oraclecloud.com"},
-	{RegionEUAmsterdam1, "nosql.eu-amsterdam-1.oci.oraclecloud.com"},
-	{RegionLHR, "nosql.uk-london-1.oci.oraclecloud.com"},
-	{RegionAPTokyo1, "nosql.ap-tokyo-1.oci.oraclecloud.com"},
-	{RegionAPOsaka1, "nosql.ap-osaka-1.oci.oraclecloud.com"},
-	{RegionAPSeoul1, "nosql.ap-seoul-1.oci.oraclecloud.com"},
-	{RegionAPChuncheon1, "nosql.ap-chuncheon-1.oci.oraclecloud.com"},
-	{RegionAPMumbai1, "nosql.ap-mumbai-1.oci.oraclecloud.com"},
-	{RegionAPHyderabad1, "nosql.ap-hyderabad-1.oci.oraclecloud.com"},
-	{RegionEUZurich1, "nosql.eu-zurich-1.oci.oraclecloud.com"},
-	{RegionSASaopaulo1, "nosql.sa-saopaulo-1.oci.oraclecloud.com"},
-	{RegionAPSydney1, "nosql.ap-sydney-1.oci.oraclecloud.com"},
-	{RegionAPMelbourne1, "nosql.ap-melbourne-1.oci.oraclecloud.com"},
-	{RegionMEJeddah1, "nosql.me-jeddah-1.oci.oraclecloud.com"},
+	{RegionCaToronto1, "nosql.ca-toronto-1.oci.oraclecloud.com"},
+	{RegionCaMontreal1, "nosql.ca-montreal-1.oci.oraclecloud.com"},
+	{RegionUsPhoenix1, "nosql.us-phoenix-1.oci.oraclecloud.com"},
+	{RegionUsAshburn1, "nosql.us-ashburn-1.oci.oraclecloud.com"},
+	{RegionEuFrankfurt1, "nosql.eu-frankfurt-1.oci.oraclecloud.com"},
+	{RegionEuAmsterdam1, "nosql.eu-amsterdam-1.oci.oraclecloud.com"},
+	{RegionUkLondon1, "nosql.uk-london-1.oci.oraclecloud.com"},
+	{RegionApTokyo1, "nosql.ap-tokyo-1.oci.oraclecloud.com"},
+	{RegionApOsaka1, "nosql.ap-osaka-1.oci.oraclecloud.com"},
+	{RegionApSeoul1, "nosql.ap-seoul-1.oci.oraclecloud.com"},
+	{RegionApChuncheon1, "nosql.ap-chuncheon-1.oci.oraclecloud.com"},
+	{RegionApMumbai1, "nosql.ap-mumbai-1.oci.oraclecloud.com"},
+	{RegionApHyderabad1, "nosql.ap-hyderabad-1.oci.oraclecloud.com"},
+	{RegionEuZurich1, "nosql.eu-zurich-1.oci.oraclecloud.com"},
+	{RegionSaSaopaulo1, "nosql.sa-saopaulo-1.oci.oraclecloud.com"},
+	{RegionApSydney1, "nosql.ap-sydney-1.oci.oraclecloud.com"},
+	{RegionApMelbourne1, "nosql.ap-melbourne-1.oci.oraclecloud.com"},
+	{RegionMeJeddah1, "nosql.me-jeddah-1.oci.oraclecloud.com"},
 	// realm: oc2
-	{RegionUSLangley1, "nosql.us-langley-1.oci.oraclegovcloud.com"},
-	{RegionUSLuke1, "nosql.us-luke-1.oci.oraclegovcloud.com"},
+	{RegionUsLangley1, "nosql.us-langley-1.oci.oraclegovcloud.com"},
+	{RegionUsLuke1, "nosql.us-luke-1.oci.oraclegovcloud.com"},
 	// realm: oc3
-	{RegionUSGovAshburn1, "nosql.us-gov-ashburn-1.oci.oraclegovcloud.com"},
-	{RegionUSGovChicago1, "nosql.us-gov-chicago-1.oci.oraclegovcloud.com"},
-	{RegionUSGovPhoenix1, "nosql.us-gov-phoenix-1.oci.oraclegovcloud.com"},
+	{RegionUsGovAshburn1, "nosql.us-gov-ashburn-1.oci.oraclegovcloud.com"},
+	{RegionUsGovChicago1, "nosql.us-gov-chicago-1.oci.oraclegovcloud.com"},
+	{RegionUsGovPhoenix1, "nosql.us-gov-phoenix-1.oci.oraclegovcloud.com"},
 	// realm: oc4
-	{RegionUKGovLondon1, "nosql.uk-gov-london-1.oci.oraclegovcloud.uk"},
+	{RegionUkGovLondon1, "nosql.uk-gov-london-1.oci.oraclegovcloud.uk"},
 }
 
 func TestEndpointForRegion(t *testing.T) {
@@ -77,8 +78,8 @@ func TestEndpointForService(t *testing.T) {
 		wantEndpoint string
 		wantErr      bool
 	}{
-		{RegionIAD, "auth", "auth.us-ashburn-1.oraclecloud.com", false},
-		{RegionPHX, "foo", "foo.us-phoenix-1.oraclecloud.com", false},
+		{RegionUsAshburn1, "auth", "auth.us-ashburn-1.oraclecloud.com", false},
+		{RegionUsPhoenix1, "foo", "foo.us-phoenix-1.oraclecloud.com", false},
 		{"RegionNA", "bar", "", true},
 	}
 
@@ -90,6 +91,28 @@ func TestEndpointForService(t *testing.T) {
 			assert.Equalf(t, r.wantEndpoint, ep, "EndpointForService() got unexpected service endpoint")
 		}
 	}
+}
+
+func setupOCIRegionsEnv() {
+	// OCI environment
+	os.Setenv("OCI_REGION_METADATA", `{"realmKey":"OC50","realmDomainComponent":"oraclecloud50.com","regionKey":"ENV","regionIdentifier":"us-fromenv-1"}`)
+}
+
+func setupOCIRegionsFile() {
+	// OCI config file... we may have to create a ~/.oci directory
+	configDir := filepath.Join(getHomeFolder(), ".oci")
+	os.Mkdir(configDir, 0777)
+	configFile := filepath.Join(getHomeFolder(), ".oci/regions-config.json")
+	os.WriteFile(configFile, []byte(`[{"realmKey":"OC55","realmDomainComponent":"oraclecloud55.com","regionKey":"FIL","regionIdentifier":"us-fromfil-1"},{"realmKey":"OC70","realmDomainComponent":"oraclecloud70.com","regionKey":"ZZZ","regionIdentifier":"us-fromzzz-1"}]`), 0777)
+}
+
+func unsetOCIRegionsEnv() {
+	os.Unsetenv("OCI_REGION_METADATA")
+}
+
+func unsetOCIRegionsFile() {
+	configFile := filepath.Join(getHomeFolder(), ".oci/regions-config.json")
+	os.Remove(configFile)
 }
 
 func TestStringToRegion(t *testing.T) {
@@ -129,6 +152,39 @@ func TestStringToRegion(t *testing.T) {
 		assert.NoErrorf(t, err, "StringToRegion(%q) got error %v", s, err)
 	}
 
+	// OCI environment
+	envRegionKeys := []string{
+		"env", "us-fromenv-1",
+	}
+	setupOCIRegionsEnv()
+	defer unsetOCIRegionsEnv()
+	for _, s := range envRegionKeys {
+		_, err = StringToRegion(s)
+		assert.NoErrorf(t, err, "StringToRegion(%q) got error %v", s, err)
+		s = strings.ToUpper(s)
+		_, err = StringToRegion(s)
+		assert.NoErrorf(t, err, "StringToRegion(%q) got error %v", s, err)
+		readCfgFile, readEnvVar, visitIMDS = true, true, false
+	}
+	unsetOCIRegionsEnv()
+
+	// OCI config file
+	fileRegionKeys := []string{
+		"fil", "us-fromfil-1",
+		"zzz", "us-fromzzz-1",
+	}
+	setupOCIRegionsFile()
+	defer unsetOCIRegionsFile()
+	for _, s := range fileRegionKeys {
+		_, err = StringToRegion(s)
+		assert.NoErrorf(t, err, "StringToRegion(%q) got error %v", s, err)
+		s = strings.ToUpper(s)
+		_, err = StringToRegion(s)
+		assert.NoErrorf(t, err, "StringToRegion(%q) got error %v", s, err)
+	}
+	unsetOCIRegionsFile()
+
+	// Invalid regions
 	badRegionKeyOrIDs := []string{
 		"", "oci",
 		"xyz", "ca-toronto-x",

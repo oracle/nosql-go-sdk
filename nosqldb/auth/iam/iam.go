@@ -64,19 +64,19 @@ type SignatureProvider struct {
 
 // NewSignatureProvider creates a signature provider using the "DEFAULT"
 // profile specified in the default OCI configuration file ~/.oci/config.
-// See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
-// for details of the configuration file's contents and format.
+// See [SDK Configuration File] for details of the configuration file's contents and format.
 //
 // This signature provider uses the tenancyOCID that is the "tenancy" field
 // specified in the configuration file as compartmentID.
+//
+// [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
 func NewSignatureProvider() (*SignatureProvider, error) {
 	return NewSignatureProviderFromFile("~/.oci/config", "", "", "")
 }
 
 // NewSignatureProviderFromFile creates a signature provider using the ociProfile
 // specified in the OCI configuration file configFilePath.
-// See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
-// for details of the configuration file's contents and format.
+// See [SDK Configuration File] for details of the configuration file's contents and format.
 //
 // ociProfile is optional; if empty, "DEFAULT" will be used.
 //
@@ -89,6 +89,8 @@ func NewSignatureProvider() (*SignatureProvider, error) {
 // the root compartment as compartmentID.
 // For example, if using rootCompartment.compartmentA.compartmentB, the
 // compartmentID should be set to compartmentA.compartmentB.
+//
+// [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
 func NewSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassphrase, compartmentID string) (*SignatureProvider, error) {
 
 	// default to OCI "DEFAULT" if none given
@@ -248,7 +250,7 @@ func NewSignatureProviderWithInstancePrincipalDelegationFromFile(compartmentID s
 // root compartment of the user's tenancy.
 //
 // [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
-// Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
+// [Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
 // [Token-based Authentication for the CLI]: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/clitoken.htm
 func NewSessionTokenSignatureProvider() (*SignatureProvider, error) {
 	return NewSessionTokenSignatureProviderFromFile("~/.oci/config", "DEFAULT", "")
@@ -272,7 +274,7 @@ func NewSessionTokenSignatureProvider() (*SignatureProvider, error) {
 // root compartment of the user's tenancy.
 //
 // [SDK Configuration File]: https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
-// Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
+// [Session Token-Based Authentication]: https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_authentication_methods.htm#sdk_authentication_methods_session_token
 // [Token-based Authentication for the CLI]: https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/clitoken.htm
 func NewSessionTokenSignatureProviderFromFile(configFilePath, ociProfile, privateKeyPassphrase string) (*SignatureProvider, error) {
 	// default to OCI "DEFAULT" if none given
