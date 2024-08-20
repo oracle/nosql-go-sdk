@@ -5,6 +5,8 @@
 //  https://oss.oracle.com/licenses/upl/
 //
 
+// NOTE: this file is auto-generated. Do not modify it manually.
+
 // Package common provides common utilities used for NoSQL client.
 package common
 
