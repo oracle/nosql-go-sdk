@@ -107,6 +107,8 @@ func getRegionForFederationClient(httpClient httputil.RequestExecutor, url strin
 		}
 		return
 	}
+	// enable IMDS, in case we don't have this region hardcoded yet
+	common.EnableInstanceMetadataServiceLookup()
 	return common.StringToRegion(body.String())
 }
 

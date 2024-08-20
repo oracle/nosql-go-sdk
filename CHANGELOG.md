@@ -3,6 +3,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+## Added
+- Cloud only: Added the capability to determine region metadata from OCI configuration.
+  This enables using new regions that may not have been added to the SDK code yet, without
+  having to specify a full NoSQL endpoint parameter.
+  See [Adding Regions](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_adding_new_region_endpoints.htm) for more information.
+
+## Changed
+- Cloud only: Internal OCI `Region` definitions have been updated to be consistent. Some previous
+  shorthand `Region`s have been removed, for example `RegionPHX` and `RegionIAD`. This should not affect any
+  external usage, as the `Region` definitions are intended for internal logic only. Interaction
+  with the NoSQL APIs should always use region identifier strings, such as `us-phoenix-1`, or
+  full endpoint strings, such as `nosql.us-phoenix-1.oci.oraclecloud.com`.
+
 ## 1.4.7 - 2024-08-13
 
 ### Changed
