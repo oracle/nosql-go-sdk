@@ -158,7 +158,8 @@ func setRegionMetadataFromEnvVar(region *string) bool {
 		if checkSchemaItems(regionSchema) {
 			// set mapping table
 			addRegionSchema(regionSchema)
-			if regionSchema[regionKeyPropertyName] == *region ||
+			if *region == "" ||
+				regionSchema[regionKeyPropertyName] == *region ||
 				regionSchema[regionIdentifierPropertyName] == *region {
 				*region = regionSchema[regionIdentifierPropertyName]
 				return true
@@ -288,7 +289,8 @@ func setRegionFromInstanceMetadataService(region *string) bool {
 
 	if checkSchemaItems(regionInfo) {
 		addRegionSchema(regionInfo)
-		if regionInfo[regionKeyPropertyName] == *region ||
+		if *region == "" ||
+			regionInfo[regionKeyPropertyName] == *region ||
 			regionInfo[regionIdentifierPropertyName] == *region {
 			*region = regionInfo[regionIdentifierPropertyName]
 		}
