@@ -211,7 +211,7 @@ defer client.Close()
 
 ### Configure for the On-Premise Oracle NoSQL Database
 
-The on-premise configuration requires a running instance of the Oracle NoSQL database. In addition a running proxy service is required. See [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads, and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
+The on-premise configuration requires a running instance of the Oracle NoSQL database. In addition a running proxy service is required. See [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads, and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/24.3/admin/proxy.html) for proxy configuration information.
 
 In this case, the `Endpoint` config parameter should point to the NoSQL proxy host and port location.
 

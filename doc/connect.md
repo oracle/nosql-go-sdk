@@ -16,7 +16,7 @@ The Go SDK requires:
   - See [Download Oracle NoSQL Cloud Simulator](https://www.oracle.com/downloads/cloud/nosql-cloud-sdk-downloads.html) to download and start the Cloud Simulator.
 * For the on-premise Oracle NoSQL Database:
   - An instance of the database, see [Oracle NoSQL Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html).
-  - A running proxy server, see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
+  - A running proxy server, see the [Oracle NoSQL Database Proxy and Driver](https://docs.oracle.com/en/database/other-databases/nosql-database/24.3/admin/proxy.html) for proxy configuration information.
 
 ## Downloading and Installing the SDK
 
@@ -292,7 +292,7 @@ client, err := nosqldb.NewClient(cfg)
 The on-premise configuration requires a running instance of the Oracle NoSQL
 database. In addition a running proxy service is required. See [Oracle NoSQL
 Database Downloads](https://www.oracle.com/database/technologies/nosql-database-server-downloads.html) for downloads,
-and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/22.3/admin/proxy-and-driver.html) for proxy configuration information.
+and see [Information about the proxy](https://docs.oracle.com/en/database/other-databases/nosql-database/24.3/admin/proxy.html) for proxy configuration information.
 
 
 #### Configure for non-secure on-premise Oracle NoSQL Database
