@@ -68,7 +68,10 @@ const (
 	RegionMeAbudhabi2 Region = "me-abudhabi-2"
 	RegionMeAbudhabi4 Region = "me-abudhabi-4"
 	RegionApHobsonville1 Region = "ap-hobsonville-1"
+	RegionApSilverdale1 Region = "ap-silverdale-1"
 	RegionApSuwon1 Region = "ap-suwon-1"
+	RegionApSeoul2 Region = "ap-seoul-2"
+	RegionApChuncheon2 Region = "ap-chuncheon-2"
 	RegionUsGovAshburn1 Region = "us-gov-ashburn-1"
 	RegionUsGovChicago1 Region = "us-gov-chicago-1"
 	RegionUsGovPhoenix1 Region = "us-gov-phoenix-1"
@@ -205,7 +208,10 @@ var regionRealm = map[Region]string{
 	RegionMeAbudhabi2: "oc29",
 	RegionMeAbudhabi4: "oc29",
 	RegionApHobsonville1: "oc31",
+	RegionApSilverdale1: "oc31",
 	RegionApSuwon1: "oc35",
+	RegionApSeoul2: "oc35",
+	RegionApChuncheon2: "oc35",
 }
 
 var shortNameRegion = map[string]Region{
@@ -290,5 +296,8 @@ var shortNameRegion = map[string]Region{
 	"rkt": RegionMeAbudhabi2,
 	"shj": RegionMeAbudhabi4,
 	"izq": RegionApHobsonville1,
+	"jjt": RegionApSilverdale1,
 	"dln": RegionApSuwon1,
+	"dtz": RegionApSeoul2,
+	"bno": RegionApChuncheon2,
 }
