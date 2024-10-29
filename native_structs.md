@@ -46,7 +46,7 @@ There are two methods for retrieving data from NoSQL into native structs:
         StructValue: nval,
     }
     getRes, err := client.Get(getReq)
-    if err != nil {
+    if err == nil {
         // nval now has all row data filled in
         // nval is also available via getRes.StructValue
     }
@@ -64,7 +64,7 @@ import "reflect"
         StructType:  reflect.TypeOf((*MyStruct)(nil)).Elem(),
     }
     getRes, err := client.Get(getReq)
-    if err != nil {
+    if err == nil {
         // nval is left unchanged
         // getRes.StructValue contains a newly allocated populated struct
     }
@@ -81,7 +81,7 @@ import "reflect"
         StructType:  reflect.TypeOf((*MyStruct)(nil)).Elem(),
     }
     getRes, err := client.Get(getReq)
-    if err != nil {
+    if err == nil {
         // getRes.StructValue contains a newly allocated populated struct
     }
 ```
@@ -100,12 +100,25 @@ import "reflect"
         Statement:   stmt,
         StructType:  reflect.TypeOf((*MyStruct)(nil)).Elem(),
     }
-    queryRes, err := client.Query(queryReq)
-    if err != nil {
+    var allStructs []MyStruct
+    for {
+        queryRes, err := client.Query(queryReq)
+        if err != nil {
+            break
+        }
         // retrieve slice of direct structs using GetStructResults:
         res, err := queryRes.GetStructResults()
         if err != nil {
-            // res is a slice of MyStruct
+            break
+        }
+        // res is a slice of `any`. Convert to MyStruct:
+        for i := 0; i < len(res); i++ {
+            if v, ok := res[i].(*MyStruct); ok {
+                allStructs = append(allStructs, *v)
+            }
+        }
+        if queryReq.IsDone() {
+            break
         }
     }
 ```
