@@ -544,7 +544,7 @@ func (r *DropReplicaRequest) doesWrites() bool {
 	return false
 }
 
-// ReplicaStatsRequest is a request used to remove a remote replica from another region.
+// ReplicaStatsRequest is a request used to get stats for one or more replicas.
 //
 // Cloud service only.
 //
