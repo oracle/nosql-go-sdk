@@ -883,7 +883,21 @@ type TableRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// CDCConfig specifies optional Change Data Capture configuration. This is only
+	// applicable to tables in the NoSQL Cloud Service.
+	CDCConfig *CDCConfig
+
 	common.InternalRequestData
+}
+
+type CDCConfig struct {
+	// Enabled is a boolean flag to enable or disable Change Data Capture streaming
+	// for this table. Enabling CDC will incur additional read and write unit costs.
+	Enabled bool
+
+	// NumPartititons specifies an optional number of partititons to use in the CDC
+	// stream. By default only one partition is used.
+	NumPartitions uint16
 }
 
 func (r *TableRequest) validate() (err error) {

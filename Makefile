@@ -24,7 +24,7 @@ EXAMPLE_BIN := $(BIN)/examples
 
 testcases ?=
 options ?=
-examples := basic delete index
+examples := cdc cdc_restartable basic delete index
 
 # Enable to get code coverage from tests
 # afterwards, run go tool cover -html=nosqldb/cover.out

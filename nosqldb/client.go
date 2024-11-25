@@ -10,11 +10,13 @@ package nosqldb
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -182,6 +184,289 @@ func (c *Client) Close() error {
 
 	// do not close logger; it may have been passed to us and
 	// may still be in use by the application
+
+	return nil
+}
+
+// ChangeType represents the type of change in a change event.
+type ChangeType int
+
+const (
+	// Put specifies a row that was put into the table.
+	Put = iota + 1
+
+	// Delete specifies a row that was removed from the table.
+	Delete
+)
+
+// ChangeEvent represents a single Change Data Capture event.
+type ChangeEvent struct {
+
+	// The current cursor for the table for this event
+	Cursor *ChangeCursor
+
+	// The type of change (Put, Delete)
+	ChangeType
+
+	// ID of the event
+	EventID string
+
+	// Version of the event format
+	Version string
+
+	// The current image of the table record
+	CurrentImage ChangeImage
+
+	// The previous image of the table record, if it existed before this event
+	BeforeImage *ChangeImage
+
+	// ModificationTime specifies a timestamp indicating when the change event occurred.
+	ModificationTime time.Time
+
+	// ExpirationTime specifies a timestamp indicating when the record will expire. This will
+	// be zero for Delete events.
+	ExpirationTime time.Time
+}
+
+type ChangeImage struct {
+	// RecordKey specifies the fields in the record that make up the primary key.
+	RecordKey *types.MapValue
+
+	// RecordValue specifies the fields of the record. This will be nil if ChangeType == Delete.
+	RecordValue *types.MapValue
+
+	// RecordMetadata represents additional data for the record. Its value is TBD.
+	RecordMetadata map[string]interface{}
+}
+
+// ChangeMessage represents a single message in a Change Data Capture channel.
+type ChangeMessage struct {
+	// The current cursor group for the table(s) for these events
+	CursorGroup ChangeCursorGroup
+
+	// EventsRemaining specifies an estimate of the number of change events that are still remaining to
+	// be consumed, not counting the events in this message. This can be used to monitor if a reader of
+	// the events channel is keeping up with change events for the table.
+	// This value applies to only the tables and partitions specified in the CursorGroup.
+	EventsRemaining uint64
+
+	// ChangeEvents is a slice of events
+	ChangeEvents []ChangeEvent
+
+	// StartEvent specifies the optional start of a stream partititon
+	StartEvent *StartEvent
+
+	// EndEvent specifies the optional end of a stream partititon
+	EndEvent *EndEvent
+}
+
+type StartEvent struct {
+	// Cursor info (table, partition, etc) for this event
+	Cursor *ChangeCursor
+
+	// Previous parent partition IDs
+	ParentIDs []string
+}
+
+type EndEvent struct {
+	// Cursor info (table, partition, etc) for this event
+	Cursor *ChangeCursor
+
+	// New child partition IDs
+	ChildIDs []string
+}
+
+type ChangeCursorType string
+
+const (
+	// Start consuming from the oldest available message in the stream partition.
+	TrimHorizon ChangeCursorType = "trimHorizon"
+
+	// Start consuming at a specified offset. The offset must be greater than or equal to the offset
+	// of the oldest messages and less than or equal to the latest published offset.
+	AtOffset ChangeCursorType = "atOffset"
+
+	// Start consuming after the given offset. This the same restrictions as AtOffset.
+	AfterOffset ChangeCursorType = "afterOffset"
+
+	// Start consuming messages that were published after the start of the stream.
+	Latest ChangeCursorType = "latest"
+
+	// Start consuming from a given time.
+	AtTime ChangeCursorType = "atTime"
+)
+
+type ChangeCursor struct {
+	// Table name. required.
+	TableName string `json:"tableName"`
+
+	// Compartment OCID. If not given, the OCID of the tenancy is used.
+	CompartmentOCID string `json:"compartmentOcid,omitempty"`
+
+	// Partition ID. If empty, data for all partitions is used.
+	PartitionID string `json:"partitionId,omitempty"`
+
+	// The type of cursor (trim, offset, latest, etc.)
+	CursorType ChangeCursorType `json:"cursorType"`
+
+	// Used for AtOffset and AfterOffset types
+	Offset string `json:"offset,omitempty"`
+
+	// used for AtTime type
+	StartTime time.Time `json:"startTime,omitempty"`
+}
+
+type ChangeCursorGroup struct {
+	// array of change cursors
+	Cursors []ChangeCursor `json:"cursors"`
+}
+
+type ControlType int
+
+const (
+	AddTable = iota + 1
+	RemoveTable
+)
+
+// A message to control what is being sent in a change data channel.
+// Most of this is TBD.
+type ChangeControlMessage struct {
+
+	// Type of control message
+	ControlType
+
+	// Table Name
+	TableName string
+
+	// Start details for AddTable type
+	StartCursor *ChangeCursor
+}
+
+// Get Change Data Capture messages based on a cursor. The table(s) in the cursor must have
+// already been enabled for Change Data Capture.
+// limit: max number of change events to return in the message
+// waitTime: max amount of time to wait for messages
+func (c *Client) GetCDCMessages(cursor *ChangeCursorGroup, limit int, waitTime time.Duration) (*ChangeMessage, error) {
+	// TODO
+	return nil, nil
+}
+
+func (c *Client) simpleCDCTest() error {
+
+	// Create a cursor for a single table.
+	cursor := &ChangeCursorGroup{Cursors: []ChangeCursor{
+		{TableName: "test_table", CursorType: TrimHorizon},
+	}}
+
+	// read data from the stream, returning only if the stream has ended.
+	for {
+		// wait up to one second to read up to 10 events
+		message, err := c.GetCDCMessages(cursor, 10, time.Duration(1*time.Second))
+		if err != nil {
+			return fmt.Errorf("error getting CDC messages: %v", err)
+		}
+		// If the time elapsed but there were no messages to read, the returned message
+		// will have an empty array of events.
+		fmt.Printf("Received message: %v", message)
+
+		// The message contains a cursor pointing to the next messages in the CDC stream
+		cursor = &message.CursorGroup
+	}
+}
+
+func (c *Client) multiTableCDCTest() error {
+
+	var cursor *ChangeCursorGroup
+	// if a previous run of this program wrote a checkpoint file,
+	// read that and use its data as a group cursor for our CDC consumer.
+	fileName := "/tmp/cdc_cursor.json"
+	infile, err := os.Open(fileName)
+	if err == nil {
+		var cg ChangeCursorGroup
+		decoder := json.NewDecoder(infile)
+		err = decoder.Decode(&cg)
+		infile.Close()
+		if err != nil {
+			return fmt.Errorf("error decoding cursor from %s: %v", fileName, err)
+		}
+		cursor = &cg
+	} else {
+		// Create a new cursor group for two tables, starting with the most current entry in
+		// each partition of each table.
+		cursor = &ChangeCursorGroup{
+			Cursors: []ChangeCursor{
+				{TableName: "client_info", CursorType: Latest},
+				{TableName: "location_data", CursorType: Latest},
+			},
+		}
+	}
+
+	// Read 10 messages from the CDC stream. Write a checkpoint after every message received.
+	for i := 0; i < 10; i++ {
+		// wait up to one second to read up to 10 events
+		message, err := c.GetCDCMessages(cursor, 10, time.Duration(1*time.Second))
+		if err != nil {
+			return fmt.Errorf("error getting CDC messages: %v", err)
+		}
+		// If the time elapsed but there were no messages to read, the returned message
+		// will have an empty array of events.
+		fmt.Printf("Received message: %v", message)
+		// The message contains a cursor pointing to the next messages in the CDC stream
+		cursor = &message.CursorGroup
+
+		// write a file to enable starting this program again from a checkpoint
+		jsonData, err := json.Marshal(*cursor)
+		if err != nil {
+			return fmt.Errorf("can't marshal cursor to JSON: %v", err)
+		}
+		outfile, err := os.Create(fileName)
+		if err != nil {
+			return fmt.Errorf("can't open checkpoint file %s: %v", fileName, err)
+		}
+		_, err = outfile.Write(jsonData)
+		outfile.Close()
+		if err != nil {
+			return fmt.Errorf("can't write checkpoint data to file %s: %v", fileName, err)
+		}
+	}
+
+	// The JSON representation of the cursor group may now be something like the
+	// following (assuming in this case the two tables have 2 partititons each):
+	// {
+	//   "cursors": [
+	//     {
+	//       "tableName": "client_info",
+	//       "tableOCID": "aaagfjdfjddfk758485",
+	//       "partitionID": "2443hxdF",
+	//       "offset": 128548,
+	//       "cursorType": "AtOffset"
+	//     },
+	//     {
+	//       "tableName": "client_info",
+	//       "tableOCID": "aaagfjdfjddfk758485",
+	//       "partitionID": "54664hdF",
+	//       "offset": 129024,
+	//       "cursorType": "AtOffset"
+	//     },
+	//     {
+	//       "tableName": "location_data",
+	//       "tableOCID": "aaagfjgdsgds943fkjs",
+	//       "partitionID": "hf73kjdsiX",
+	//       "offset": 3404,
+	//       "cursorType": "AtOffset"
+	//     },
+	//     {
+	//       "tableName": "location_data",
+	//       "tableOCID": "aaagfjgdsgds943fkjs",
+	//       "partitionID": "84537hf",
+	//       "offset": 17808,
+	//       "cursorType": "AtOffset"
+	//     }
+	//   ]
+	// }
+
+	// This function can now be run again, picking up where it left off from the
+	// latest checkpoint file.
 
 	return nil
 }

@@ -346,6 +346,30 @@ type TableResult struct {
 	// this table. This is only used in the cloud service for Global Active Tables.
 	// Added in SDK Version 1.4.3
 	Replicas []*Replica `json:"replicas"`
+
+	// CDCInfo specifies optional Change Data Capture information. This is only used
+	// in the cloud service.
+	// Added in SDK Version 1.4.8
+	CDCInfo *CDCInfo `json:"cdcInfo,omitempty"`
+}
+
+type CDCInfo struct {
+	// Partitions is an array of partition structs. In most cases, there will be only
+	// one partition.
+	Partitions []PartitionInfo `json:"partitions"`
+}
+
+type PartitionInfo struct {
+	// The ID of this partition. This is only guaranteed to be unique for the specific table.
+	ID string `json:"id"`
+
+	// Optional parent partition IDs. If this is nonempty, it means that previous
+	// CDC partitions were combined into this one.
+	ParentIDs []string `json:"parentIDs,omitempty"`
+
+	// Optional child partition IDs. If this is nonempty, it means that this partition is no longer
+	// being updated, and its contents have been split into separate multiple partitions.
+	ChildIDs []string `json:"childIDs,omitempty"`
 }
 
 // String returns a JSON string representation of the TableResult.
