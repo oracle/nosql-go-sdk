@@ -321,34 +321,13 @@ type ChangeCursorGroup struct {
 	Cursors []ChangeCursor `json:"cursors"`
 }
 
-type ControlType int
-
-const (
-	AddTable = iota + 1
-	RemoveTable
-)
-
-// A message to control what is being sent in a change data channel.
-// Most of this is TBD.
-type ChangeControlMessage struct {
-
-	// Type of control message
-	ControlType
-
-	// Table Name
-	TableName string
-
-	// Start details for AddTable type
-	StartCursor *ChangeCursor
-}
-
 // Get Change Data Capture messages based on a cursor. The table(s) in the cursor must have
 // already been enabled for Change Data Capture.
 // limit: max number of change events to return in the message
 // waitTime: max amount of time to wait for messages
 func (c *Client) GetCDCMessages(cursor *ChangeCursorGroup, limit int, waitTime time.Duration) (*ChangeMessage, error) {
 	// TODO
-	return nil, nil
+	return nil, fmt.Errorf("function not implemented yet")
 }
 
 func (c *Client) simpleCDCTest() error {

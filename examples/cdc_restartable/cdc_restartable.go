@@ -82,6 +82,8 @@ func runCDCRestartable(client *nosqldb.Client) error {
 
 		fmt.Printf("Received message: %v", message)
 
+		processCDCMessage(message)
+
 		// The message contains a cursor pointing to the next messages in the CDC stream
 		cursor = &message.CursorGroup
 
@@ -141,4 +143,59 @@ func runCDCRestartable(client *nosqldb.Client) error {
 
 	return nil
 
+}
+
+func processCDCMessage(message *nosqldb.ChangeMessage) {
+	fmt.Printf("Message: events remaining = %v", message.EventsRemaining)
+
+	// A StartEvent will only appear once in teh stream, at the very start.
+	// If this stream was started in the middle, this event will not appear.
+	if message.StartEvent != nil {
+		se := *message.StartEvent
+		fmt.Printf("Start event: \n")
+		fmt.Printf(" parent partititons: %v", se.ParentIDs)
+		fmt.Printf(" table name: %s", se.Cursor.TableName)
+		fmt.Printf(" table compartment: %s", se.Cursor.CompartmentOCID)
+		// Note: partition ID will be blank if the table is not partitioned
+		fmt.Printf(" partition ID: %s", se.Cursor.PartitionID)
+		fmt.Printf(" stream start time: %v", se.Cursor.StartTime)
+	}
+
+	// An EndEvent will appear when the CDC stream has ended, either because the
+	// table has been dropped, CDC streaming for the table has been disabled,
+	// or the table is partitioned and this partition has no more data.
+	if message.EndEvent != nil {
+		ee := *message.EndEvent
+		fmt.Printf("End event: \n")
+		// If a partition has ended, it may have been split into new partitions
+		fmt.Printf(" child partitions: %v", ee.ChildIDs)
+		fmt.Printf(" table name: %s", ee.Cursor.TableName)
+		fmt.Printf(" table compartment: %s", ee.Cursor.CompartmentOCID)
+		// Note: partition ID will be blank if the table is not partitioned
+		fmt.Printf(" partition ID: %s", ee.Cursor.PartitionID)
+	}
+
+	// ChangeEvents is an array of changes for the message
+	for i := 0; i < len(message.ChangeEvents); i++ {
+		event := message.ChangeEvents[i]
+		fmt.Printf("Change event: \n")
+		fmt.Printf(" table name: %s", event.Cursor.TableName)
+		fmt.Printf(" table compartment: %s", event.Cursor.CompartmentOCID)
+		// Note: partition ID will be blank if the table is not partitioned
+		fmt.Printf(" partition ID: %s", event.Cursor.PartitionID)
+		// type will be Put or Delete
+		fmt.Printf(" change type: %v", event.ChangeType)
+		fmt.Printf(" modification time: %v", event.ModificationTime)
+		fmt.Printf(" expiration time: %v", event.ExpirationTime)
+		fmt.Printf(" current image:\n")
+		fmt.Printf("   key: %v", event.CurrentImage.RecordKey)
+		fmt.Printf("   value: %v", event.CurrentImage.RecordValue)
+		fmt.Printf("   metadata: %v", event.CurrentImage.RecordMetadata)
+		if event.BeforeImage != nil {
+			fmt.Printf(" before image:\n")
+			fmt.Printf("   key: %v", event.BeforeImage.RecordKey)
+			fmt.Printf("   value: %v", event.BeforeImage.RecordValue)
+			fmt.Printf("   metadata: %v", event.BeforeImage.RecordMetadata)
+		}
+	}
 }
