@@ -58,7 +58,7 @@ func runCDCMultiConsumer(client *nosqldb.Client) error {
 	// Make an API call to enable CDC for this table. If it is already enabled,
 	// no error is returned.
 	// Note this is typically executed elsewhere, through a control plane mechanism
-	// like terraform, the OCI control panel, or some other "coordinator" program.
+	// like the OCI control panel or some other "coordinator" program.
 	// In this example, we start with 4 partitions in the CDC stream for the table.
 	tableName := "customer_data"
 	tableReq := &nosqldb.TableRequest{
@@ -238,15 +238,9 @@ func runCDCAddTable(client *nosqldb.Client) error {
 	return nil
 }
 
-
-// Example function that runs consumer goroutines for all partitions of
-// a change data capture stream for a single table. Each partition is
-// handled by a consumer goroutine.
-// The CDC streams are monitored for changes in partitioning, and new
-// consumer goroutines are created for any new partitions.
-// This returns only when all partitions for a table have been completely
-// consumed - either because the table was dropped, or its CDC streaming
-// was disabled elsewhere.
+// Example function that reads CDC curso info from a file on
+// startup and writes the cursor info to the file as it reads
+// messages from the CDC stream.
 func runCDCRestartable(client *nosqldb.Client) error {
 
 	// Assume table "customer_data" exists already and is CDC enabled
