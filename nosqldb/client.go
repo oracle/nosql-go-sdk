@@ -10,13 +10,15 @@ package nosqldb
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+
+	//"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
+
+	//"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -202,8 +204,13 @@ const (
 // ChangeEvent represents a single Change Data Capture event.
 type ChangeEvent struct {
 
-	// The current cursor for the table for this event
-	Cursor *ChangeCursor
+	// The table name for this event
+	TableName string
+
+	// The compartment OCID for this event. If this is empty,
+	// the compartment is assumed to be the default compartment
+	// for the tenancy.
+	CompartmentOCID string
 
 	// The type of change (Put, Delete)
 	ChangeType
@@ -246,206 +253,316 @@ type ChangeMessage struct {
 
 	// EventsRemaining specifies an estimate of the number of change events that are still remaining to
 	// be consumed, not counting the events in this message. This can be used to monitor if a reader of
-	// the events channel is keeping up with change events for the table.
+	// the events consumer is keeping up with change events for the table.
 	// This value applies to only the tables and partitions specified in the CursorGroup.
 	EventsRemaining uint64
 
 	// ChangeEvents is a slice of events
 	ChangeEvents []ChangeEvent
-
-	// StartEvent specifies the optional start of a stream partititon
-	StartEvent *StartEvent
-
-	// EndEvent specifies the optional end of a stream partititon
-	EndEvent *EndEvent
 }
 
-type StartEvent struct {
-	// Cursor info (table, partition, etc) for this event
-	Cursor *ChangeCursor
-
-	// Previous parent partition IDs
-	ParentIDs []string
-}
-
-type EndEvent struct {
-	// Cursor info (table, partition, etc) for this event
-	Cursor *ChangeCursor
-
-	// New child partition IDs
-	ChildIDs []string
-}
-
-type ChangeCursorType string
+type ChangeLocationType string
 
 const (
-	// Start consuming from the oldest available message in the stream partition.
-	TrimHorizon ChangeCursorType = "trimHorizon"
+	// Start consuming at the first uncommitted message in the stream. This is
+	// the default.
+	FirstUncommitted ChangeLocationType = "nextUncommitted"
 
-	// Start consuming at a specified offset. The offset must be greater than or equal to the offset
-	// of the oldest messages and less than or equal to the latest published offset.
-	AtOffset ChangeCursorType = "atOffset"
+	// Start consuming from the earliest (oldest) available message in the stream.
+	Earliest ChangeLocationType = "earliest"
 
-	// Start consuming after the given offset. This the same restrictions as AtOffset.
-	AfterOffset ChangeCursorType = "afterOffset"
-
-	// Start consuming messages that were published after the start of the stream.
-	Latest ChangeCursorType = "latest"
+	// Start consuming messages that were published after the start of the consumer.
+	Latest ChangeLocationType = "latest"
 
 	// Start consuming from a given time.
-	AtTime ChangeCursorType = "atTime"
+	AtTime ChangeLocationType = "atTime"
 )
 
-type ChangeCursor struct {
-	// Table name. required.
-	TableName string `json:"tableName"`
-
-	// Compartment OCID. If not given, the OCID of the tenancy is used.
-	CompartmentOCID string `json:"compartmentOcid,omitempty"`
-
-	// Partition ID. If empty, data for all partitions is used.
-	PartitionID string `json:"partitionId,omitempty"`
-
-	// The type of cursor (trim, offset, latest, etc.)
-	CursorType ChangeCursorType `json:"cursorType"`
-
-	// Used for AtOffset and AfterOffset types
-	Offset string `json:"offset,omitempty"`
+type ChangeStartLocation struct {
+	// The location type (earliest, latest, etc). If this is empty,
+	// FirstUncommitted is used as the default.
+	Location ChangeLocationType `json:"locationType,omitempty"`
 
 	// used for AtTime type
-	StartTime time.Time `json:"startTime,omitempty"`
+	StartTime *time.Time `json:"startTime,omitempty"`
+}
+
+type ChangeConsumerTableConfig struct {
+	// Name of the table. This is required.
+	TableName string `json:"tableName"`
+
+	// Optional compartment ID for the table. If empty, the default compartment
+	// for the tenancy is used.
+	CompartmentOCID string `json:"compartmentOcid,omitempty"`
+
+	// Optional start location. If empty, FirstUncommitted is used as the default.
+	StartLocation ChangeStartLocation `json:"startLocation,omitempty"`
+}
+
+type ChangeConsumerConfig struct {
+	// Tables to consume from. This array must have at least one table config defined.
+	Tables []ChangeConsumerTableConfig `json:"tables"`
+
+	// Optional group ID. If this is nonempty, the consumer will join a "group" based on
+	// the ID. When multiple consumers use the same group ID, the NoSQL system will attempt
+	// to evenly distribute data for the specified tables evenly across all consumers in
+	// the group. Data to any one consumer will be consistently ordered for records using
+	// the same shard key. That is, different consumers will not get data for the same shard key.
+	// Any group ID used should be sufficiently unique to avoid unintended alterations to
+	// existing groups.
+	//
+	// The Tables in this struct will override any previous tables that other
+	// existing consumers in this group have specified. Any tables that are being
+	// currently consumed by this group that are not in the specified Tables list will
+	// have their consumption stopped.
+	//
+	// If a table is already in an existing group, this consumer's start location will
+	// be FirstUncommitted. If it is not in the existing group (or if this the
+	// first consumer in this group), the StartLocation in the table config will be used.
+	//
+	// If this field is empty, no grouping is assumed. This consumer will always get all
+	// of the data for all of the tables specified.
+	GroupID string `json:"groupId,omitempty"`
+
+	// Specify the commit mode for the consumer. If this value is true, the system will not
+	// automatically commit messages consumed by Poll(). It is the responsibility of the
+	// application to call Commit() on a timely basis after consumed data has been processed.
+	// If this value is false (the default), commits will be done automatically based on the
+	// AutoCommitInterval defined below.
+	ManualCommit bool `json:"manualCommit"`
+
+	// Specify the interval to use for automatic commits. If this value is zero, every call
+	// to Poll() will automatically mark the data returned by the previous Poll() as committed.
+	// Otherwise, data read by calls to Poll() will be automatically committed at least as
+	// often as specified.
+	AutoCommitInterval time.Duration `json:"autoCommitInterval"`
+}
+
+// Add a table to the consumer config.
+//
+// Table name is required.
+//
+// Compartment OCID is optional. If empty, the default compartment
+// for the tenancy is used.
+//
+// Start location is optional. If empty, FirstUncommitted is used.
+//
+// If start location specifies AtTime, the startTime field is required to be non-nil.
+func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) *ChangeConsumerConfig {
+	sl := ChangeStartLocation{
+		Location:  startLocation,
+		StartTime: startTime,
+	}
+	tc := ChangeConsumerTableConfig{
+		TableName:       tableName,
+		CompartmentOCID: compartmentOCID,
+		StartLocation:   sl,
+	}
+	cc.Tables = append(cc.Tables, tc)
+	return cc
+}
+
+// Specify a single table name for the consumer. This is a convenience
+// method to simplify single-table consumer creation.
+func (cc *ChangeConsumerConfig) TableName(tableName string) *ChangeConsumerConfig {
+	// TODO: if already have a table, set error
+	cc.AddTable(tableName, "", FirstUncommitted, nil)
+	return cc
+}
+
+// Specify a compartment OCID for a single-table consumer. This is a convenience
+// method to simplify single-table consumer creation.
+func (cc *ChangeConsumerConfig) CompartmentOCID(compartmentOCID string) *ChangeConsumerConfig {
+	// TODO: if not exactly one table, set error
+	if len(cc.Tables) == 1 {
+		cc.Tables[0].CompartmentOCID = compartmentOCID
+	}
+	return cc
+}
+
+// Specify that a single-table consumer should start from the earliest (oldest)
+// event in the change stream for the table. This is a convenience
+// method to simplify single-table consumer creation.
+func (cc *ChangeConsumerConfig) Earliest() *ChangeConsumerConfig {
+	// TODO: if not exactly one table, set error
+	if len(cc.Tables) == 1 {
+		cc.Tables[0].StartLocation.Location = Earliest
+	}
+	return cc
+}
+
+// Specify that a single-table consumer should start from the latest (newest)
+// event in the change stream for the table. This is a convenience
+// method to simplify single-table consumer creation.
+func (cc *ChangeConsumerConfig) Latest() *ChangeConsumerConfig {
+	// TODO: if not exactly one table, set error
+	if len(cc.Tables) == 1 {
+		cc.Tables[0].StartLocation.Location = Latest
+	}
+	return cc
+}
+
+// Specify that a single-table consumer should start at the next change stream
+// event at or after a specific timestamp. This is a convenience
+// method to simplify single-table consumer creation.
+func (cc *ChangeConsumerConfig) StartTime(startTime *time.Time) *ChangeConsumerConfig {
+	// TODO: if not exactly one table, set error
+	if len(cc.Tables) == 1 {
+		cc.Tables[0].StartLocation.Location = AtTime
+		cc.Tables[0].StartLocation.StartTime = startTime
+	}
+	return cc
+}
+
+// Set an optional group ID. If this is nonempty, the consumer will join a "group" based on
+// the ID. When multiple consumers use the same group ID, the NoSQL system will attempt
+// to evenly distribute data for the specified tables evenly across all consumers in
+// the group. Data to any one consumer will be consistently ordered for records using
+// the same shard key. That is, different consumers will not get data for the same shard key.
+// Any group ID used should be sufficiently unique to avoid unintended alterations to
+// existing groups.
+//
+// The Tables in this config will override any previous tables that other
+// existing consumers in this group have specified. Any tables that are being
+// currently consumed by this group that are not in the specified Tables list will
+// have their consumption stopped.
+//
+// If a table is already in an existing group, this consumer's start location will
+// be FirstUncommitted. If it is not in the existing group (or if this the
+// first consumer in this group), the StartLocation in the table config will be used.
+//
+// If the group ID is empty (the default), no grouping is assumed. This consumer will
+// always get all of the data for all of the tables specified in the config.
+func (cc *ChangeConsumerConfig) Group(groupID string) *ChangeConsumerConfig {
+	cc.GroupID = groupID
+	return cc
+}
+
+// Specify the interval to use for automatic commits. If this value is zero, every call
+// to Poll() will automatically mark the data returned by the previous Poll() as committed.
+// Otherwise, data read by calls to Poll() will be automatically committed at least as
+// often as specified. Calling this method implies setting AutoCommit.
+func (cc *ChangeConsumerConfig) CommitInterval(interval time.Duration) *ChangeConsumerConfig {
+	cc.ManualCommit = false
+	cc.AutoCommitInterval = interval
+	return cc
+}
+
+// Specify manual commit mode for the consumer. The system will not
+// automatically commit messages consumed by Poll(). It is the responsibility of the
+// application to call Commit() on a timely basis after consumed data has been processed.
+func (cc *ChangeConsumerConfig) CommitManual() *ChangeConsumerConfig {
+	cc.ManualCommit = true
+	return cc
+}
+
+func (c *Client) CreateChangeConsumerConfig() *ChangeConsumerConfig {
+	return &ChangeConsumerConfig{
+		GroupID:      "",
+		ManualCommit: false,
+	}
 }
 
 type ChangeCursorGroup struct {
 	// array of change cursors
-	Cursors []ChangeCursor `json:"cursors"`
+	// TODO Cursors []ChangeCursor `json:"cursors"`
+	// group id
+	GroupID string
 }
 
-// Get Change Data Capture messages based on a cursor. The table(s) in the cursor must have
-// already been enabled for Change Data Capture.
-// limit: max number of change events to return in the message
-// waitTime: max amount of time to wait for messages
-func (c *Client) GetCDCMessages(cursor *ChangeCursorGroup, limit int, waitTime time.Duration) (*ChangeMessage, error) {
+// The main struct used for Change Data Capture
+type ChangeConsumer struct {
+	group  ChangeCursorGroup
+	config ChangeConsumerConfig
+}
+
+func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeConsumer, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
 }
 
+func (c *Client) CreateChangeConsumerAtCheckpoint(checkpoint []byte) (*ChangeConsumer, error) {
+	// TODO
+	return nil, fmt.Errorf("function not implemented yet")
+}
+
+// Get Change Data Capture messages for a consumer.
+// limit: max number of change events to return in the message
+// waitTime: max amount of time to wait for messages
+func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessage, error) {
+	// TODO
+	return nil, fmt.Errorf("function not implemented yet")
+}
+
+func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
+	return fmt.Errorf("function not implemented yet")
+}
+
+func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
+
+func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
+
+func (cc *ChangeConsumer) GetCheckpoint() []byte {
+	// TODO
+	return nil
+}
+
+func (cc *ChangeConsumer) PositionAtCheckpoint(checkpoint []byte) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
+
 func (c *Client) simpleCDCTest() error {
 
-	// Create a cursor for a single table.
-	cursor := &ChangeCursorGroup{Cursors: []ChangeCursor{
-		{TableName: "test_table", CursorType: TrimHorizon},
-	}}
+	// Create a single (non-grouped) consumer for a single table.
+	config := c.CreateChangeConsumerConfig().TableName("test_table")
+	consumer, err := c.CreateChangeConsumer(config)
+	if err != nil {
+		return fmt.Errorf("error creating change consumer: %v", err)
+	}
 
 	// read data from the stream, returning only if the stream has ended.
 	for {
 		// wait up to one second to read up to 10 events
-		message, err := c.GetCDCMessages(cursor, 10, time.Duration(1*time.Second))
+		message, err := consumer.Poll(10, time.Duration(1*time.Second))
 		if err != nil {
 			return fmt.Errorf("error getting CDC messages: %v", err)
 		}
 		// If the time elapsed but there were no messages to read, the returned message
 		// will have an empty array of events.
 		fmt.Printf("Received message: %v", message)
-
-		// The message contains a cursor pointing to the next messages in the CDC stream
-		cursor = &message.CursorGroup
 	}
 }
 
 func (c *Client) multiTableCDCTest() error {
 
-	var cursor *ChangeCursorGroup
-	// if a previous run of this program wrote a checkpoint file,
-	// read that and use its data as a group cursor for our CDC consumer.
-	fileName := "/tmp/cdc_cursor.json"
-	infile, err := os.Open(fileName)
-	if err == nil {
-		var cg ChangeCursorGroup
-		decoder := json.NewDecoder(infile)
-		err = decoder.Decode(&cg)
-		infile.Close()
-		if err != nil {
-			return fmt.Errorf("error decoding cursor from %s: %v", fileName, err)
-		}
-		cursor = &cg
-	} else {
-		// Create a new cursor group for two tables, starting with the most current entry in
-		// each partition of each table.
-		cursor = &ChangeCursorGroup{
-			Cursors: []ChangeCursor{
-				{TableName: "client_info", CursorType: Latest},
-				{TableName: "location_data", CursorType: Latest},
-			},
-		}
+	// Create a new consumer for two tables, starting with the most current entry in
+	// each table's CDC stream.
+	config := c.CreateChangeConsumerConfig().
+		AddTable("client_info", "", Latest, nil).
+		AddTable("location_data", "", Latest, nil)
+	consumer, err := c.CreateChangeConsumer(config)
+	if err != nil {
+		return err
 	}
 
-	// Read 10 messages from the CDC stream. Write a checkpoint after every message received.
+	// Read 10 messages from the CDC stream.
 	for i := 0; i < 10; i++ {
 		// wait up to one second to read up to 10 events
-		message, err := c.GetCDCMessages(cursor, 10, time.Duration(1*time.Second))
+		message, err := consumer.Poll(10, time.Duration(1*time.Second))
 		if err != nil {
 			return fmt.Errorf("error getting CDC messages: %v", err)
 		}
 		// If the time elapsed but there were no messages to read, the returned message
 		// will have an empty array of events.
 		fmt.Printf("Received message: %v", message)
-		// The message contains a cursor pointing to the next messages in the CDC stream
-		cursor = &message.CursorGroup
-
-		// write a file to enable starting this program again from a checkpoint
-		jsonData, err := json.Marshal(*cursor)
-		if err != nil {
-			return fmt.Errorf("can't marshal cursor to JSON: %v", err)
-		}
-		outfile, err := os.Create(fileName)
-		if err != nil {
-			return fmt.Errorf("can't open checkpoint file %s: %v", fileName, err)
-		}
-		_, err = outfile.Write(jsonData)
-		outfile.Close()
-		if err != nil {
-			return fmt.Errorf("can't write checkpoint data to file %s: %v", fileName, err)
-		}
 	}
-
-	// The JSON representation of the cursor group may now be something like the
-	// following (assuming in this case the two tables have 2 partititons each):
-	// {
-	//   "cursors": [
-	//     {
-	//       "tableName": "client_info",
-	//       "tableOCID": "aaagfjdfjddfk758485",
-	//       "partitionID": "2443hxdF",
-	//       "offset": 128548,
-	//       "cursorType": "AtOffset"
-	//     },
-	//     {
-	//       "tableName": "client_info",
-	//       "tableOCID": "aaagfjdfjddfk758485",
-	//       "partitionID": "54664hdF",
-	//       "offset": 129024,
-	//       "cursorType": "AtOffset"
-	//     },
-	//     {
-	//       "tableName": "location_data",
-	//       "tableOCID": "aaagfjgdsgds943fkjs",
-	//       "partitionID": "hf73kjdsiX",
-	//       "offset": 3404,
-	//       "cursorType": "AtOffset"
-	//     },
-	//     {
-	//       "tableName": "location_data",
-	//       "tableOCID": "aaagfjgdsgds943fkjs",
-	//       "partitionID": "84537hf",
-	//       "offset": 17808,
-	//       "cursorType": "AtOffset"
-	//     }
-	//   ]
-	// }
-
-	// This function can now be run again, picking up where it left off from the
-	// latest checkpoint file.
 
 	return nil
 }
