@@ -266,7 +266,7 @@ type ChangeLocationType string
 const (
 	// Start consuming at the first uncommitted message in the stream. This is
 	// the default.
-	FirstUncommitted ChangeLocationType = "nextUncommitted"
+	FirstUncommitted ChangeLocationType = "firstUncommitted"
 
 	// Start consuming from the earliest (oldest) available message in the stream.
 	Earliest ChangeLocationType = "earliest"
@@ -303,51 +303,64 @@ type ChangeConsumerConfig struct {
 	// Tables to consume from. This array must have at least one table config defined.
 	Tables []ChangeConsumerTableConfig `json:"tables"`
 
-	// Optional group ID. If this is nonempty, the consumer will join a "group" based on
-	// the ID. When multiple consumers use the same group ID, the NoSQL system will attempt
+	// The group ID. In NoSQL Change Data Capture, every consumer is part of a "group".
+	// The group may be a single consumer, or may have multiple consumers.
+	//
+	// When multiple consumers use the same group ID, the NoSQL system will attempt
 	// to evenly distribute data for the specified tables evenly across all consumers in
 	// the group. Data to any one consumer will be consistently ordered for records using
 	// the same shard key. That is, different consumers will not get data for the same shard key.
 	// Any group ID used should be sufficiently unique to avoid unintended alterations to
 	// existing groups.
 	//
-	// The Tables in this struct will override any previous tables that other
+	// If there is only one consumer in a group, this consumer will
+	// always get all of the data for all of the tables specified in the group.
+	//
+	// NOTE: The Tables in this config will override any previous tables that other
 	// existing consumers in this group have specified. Any tables that are being
 	// currently consumed by this group that are not in the specified Tables list will
 	// have their consumption stopped.
 	//
-	// If a table is already in an existing group, this consumer's start location will
-	// be FirstUncommitted. If it is not in the existing group (or if this the
+	// If a table is already being consumed by other consumers in this group, this
+	// consumer's start location for the table will be FirstUncommitted (the start location
+	// specified in the config is ignored). If a table is not in the existing group (or if this the
 	// first consumer in this group), the StartLocation in the table config will be used.
-	//
-	// If this field is empty, no grouping is assumed. This consumer will always get all
-	// of the data for all of the tables specified.
-	GroupID string `json:"groupId,omitempty"`
+	// This behavior can be changed by setting ForceReset to true in the config.
+	GroupId string `json:"groupId,omitempty"`
 
 	// Specify the commit mode for the consumer. If this value is true, the system will not
 	// automatically commit messages consumed by Poll(). It is the responsibility of the
 	// application to call Commit() on a timely basis after consumed data has been processed.
-	// If this value is false (the default), commits will be done automatically based on the
-	// AutoCommitInterval defined below.
+	// If this value is false (the default), commits will be done automatically: every call
+	// to Poll() will automatically mark the data returned by the previous Poll() as committed.
 	ManualCommit bool `json:"manualCommit"`
 
-	// Specify the interval to use for automatic commits. If this value is zero, every call
-	// to Poll() will automatically mark the data returned by the previous Poll() as committed.
-	// Otherwise, data read by calls to Poll() will be automatically committed at least as
-	// often as specified.
-	AutoCommitInterval time.Duration `json:"autoCommitInterval"`
+	// Force resetting the start location for the consumer(s) in the group. This is typically
+	// only used when a consumer group is completely stopped and a new group with the same
+	// group ID is to be started at a given start location (Earliest, Latest, etc).
+	//
+	// This setting will remove any existing consumers' committed locations.
+	//
+	// NOTE: Usage of this setting is dangerous, as any currently running consumers in the group
+	// will have their current and committed locations reset unexpectedly.
+	ForceReset bool `json:"-"`
 }
 
-// Add a table to the consumer config.
+// AddTable adds a table to the consumer config. The table must have already been
+// CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
 //
-// Table name is required.
+// tablename: required.
 //
-// Compartment OCID is optional. If empty, the default compartment
+// compartmentOCID: This is optional. If empty, the default compartment OCID
 // for the tenancy is used.
 //
-// Start location is optional. If empty, FirstUncommitted is used.
+// startLocation: Specify the position of the first element to read in the change stream.
+// If a table is already being consumed by other consumers in this group, this
+// consumer's start location for the table will be FirstUncommitted (the start location
+// specified in the config is ignored). If a table is not in the existing group (or if this the
+// first consumer in this group), the startLocation in the table config will be used.
 //
-// If start location specifies AtTime, the startTime field is required to be non-nil.
+// startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
 func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) *ChangeConsumerConfig {
 	sl := ChangeStartLocation{
 		Location:  startLocation,
@@ -362,103 +375,68 @@ func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID strin
 	return cc
 }
 
-// Specify a single table name for the consumer. This is a convenience
-// method to simplify single-table consumer creation.
-func (cc *ChangeConsumerConfig) TableName(tableName string) *ChangeConsumerConfig {
-	// TODO: if already have a table, set error
-	cc.AddTable(tableName, "", FirstUncommitted, nil)
-	return cc
-}
-
-// Specify a compartment OCID for a single-table consumer. This is a convenience
-// method to simplify single-table consumer creation.
-func (cc *ChangeConsumerConfig) CompartmentOCID(compartmentOCID string) *ChangeConsumerConfig {
-	// TODO: if not exactly one table, set error
-	if len(cc.Tables) == 1 {
-		cc.Tables[0].CompartmentOCID = compartmentOCID
-	}
-	return cc
-}
-
-// Specify that a single-table consumer should start from the earliest (oldest)
-// event in the change stream for the table. This is a convenience
-// method to simplify single-table consumer creation.
-func (cc *ChangeConsumerConfig) Earliest() *ChangeConsumerConfig {
-	// TODO: if not exactly one table, set error
-	if len(cc.Tables) == 1 {
-		cc.Tables[0].StartLocation.Location = Earliest
-	}
-	return cc
-}
-
-// Specify that a single-table consumer should start from the latest (newest)
-// event in the change stream for the table. This is a convenience
-// method to simplify single-table consumer creation.
-func (cc *ChangeConsumerConfig) Latest() *ChangeConsumerConfig {
-	// TODO: if not exactly one table, set error
-	if len(cc.Tables) == 1 {
-		cc.Tables[0].StartLocation.Location = Latest
-	}
-	return cc
-}
-
-// Specify that a single-table consumer should start at the next change stream
-// event at or after a specific timestamp. This is a convenience
-// method to simplify single-table consumer creation.
-func (cc *ChangeConsumerConfig) StartTime(startTime *time.Time) *ChangeConsumerConfig {
-	// TODO: if not exactly one table, set error
-	if len(cc.Tables) == 1 {
-		cc.Tables[0].StartLocation.Location = AtTime
-		cc.Tables[0].StartLocation.StartTime = startTime
-	}
-	return cc
-}
-
-// Set an optional group ID. If this is nonempty, the consumer will join a "group" based on
-// the ID. When multiple consumers use the same group ID, the NoSQL system will attempt
+// Specify the group ID. In NoSQL Change Data Capture, every consumer is part of a "group".
+// The group may have a single consumer, or may have multiple consumers.
+//
+// When there is only a single consumer in a group, this consumer will
+// always get all of the data for all of the tables specified in the group.
+//
+// When multiple consumers use the same group ID, the NoSQL system will attempt
 // to evenly distribute data for the specified tables evenly across all consumers in
 // the group. Data to any one consumer will be consistently ordered for records using
 // the same shard key. That is, different consumers will not get data for the same shard key.
 // Any group ID used should be sufficiently unique to avoid unintended alterations to
 // existing groups.
 //
-// The Tables in this config will override any previous tables that other
+// NOTE: The Tables in this config will override any previous tables that other
 // existing consumers in this group have specified. Any tables that are being
 // currently consumed by this group that are not in the specified Tables list will
-// have their consumption stopped.
+// have their consumption stopped: calls to [ChangeConsumer.Poll] from existing consumers will
+// no longer contain data for tables not specified in this config.
 //
-// If a table is already in an existing group, this consumer's start location will
-// be FirstUncommitted. If it is not in the existing group (or if this the
+// If a table is already being consumed by other consumers in this group, this
+// consumer's start location for the table will be FirstUncommitted (the start location
+// specified in the config is ignored). If a table is not in the existing group (or if this the
 // first consumer in this group), the StartLocation in the table config will be used.
-//
-// If the group ID is empty (the default), no grouping is assumed. This consumer will
-// always get all of the data for all of the tables specified in the config.
-func (cc *ChangeConsumerConfig) Group(groupID string) *ChangeConsumerConfig {
-	cc.GroupID = groupID
+// This behavior can be changed by specifying ResetStartLocation() in the config.
+func (cc *ChangeConsumerConfig) GroupID(groupID string) *ChangeConsumerConfig {
+	cc.GroupId = groupID
 	return cc
 }
 
-// Specify the interval to use for automatic commits. If this value is zero, every call
-// to Poll() will automatically mark the data returned by the previous Poll() as committed.
-// Otherwise, data read by calls to Poll() will be automatically committed at least as
-// often as specified. Calling this method implies setting AutoCommit.
-func (cc *ChangeConsumerConfig) CommitInterval(interval time.Duration) *ChangeConsumerConfig {
+// Specify automatic commit mode for the consumer. This is the default if not specified.
+// In this mode, commits will be done automatically: every call
+// to [ChangeConsumer.Poll] will automatically mark the data returned by the previous
+// call to [ChangeConsumer.Poll] as committed.
+func (cc *ChangeConsumerConfig) CommitAutomatic() *ChangeConsumerConfig {
 	cc.ManualCommit = false
-	cc.AutoCommitInterval = interval
 	return cc
 }
 
 // Specify manual commit mode for the consumer. The system will not
-// automatically commit messages consumed by Poll(). It is the responsibility of the
-// application to call Commit() on a timely basis after consumed data has been processed.
+// automatically commit messages consumed by [ChangeConsumer.Poll]. It is the responsibility
+// of the application to call [ChangeConsumer.Commit] on a timely basis after consumed data has been processed.
 func (cc *ChangeConsumerConfig) CommitManual() *ChangeConsumerConfig {
 	cc.ManualCommit = true
 	return cc
 }
 
+// Force resetting the start location for the consumer(s) in the group. This is typically
+// only used when a consumer group is completely stopped and a new group with the same
+// group ID is to be started at a given start location (Earliest, Latest, etc).
+//
+//	NOTE: Usage of this setting is dangerous, as any currently running consumers in the group
+//	      will have their current and committed locations reset unexpectedly.
+//
+// This setting will remove any existing consumers' committed locations.
+func (cc *ChangeConsumerConfig) ForceResetStartLocation() *ChangeConsumerConfig {
+	cc.ForceReset = true
+	return cc
+}
+
 func (c *Client) CreateChangeConsumerConfig() *ChangeConsumerConfig {
 	return &ChangeConsumerConfig{
-		GroupID:      "",
+		GroupId:      "",
 		ManualCommit: false,
 	}
 }
@@ -476,14 +454,36 @@ type ChangeConsumer struct {
 	config ChangeConsumerConfig
 }
 
+// Create a Change Data Capture consumer based on configuration.
+//
+// This will make a server-side call to validate all configuration and
+// establish server-side state for the consumer.
+//
+// If this consumer will be joining a group that has other consumers
+// currently polling data, this call will trigger a rebalance operation to
+// redistribute change data across this and all other active consumers.
+// Note that the rebalance may not happen immediately; in the NoSQL system,
+// rebalanace operations are rate limitied to avoid excessive resource
+// usage when many consumers are being added or removed from a group.
 func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeConsumer, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
 }
 
-func (c *Client) CreateChangeConsumerAtCheckpoint(checkpoint []byte) (*ChangeConsumer, error) {
-	// TODO
-	return nil, fmt.Errorf("function not implemented yet")
+// Create a single-table consumer with all default parameters.
+//
+// This is a convenience method for crating a consumer for a single table.
+// It is equivalent to:
+//
+//	config := c.CreateChangeConsumerConfig().
+//	    AddTable(tableName, "", FirstUncommitted, nil).
+//	    GroupID(groupID)
+//	consumer, err := c.CreateChangeConsumer(config)
+func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeConsumer, error) {
+	config := c.CreateChangeConsumerConfig().
+		AddTable(tableName, "", FirstUncommitted, nil).
+		GroupID(groupID)
+	return c.CreateChangeConsumer(config)
 }
 
 // Get Change Data Capture messages for a consumer.
@@ -494,35 +494,125 @@ func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessag
 	return nil, fmt.Errorf("function not implemented yet")
 }
 
+// Mark the data from the most recent call to [ChangeConsumer.Poll] as committed: the consumer has
+// completely processed the data and it should be considered "consumed".
+//
+// This method is only necessary when using manual commit mode. Otherwise,
+// in auto commit mode, the commit is implied for all previous data every time [ChangeConsumer.Poll]
+// is called.
 func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 	return fmt.Errorf("function not implemented yet")
 }
 
+// AddTable adds a table to an existing consumer. The table must have already been
+// CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
+//
+// tablename: required.
+//
+// compartmentOCID: This is optional. If empty, the default compartment OCID
+// for the tenancy is used.
+//
+// startLocation: specify the position of the first element to read in the change stream.
+// If a table is already being consumed by other consumers in this group, this
+// consumer's start location for the table will be FirstUncommitted (the start location
+// specified in the config is ignored). If a table is not in the existing group (or if this the
+// first consumer in this group), the startLocation in the table config will be used.
+//
+// startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
 func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) error {
 	// TODO
 	return fmt.Errorf("function not implemented yet")
 }
 
+// RemoveTable removes a table from an existing change consumer group.
+// If the given table does not exist in the group, this call is ignored and
+// will return no error.
+//
+// tablename: required.
+//
+// compartmentOCID: This is optional. If empty, the default compartment OCID
+// for the tenancy is used.
 func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) error {
 	// TODO
 	return fmt.Errorf("function not implemented yet")
 }
 
-func (cc *ChangeConsumer) GetCheckpoint() []byte {
-	// TODO
-	return nil
-}
-
-func (cc *ChangeConsumer) PositionAtCheckpoint(checkpoint []byte) error {
+// Close and release all resources for this consumer.
+//
+// Call this method if the application does not intend to continue using
+// this consumer. If this consumer was part of a group, this will trigger a
+// rebalance such that data that was being directed to this consumer will
+// now be redistributed to other active consumers.
+//
+// It is not required to call this method. If a consumer has not called [ChangeConsumer.Poll]
+// within the maximum poll period, it will be considered closed by the system and a
+// rebalance may be triggered at that point.
+func (cc *ChangeConsumer) Close() error {
 	// TODO
 	return fmt.Errorf("function not implemented yet")
 }
 
-func (c *Client) simpleCDCTest() error {
+// Get the minimum number of consumers needed in order to process all change
+// data given a set of tables and start location, and a desired amount of time to process
+// the data.
+//
+// This function returns an estimate based only on the amount of data that exists
+// in the change streams for the given tables, and the fastest rate that the system can
+// deliver that data to each consumer. It does not take into account any additional
+// processing time used by the consumer applications.
+//
+// Note: if a groupID is specified in the config, and the start location in the config is
+// NextUncommitted, this will return the count based on the remaining data that has yet to
+// be read and committed for the existing group.
+func (c *Client) GetMinimumChangeConsumerCount(config *ChangeConsumerConfig, processTime time.Duration) (int, error) {
+	// TODO
+	return 0, fmt.Errorf("function not implemented yet")
+}
 
+// AddTableToChangeConsumerGroup adds a table to an existing change consumer group
+// based on the groupID. The table must have already been
+// CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
+// If the given group ID does not exist in the system, this call will return an error.
+// If the given table already exists in the group, this call is ignored and
+// will return no error.
+//
+// groupID: required.
+//
+// tablename: required.
+//
+// compartmentOCID: This is optional. If empty, the default compartment OCID
+// for the tenancy is used.
+//
+// startLocation: Specify the position of the first element to read in the change stream.
+//
+// startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
+func (c *Client) AddTableToChangeConsumerGroup(groupID string, tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
+
+// RemoveTableFromChangeConsumerGroup removes a table from an existing change consumer group
+// based on the groupID.
+// If the given group ID does not exist in the system, this call will return an error.
+// If the given table does not exist in the group, this call is ignored and
+// will return no error.
+//
+// groupID: required.
+//
+// tablename: required.
+//
+// compartmentOCID: This is optional. If empty, the default compartment OCID
+// for the tenancy is used.
+func (c *Client) RemoveTableFromChangeConsumerGroup(groupID string, tableName string, compartmentOCID string) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
+
+// Get the minimum number of consumers needed in order to process all change
+
+func (c *Client) simpleCDCTest() error {
 	// Create a single (non-grouped) consumer for a single table.
-	config := c.CreateChangeConsumerConfig().TableName("test_table")
-	consumer, err := c.CreateChangeConsumer(config)
+	consumer, err := c.CreateSimpleChangeConsumer("test_table", "group1")
 	if err != nil {
 		return fmt.Errorf("error creating change consumer: %v", err)
 	}

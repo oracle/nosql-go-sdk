@@ -9,7 +9,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -40,11 +39,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	err = runCDCCheckpoint(client)
-	if err != nil {
-		fmt.Println(err)
-	}
 }
 
 // Simple example showing how to create a single consumer for
@@ -59,17 +53,8 @@ func runCDCSimple(client *nosqldb.Client) error {
 	// Start with the earliest message available in the change stream.
 	// Automatically commit polled messages on 10 second intervals.
 	config := client.CreateChangeConsumerConfig().
-		TableName("customer_data").
-		// Compartment(string)
-		// AddTable(tablename, compartment, startat, startdata)
-		Earliest().
-		// Latest()
-		// FirstUncommitted()
-		// AtTime(time.Time)
-		CommitInterval(time.Duration(10 * time.Second))
-		// CommitOnPoll()
-		// CommitManual()
-		// GroupID()
+		AddTable("customer_data", "", nosqldb.Earliest, nil).
+		GroupID("my_group")
 
 	// Create the consumer. This will make a server side call to validate
 	// and establish the consumer information.
@@ -127,9 +112,8 @@ func runCDCGroupConsumer(client *nosqldb.Client) error {
 
 	// Create a consumer config that will be used to create the consumers.
 	config := client.CreateChangeConsumerConfig().
-		TableName(tableName).
-		Earliest().
-		Group("test_group")
+		AddTable(tableName, "", nosqldb.Earliest, nil).
+		GroupID("test_group")
 
 	// Create 5 consumer goroutines to consume data from the table. The consumers will
 	// be created with a common Group ID, so change data will be evenly distributed
@@ -179,8 +163,7 @@ func runGroupConsumer(consumer *nosqldb.ChangeConsumer) {
 func runCDCAddTable(client *nosqldb.Client) error {
 
 	// start with a consumer for one table
-	consumer, err := client.CreateChangeConsumer(
-		client.CreateChangeConsumerConfig().TableName("table1"))
+	consumer, err := client.CreateSimpleChangeConsumer("table1", "group1")
 	if err != nil {
 		return fmt.Errorf("error creating consumer: %v", err)
 	}
@@ -210,78 +193,6 @@ func runCDCAddTable(client *nosqldb.Client) error {
 	printCDCMessage(message)
 
 	return nil
-}
-
-// Example function that reads CDC checkpoint info from a file on
-// startup and writes the checkpoint info to the file as it reads
-// messages from the CDC stream.
-//
-// NOTE: this is not the recommended way to manage consumer
-// positions. Instead, applications should either use the auto-commit
-// feature, or call the manual commit methods to have the NoSQL
-// system manage the positions of committed data internally.
-func runCDCCheckpoint(client *nosqldb.Client) error {
-
-	// Assume table "customer_data" exists already and is CDC enabled
-	// Assume table "insight_data" exists already and is CDC enabled
-	//
-	var consumer *nosqldb.ChangeConsumer
-	// if a previous run of this program wrote a checkpoint file,
-	// read that and use its data as a checkpoint for our CDC consumer.
-	fileName := "/tmp/cdc_cursor.json"
-	bytes, err := os.ReadFile(fileName)
-	if err == nil {
-		consumer, err = client.CreateChangeConsumerAtCheckpoint(bytes)
-		if err != nil {
-			return fmt.Errorf("error creating consumer from %s: %v", fileName, err)
-		}
-	} else {
-		// Create a new consumer for two tables, starting with the most current entry in
-		// each table.
-		config := client.CreateChangeConsumerConfig().
-			AddTable("client_info", "", nosqldb.Latest, nil).
-			AddTable("location_data", "", nosqldb.Latest, nil)
-		consumer, err = client.CreateChangeConsumer(config)
-		if err != nil {
-			return fmt.Errorf("error creating consumer for two tables: %v", err)
-		}
-	}
-
-	// Read 10 messages from the CDC stream. Write a checkpoint after every message received.
-	for i := 0; i < 10; i++ {
-		// wait up to one second to read up to 10 events
-		message, err := consumer.Poll(10, time.Duration(1*time.Second))
-		if err != nil {
-			return fmt.Errorf("error getting CDC messages: %v", err)
-		}
-		// If the time elapsed but there were no messages to read, the returned message
-		// will have an empty array of events.
-
-		fmt.Printf("Received message: %v", message)
-
-		printCDCMessage(message)
-
-		// write a file to enable starting this program again from a checkpoint
-		// Note: the checkpoint data is a byte representation of a JSON string.
-		// The data contained in the checkpoint is intended to be opaque to the
-		// application; however, it may be used for tracing or debugging purposes.
-		checkpoint := consumer.GetCheckpoint()
-		outfile, err := os.Create(fileName)
-		if err != nil {
-			return fmt.Errorf("can't open checkpoint file %s: %v", fileName, err)
-		}
-		_, err = outfile.Write(checkpoint)
-		outfile.Close()
-		if err != nil {
-			return fmt.Errorf("can't write checkpoint data to file %s: %v", fileName, err)
-		}
-	}
-
-	// This function can now be run again, picking up where it left off from the
-	// latest checkpoint file.
-
-	return nil
-
 }
 
 // Function to print all contents of a CDC stream message
