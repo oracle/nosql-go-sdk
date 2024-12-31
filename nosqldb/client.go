@@ -506,17 +506,14 @@ func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 
 // AddTable adds a table to an existing consumer. The table must have already been
 // CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
+// If the given table already exists in the group, this call is ignored and will return no error.
 //
 // tablename: required.
 //
 // compartmentOCID: This is optional. If empty, the default compartment OCID
 // for the tenancy is used.
 //
-// startLocation: specify the position of the first element to read in the change stream.
-// If a table is already being consumed by other consumers in this group, this
-// consumer's start location for the table will be FirstUncommitted (the start location
-// specified in the config is ignored). If a table is not in the existing group (or if this the
-// first consumer in this group), the startLocation in the table config will be used.
+// startLocation: Specify the position of the first element to read in the change stream.
 //
 // startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
 func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) error {
