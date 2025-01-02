@@ -51,7 +51,7 @@ func runCDCSimple(client *nosqldb.Client) error {
 
 	// Create a consumer config that will be used to create the consumer.
 	// Start with the earliest message available in the change stream.
-	// Automatically commit polled messages on 10 second intervals.
+	// Automatically commit previously polled messages on each subsequent poll.
 	config := client.CreateChangeConsumerConfig().
 		AddTable("customer_data", "", nosqldb.Earliest, nil).
 		GroupID("my_group")
@@ -65,15 +65,15 @@ func runCDCSimple(client *nosqldb.Client) error {
 
 	// Loop reading messages from the consumer
 	for {
-		// wait up to one second to read up to 10 events
-		message, err := consumer.Poll(10, time.Duration(1*time.Second))
+		// wait up to one second to read up to 10 messages
+		bundle, err := consumer.Poll(10, time.Duration(1*time.Second))
 		if err != nil {
 			// This would only happen if the table is dropped and all messages
 			// have been consumed
 			return fmt.Errorf("error polling for CDC messages: %v", err)
 		}
 		// Do something with message
-		printCDCMessage(message)
+		printCDCMessageBundle(bundle)
 
 		//TODO: example of manual commit
 	}
@@ -146,8 +146,8 @@ func runGroupConsumer(consumer *nosqldb.ChangeConsumer) {
 
 	// Loop reading messages from the consumer
 	for {
-		// wait up to one second to read up to 10 events
-		message, err := consumer.Poll(10, time.Duration(1*time.Second))
+		// wait up to one second to read up to 10 messages
+		bundle, err := consumer.Poll(10, time.Duration(1*time.Second))
 		if err != nil {
 			// This would only happen if the table is dropped and all messages
 			// have been consumed
@@ -155,7 +155,7 @@ func runGroupConsumer(consumer *nosqldb.ChangeConsumer) {
 			return
 		}
 		// Do something with message
-		printCDCMessage(message)
+		printCDCMessageBundle(bundle)
 	}
 }
 
@@ -169,14 +169,14 @@ func runCDCAddTable(client *nosqldb.Client) error {
 	}
 
 	// Read one message. This could be in a loop reading, etc...
-	// wait up to one second to read up to 10 events
-	message, err := consumer.Poll(10, time.Duration(1*time.Second))
+	// wait up to one second to read up to 10 messages
+	bundle, err := consumer.Poll(10, time.Duration(1*time.Second))
 	if err != nil {
 		// This should only happen if the table has since been dropped or
 		// CDC has been disabled (not likely in the few ms after consumer creation)
 		return fmt.Errorf("error getting CDC messages: %v", err)
 	}
-	printCDCMessage(message)
+	printCDCMessageBundle(bundle)
 
 	// Add a table to the consumer.
 	err = consumer.AddTable("table_2", "", nosqldb.FirstUncommitted, nil)
@@ -184,40 +184,46 @@ func runCDCAddTable(client *nosqldb.Client) error {
 		return fmt.Errorf("error adding table to consumer: %v", err)
 	}
 
-	// The next Poll call may now contain events for both tables
-	message, err = consumer.Poll(10, time.Duration(1*time.Second))
+	// The next Poll call may now contain messages for both tables
+	bundle, err = consumer.Poll(10, time.Duration(1*time.Second))
 	if err != nil {
 		// This will happen if the second table doesn't exist or isn't enabled for CDC
 		return fmt.Errorf("error getting CDC messages: %v", err)
 	}
-	printCDCMessage(message)
+	printCDCMessageBundle(bundle)
 
 	return nil
 }
 
-// Function to print all contents of a CDC stream message
-func printCDCMessage(message *nosqldb.ChangeMessage) {
-	fmt.Printf("Message: events remaining = %v", message.EventsRemaining)
+// Function to print all contents of a CDC stream message bundle
+func printCDCMessageBundle(bundle *nosqldb.ChangeMessageBundle) {
+	fmt.Printf("MessageBundle: messages remaining = %v", bundle.MessagesRemaining)
 
-	// ChangeEvents is an array of changes for the message
-	for i := 0; i < len(message.ChangeEvents); i++ {
-		event := message.ChangeEvents[i]
-		fmt.Printf("Change event: \n")
-		fmt.Printf(" table name: %s", event.TableName)
-		fmt.Printf(" table compartment: %s", event.CompartmentOCID)
-		// type will be Put or Delete
-		fmt.Printf(" change type: %v", event.ChangeType)
-		fmt.Printf(" modification time: %v", event.ModificationTime)
-		fmt.Printf(" expiration time: %v", event.ExpirationTime)
-		fmt.Printf(" current image:\n")
-		fmt.Printf("   key: %v", event.CurrentImage.RecordKey)
-		fmt.Printf("   value: %v", event.CurrentImage.RecordValue)
-		fmt.Printf("   metadata: %v", event.CurrentImage.RecordMetadata)
-		if event.BeforeImage != nil {
-			fmt.Printf(" before image:\n")
-			fmt.Printf("   key: %v", event.BeforeImage.RecordKey)
-			fmt.Printf("   value: %v", event.BeforeImage.RecordValue)
-			fmt.Printf("   metadata: %v", event.BeforeImage.RecordMetadata)
+	// ChangeMessages is an array of messages for the bundle
+	for m := 0; m < len(bundle.ChangeMessages); m++ {
+		message := bundle.ChangeMessages[m]
+		// Each message will typically have one event, unless group-by-transaction
+		// is enabled on the stream and this message represents multiple events in a
+		// single transaction
+		for i := 0; i < len(message.ChangeEvents); i++ {
+			event := message.ChangeEvents[i]
+			fmt.Printf("Change event: \n")
+			fmt.Printf(" table name: %s", event.TableName)
+			fmt.Printf(" table compartment: %s", event.CompartmentOCID)
+			// type will be Put or Delete
+			fmt.Printf(" change type: %v", event.ChangeType)
+			fmt.Printf(" modification time: %v", event.ModificationTime)
+			fmt.Printf(" expiration time: %v", event.ExpirationTime)
+			fmt.Printf(" current image:\n")
+			fmt.Printf("   key: %v", event.CurrentImage.RecordKey)
+			fmt.Printf("   value: %v", event.CurrentImage.RecordValue)
+			fmt.Printf("   metadata: %v", event.CurrentImage.RecordMetadata)
+			if event.BeforeImage != nil {
+				fmt.Printf(" before image:\n")
+				fmt.Printf("   key: %v", event.BeforeImage.RecordKey)
+				fmt.Printf("   value: %v", event.BeforeImage.RecordValue)
+				fmt.Printf("   metadata: %v", event.BeforeImage.RecordMetadata)
+			}
 		}
 	}
 }

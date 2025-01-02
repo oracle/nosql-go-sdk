@@ -201,6 +201,17 @@ const (
 	Delete
 )
 
+type ChangeImage struct {
+	// RecordKey specifies the fields in the record that make up the primary key.
+	RecordKey *types.MapValue
+
+	// RecordValue specifies the fields of the record. This will be nil if ChangeType == Delete.
+	RecordValue *types.MapValue
+
+	// RecordMetadata represents additional data for the record. Its value is TBD.
+	RecordMetadata map[string]interface{}
+}
+
 // ChangeEvent represents a single Change Data Capture event.
 type ChangeEvent struct {
 
@@ -235,30 +246,28 @@ type ChangeEvent struct {
 	ExpirationTime time.Time
 }
 
-type ChangeImage struct {
-	// RecordKey specifies the fields in the record that make up the primary key.
-	RecordKey *types.MapValue
-
-	// RecordValue specifies the fields of the record. This will be nil if ChangeType == Delete.
-	RecordValue *types.MapValue
-
-	// RecordMetadata represents additional data for the record. Its value is TBD.
-	RecordMetadata map[string]interface{}
+// ChangeMessage represents a single message from the change stream
+type ChangeMessage struct {
+	// ChangeEvents is an array of events. If group-by-transaction mode is enabled for
+	// the change stream, this array may contain many events. Otherwise it will contain a single
+	// event.
+	ChangeEvents []ChangeEvent
 }
 
-// ChangeMessage represents a single message in a Change Data Capture channel.
-type ChangeMessage struct {
-	// The current cursor group for the table(s) for these events
-	CursorGroup ChangeCursorGroup
+// ChangeMessageBundle represents one or more ChangeMessages returned from a call to Poll().
+type ChangeMessageBundle struct {
+	// Internal: the current cursor group for the table(s) for these events
+	cursorGroup changeCursorGroup
 
-	// EventsRemaining specifies an estimate of the number of change events that are still remaining to
-	// be consumed, not counting the events in this message. This can be used to monitor if a reader of
-	// the events consumer is keeping up with change events for the table.
-	// This value applies to only the tables and partitions specified in the CursorGroup.
-	EventsRemaining uint64
+	// MessagesRemaining specifies an estimate of the number of change messages that are still remaining to
+	// be consumed, not counting the messages in this struct. This can be used to monitor if a reader of
+	// the events consumer is keeping up with change messages for the table.
+	// This value applies to only the table data that this specific consumer can receive in Poll() calls,
+	// which may be less than the overall total if this consumer is one in a group of many active consumers.
+	MessagesRemaining uint64
 
-	// ChangeEvents is a slice of events
-	ChangeEvents []ChangeEvent
+	// ChangeMessages is an array of messages containing change event data
+	ChangeMessages []ChangeMessage
 }
 
 type ChangeLocationType string
@@ -441,16 +450,16 @@ func (c *Client) CreateChangeConsumerConfig() *ChangeConsumerConfig {
 	}
 }
 
-type ChangeCursorGroup struct {
+type changeCursorGroup struct {
 	// array of change cursors
-	// TODO Cursors []ChangeCursor `json:"cursors"`
+	// TODO
 	// group id
-	GroupID string
+	groupID string
 }
 
 // The main struct used for Change Data Capture
 type ChangeConsumer struct {
-	group  ChangeCursorGroup
+	group  changeCursorGroup
 	config ChangeConsumerConfig
 }
 
@@ -459,12 +468,12 @@ type ChangeConsumer struct {
 // This will make a server-side call to validate all configuration and
 // establish server-side state for the consumer.
 //
-// If this consumer will be joining a group that has other consumers
-// currently polling data, this call will trigger a rebalance operation to
-// redistribute change data across this and all other active consumers.
-// Note that the rebalance may not happen immediately; in the NoSQL system,
-// rebalanace operations are rate limitied to avoid excessive resource
-// usage when many consumers are being added or removed from a group.
+// Any table changes (added tables, removed tables, start locations) for
+// the consumer group will be applied immediately after this call succeeds.
+// It is not necessary to call Poll() to trigger table changes.
+//
+// Note that rebalancing operations will not take effect after this call
+// succeeds. Rebalancing does not happen until the first call to Poll().
 func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeConsumer, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
@@ -493,7 +502,13 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 // returning any change events.
 //
 // waitTime: max amount of time to wait for messages
-func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessage, error) {
+//
+// If this is the first call to Poll() for a consumer, this call may trigger
+// a rebalance operation to redistribute change data across this and all other active consumers.
+// Note that the rebalance may not happen immediately; in the NoSQL system,
+// rebalanace operations are rate limitied to avoid excessive resource
+// usage when many consumers are being added or removed from a group.
+func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessageBundle, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
 }
@@ -545,9 +560,9 @@ func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) 
 // Close and release all resources for this consumer.
 //
 // Call this method if the application does not intend to continue using
-// this consumer. If this consumer was part of a group, this will trigger a
-// rebalance such that data that was being directed to this consumer will
-// now be redistributed to other active consumers.
+// this consumer. If this consumer was part of a group and has called Poll(),
+// this call will trigger a rebalance such that data that was being directed
+// to this consumer will now be redistributed to other active consumers.
 //
 // It is not required to call this method. If a consumer has not called [ChangeConsumer.Poll]
 // within the maximum poll period, it will be considered closed by the system and a
