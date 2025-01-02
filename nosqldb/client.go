@@ -344,6 +344,11 @@ type ChangeConsumerConfig struct {
 	// to Poll() will automatically mark the data returned by the previous Poll() as committed.
 	ManualCommit bool `json:"manualCommit"`
 
+	// Specify the maximum interval between calls to Poll() before the system will
+	// consider this consumer as dead, which will trigger a rebalance operation to
+	// redirect its change event data to other active consumers.
+	MaxPollingInterval time.Duration
+
 	// Force resetting the start location for the consumer(s) in the group. This is typically
 	// only used when a consumer group is completely stopped and a new group with the same
 	// group ID is to be started at a given start location (Earliest, Latest, etc).
@@ -430,6 +435,20 @@ func (cc *ChangeConsumerConfig) CommitManual() *ChangeConsumerConfig {
 	return cc
 }
 
+// Specify the maximum interval between calls to Poll() before the system will
+// consider this consumer as dead, which will trigger a rebalance operation to
+// redirect its change event data to other active consumers.
+//
+// If not specified, the default value for MaxPollInterval is 30 seconds.
+//
+// Note: if a consumer process dies, the data that it would be consuming
+// will not be consumed by any other consumers in this consumer's group until
+// this interval expires.
+func (cc *ChangeConsumerConfig) MaxPollInterval(interval time.Duration) *ChangeConsumerConfig {
+	cc.MaxPollingInterval = interval
+	return cc
+}
+
 // Force resetting the start location for the consumer(s) in the group. This is typically
 // only used when a consumer group is completely stopped and a new group with the same
 // group ID is to be started at a given start location (Earliest, Latest, etc).
@@ -497,7 +516,7 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 
 // Get Change Data Capture messages for a consumer.
 //
-// limit: max number of change events to return in the message. This value can be set to
+// limit: max number of change messages to return in the bundle. This value can be set to
 // zero to specify that this consumer is alive and active in the group without actually
 // returning any change events.
 //
@@ -507,7 +526,7 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 // a rebalance operation to redistribute change data across this and all other active consumers.
 // Note that the rebalance may not happen immediately; in the NoSQL system,
 // rebalanace operations are rate limitied to avoid excessive resource
-// usage when many consumers are being added or removed from a group.
+// usage when many consumers are being added to or removed from a group.
 func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessageBundle, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
@@ -576,14 +595,20 @@ func (cc *ChangeConsumer) Close() error {
 // data given a set of tables and start location, and a desired amount of time to process
 // the data.
 //
+// config: use this field to specify the tables and their start locations.
+// all other data in the config is ignored, with the exception of GroupID (see below).
+//
+// timeToProcess: specify the desired time to finish processing of the change
+// data in the given tables from their respective start points.
+//
 // This function returns an estimate based only on the amount of data that exists
 // in the change streams for the given tables, and the fastest rate that the system can
 // deliver that data to each consumer. It does not take into account any additional
 // processing time used by the consumer applications.
 //
-// Note: if a groupID is specified in the config, and the start location in the config is
-// NextUncommitted, this will return the count based on the remaining data that has yet to
-// be read and committed for the existing group.
+// Note: if GroupID is specified in the config, and the start location in the config is
+// NextUncommitted, and this is an existing group, this call will return the count based
+// on the remaining data that has yet to be read and committed for the existing group.
 func (c *Client) GetMinimumChangeConsumerCount(config *ChangeConsumerConfig, processTime time.Duration) (int, error) {
 	// TODO
 	return 0, fmt.Errorf("function not implemented yet")
@@ -628,7 +653,22 @@ func (c *Client) RemoveTableFromChangeConsumerGroup(groupID string, tableName st
 	return fmt.Errorf("function not implemented yet")
 }
 
-// Get the minimum number of consumers needed in order to process all change
+// DeleteChangeConsumerGroup deletes all metadata (current poll positions,
+// committed message locations, etc) from a consumer group, effectively
+// removing it from the system.
+//
+// Any active consumers currently polling this group will get errors on
+// all successive calls to Poll() after this call completes.
+//
+//	Note: This method is dangerous, as it will affect any currently
+//	      running consumers for this group.
+//
+// This method is typically used during testing, where it may be desirable
+// to immediately stop and clean up all resources used by a group.
+func (c *Client) DeleteChangeConsumerGroup(groupID string) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
 
 func (c *Client) simpleCDCTest() error {
 	// Create a single (non-grouped) consumer for a single table.
