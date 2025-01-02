@@ -487,7 +487,11 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 }
 
 // Get Change Data Capture messages for a consumer.
-// limit: max number of change events to return in the message
+//
+// limit: max number of change events to return in the message. This value can be set to
+// zero to specify that this consumer is alive and active in the group without actually
+// returning any change events.
+//
 // waitTime: max amount of time to wait for messages
 func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessage, error) {
 	// TODO
@@ -508,6 +512,8 @@ func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 // CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
 // If the given table already exists in the group, this call is ignored and will return no error.
 //
+// Note this will affect all active consumers using the same group ID.
+//
 // tablename: required.
 //
 // compartmentOCID: This is optional. If empty, the default compartment OCID
@@ -524,6 +530,8 @@ func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, sta
 // RemoveTable removes a table from an existing change consumer group.
 // If the given table does not exist in the group, this call is ignored and
 // will return no error.
+//
+// Note this will affect all active consumers using the same group ID.
 //
 // tablename: required.
 //
