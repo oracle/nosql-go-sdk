@@ -785,26 +785,27 @@ func (r *SystemStatusRequest) doesWrites() bool {
 //
 // The following operations are supported by TableRequest:
 //
-//	create tables
-//	drop tables
-//	modify tables: add or remove columns
+//	create a table
+//	drop a table
+//	modify table: add or remove columns
 //	create indexes
 //	drop indexes
 //	change table limits of an existing table
+//  enable or disable change data capture streaming
 //
-// Operation that is used to create a table must specify a Statement to define
+// Operations that are used to create a table must specify a Statement to define
 // the table schema and a TableLimits to define the throughput, storage,
 // and mode (provisioned or on demand) desired for the table.
 //
 // Operations that are used to drop, modify a table, or create, drop an index
 // must specify a Statement.
 //
-// These operations that are used to manage table schema do not need to specify
+// The operations that are used to manage table schema do not need to specify
 // the TableName explicitly as the table name is inferred from the specified
 // Statement. An IllegalArgument error will be returnerd if both the Statement
 // and TableName are specified in a TableRequest.
 //
-// Operation that is used to change limits of an existing table must specify
+// Operations that are used to change limits of an existing table must specify
 // the TableName and a TableLimits to define the throughput and storage desired
 // for the table.
 //
@@ -883,21 +884,11 @@ type TableRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
-	// CDCConfig specifies optional Change Data Capture configuration. This is only
-	// applicable to tables in the NoSQL Cloud Service.
-	CDCConfig *CDCConfig
+	// CDCEnabled specifies enabling optional Change Data Capture. This is only
+	// applicable to tables in the NoSQL Cloud Service. Default is false.
+	CDCEnabled bool `json:"cdcEnabled,omitempty"`
 
 	common.InternalRequestData
-}
-
-type CDCConfig struct {
-	// Enabled is a boolean flag to enable or disable Change Data Capture streaming
-	// for this table. Enabling CDC will incur additional read and write unit costs.
-	Enabled bool
-
-	// NumPartititons specifies an optional number of partititons to use in the CDC
-	// stream. By default only one partition is used.
-	NumPartitions uint16
 }
 
 func (r *TableRequest) validate() (err error) {

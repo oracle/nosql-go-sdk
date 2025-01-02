@@ -296,6 +296,11 @@ type ChangeStartLocation struct {
 	StartTime *time.Time `json:"startTime,omitempty"`
 }
 
+// ChangeConsumerTableConfig represents the details for a single table in
+// a change data capture configuration. It is typically created using API
+// calls:
+//    config := c.CreateChangeConsumerConfig().
+//        AddTable("client_info", "", Latest, nil).
 type ChangeConsumerTableConfig struct {
 	// Name of the table. This is required.
 	TableName string `json:"tableName"`
@@ -308,6 +313,17 @@ type ChangeConsumerTableConfig struct {
 	StartLocation ChangeStartLocation `json:"startLocation,omitempty"`
 }
 
+// ChangeConsumerConfig represents the configuration to use when creating a ChangeConsumer.
+// Typically this struct is created and populated with API calls rather than creating it
+// directly:
+//
+//    config := c.CreateChangeConsumerConfig().
+//        AddTable("client_info", "", Latest, nil).
+//        AddTable("location_data", "", Latest, nil).
+//        GroupID("test_group").
+//        CommitAutomatic()
+//    consumer, err := c.CreateChangeConsumer(config)
+//
 type ChangeConsumerConfig struct {
 	// Tables to consume from. This array must have at least one table config defined.
 	Tables []ChangeConsumerTableConfig `json:"tables"`
@@ -345,7 +361,7 @@ type ChangeConsumerConfig struct {
 	ManualCommit bool `json:"manualCommit"`
 
 	// Specify the maximum interval between calls to Poll() before the system will
-	// consider this consumer as dead, which will trigger a rebalance operation to
+	// consider this consumer as failed, which will trigger a rebalance operation to
 	// redirect its change event data to other active consumers.
 	MaxPollingInterval time.Duration
 
@@ -436,7 +452,7 @@ func (cc *ChangeConsumerConfig) CommitManual() *ChangeConsumerConfig {
 }
 
 // Specify the maximum interval between calls to Poll() before the system will
-// consider this consumer as dead, which will trigger a rebalance operation to
+// consider this consumer as failed, which will trigger a rebalance operation to
 // redirect its change event data to other active consumers.
 //
 // If not specified, the default value for MaxPollInterval is 30 seconds.
@@ -543,7 +559,7 @@ func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 }
 
 // AddTable adds a table to an existing consumer. The table must have already been
-// CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
+// CDC enabled via the OCI console or a NoSQL SDK [Client.DoTableRequest] call.
 // If the given table already exists in the group, this call is ignored and will return no error.
 //
 // Note this will affect all active consumers using the same group ID.
@@ -696,7 +712,9 @@ func (c *Client) multiTableCDCTest() error {
 	// each table's CDC stream.
 	config := c.CreateChangeConsumerConfig().
 		AddTable("client_info", "", Latest, nil).
-		AddTable("location_data", "", Latest, nil)
+		AddTable("location_data", "", Latest, nil).
+		GroupID("test_group").
+		CommitAutomatic()
 	consumer, err := c.CreateChangeConsumer(config)
 	if err != nil {
 		return err

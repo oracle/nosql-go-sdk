@@ -90,14 +90,12 @@ func runCDCGroupConsumer(client *nosqldb.Client) error {
 
 	// Make an API call to enable CDC for this table. If it is already enabled,
 	// no error is returned.
-	// Note this is typically executed elsewhere, through a control plane mechanism
-	// like the OCI control panel or some other "coordinator" program.
+	// Note this could be executed elsewhere, through a control plane mechanism
+	// like the OCI control panel, or REST API call.
 	tableName := "customer_data"
 	tableReq := &nosqldb.TableRequest{
-		TableName: tableName,
-		CDCConfig: &nosqldb.CDCConfig{
-			Enabled: true,
-		},
+		TableName:  tableName,
+		CDCEnabled: true,
 	}
 	tableRes, err := client.DoTableRequest(tableReq)
 	if err != nil {
