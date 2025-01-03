@@ -49,18 +49,15 @@ func runCDCSimple(client *nosqldb.Client) error {
 
 	// Assume table "customer_data" exists already and is CDC enabled
 
-	// Create a consumer config that will be used to create the consumer.
-	// Start with the earliest message available in the change stream.
-	// Automatically commit previously polled messages on each subsequent poll.
-	config := client.CreateChangeConsumerConfig().
-		AddTable("customer_data", "", nosqldb.Earliest, nil).
-		GroupID("my_group")
-
-	// Create the consumer. This will make a server side call to validate
-	// and establish the consumer information.
-	consumer, err := client.CreateChangeConsumer(config)
+	// Create a simple change consumer that will read change events for a
+	// single table, starting at the first uncommitted message for the
+	// given group ID.
+	//
+	// If no other consumer has ever been created for this group, the
+	// consumer will start with the first messages available (i.e. "Earliest").
+	consumer, err := client.CreateSimpleChangeConsumer("customer_data", "my_group")
 	if err != nil {
-		return fmt.Errorf("error creating group consumer: %v", err)
+		return fmt.Errorf("error creating simple consumer: %v", err)
 	}
 
 	// Loop reading messages from the consumer
@@ -68,18 +65,60 @@ func runCDCSimple(client *nosqldb.Client) error {
 		// wait up to one second to read up to 10 messages
 		bundle, err := consumer.Poll(10, time.Duration(1*time.Second))
 		if err != nil {
-			// This would only happen if the table is dropped and all messages
-			// have been consumed
+			// This will typically only happen if the table is dropped and all messages
+			// have been consumed, or if the group is manually deleted elsewhere
 			return fmt.Errorf("error polling for CDC messages: %v", err)
 		}
-		// Do something with message
+		// Do something with messages
 		printCDCMessageBundle(bundle)
-
-		//TODO: example of manual commit
 	}
 }
 
-// Example function that runs many consumers in goroutines for
+// Example of running a consumer across multiple tables, doing manual
+// commits.
+// In this example, it is assumed that the tables already exist and
+// have already been enabled for CDC streaming.
+func runCDCMultipleTablesManualCommit(client *nosqldb.Client) error {
+
+	// Create a consumer config that will be used to create the consumer.
+	// The start locations will be used only if there are no existing
+	// active consumers already in the group.
+	config := client.CreateChangeConsumerConfig().
+		AddTable("customer_data", "", nosqldb.Earliest, nil).
+		AddTable("internal_metadata", "", nosqldb.FirstUncommitted, nil).
+		AddTable("item_locations", "", nosqldb.AtTime, nil).
+		GroupID("test_group").
+		CommitManual()
+
+	// Create a consumer to read change events from the above tables
+	consumer, err := client.CreateChangeConsumer(config)
+	if err != nil {
+		return fmt.Errorf("error creating consumer: %v", err)
+	}
+
+	// Loop reading messages from the consumer
+	for {
+		// wait up to one second to read up to 10 messages
+		bundle, err := consumer.Poll(10, time.Duration(1*time.Second))
+		if err != nil {
+			// This will typically only happen if all tables are dropped and all messages
+			// have been consumed, or if the group is manually deleted elsewhere
+			return fmt.Errorf("error polling for CDC messages: %v", err)
+		}
+		// Do something with messages
+		printCDCMessageBundle(bundle)
+		// Commit after all change events are processed
+		consumer.Commit(time.Duration(1 * time.Second))
+
+		// A real application may do some other operations after processing
+		// the messages, which may consume some time or resources. The above Commit()
+		// call ensures that if the additional processing causes the program
+		// to exit for some reason, the change events read in the last Poll() call
+		// will not be read again by any other existing or restarted consumers.
+	}
+}
+
+// Example that runs many consumers in goroutines for
 // a change data capture stream for a single table.
 // This returns only when all data for a table has been completely
 // consumed - either because the table was dropped, or its CDC streaming
@@ -113,7 +152,7 @@ func runCDCGroupConsumer(client *nosqldb.Client) error {
 		AddTable(tableName, "", nosqldb.Earliest, nil).
 		GroupID("test_group")
 
-	// Create 5 consumer goroutines to consume data from the table. The consumers will
+	// Create 4 consumer goroutines to consume data from the table. The consumers will
 	// be created with a common Group ID, so change data will be evenly distributed
 	// across them.
 	//
@@ -152,7 +191,7 @@ func runGroupConsumer(consumer *nosqldb.ChangeConsumer) {
 			fmt.Printf("error polling for CDC messages: %v", err)
 			return
 		}
-		// Do something with message
+		// Do something with messages
 		printCDCMessageBundle(bundle)
 	}
 }
