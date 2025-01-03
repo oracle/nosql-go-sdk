@@ -30,7 +30,17 @@ func main() {
 		fmt.Println(err)
 	}
 
-	err = runCDCGroupConsumer(client)
+	err = runCDCGroupConsumerRoutines(client)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = runCDCMultipleTablesManualCommit(client)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = runCDCManualCommitRoutines(client)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -118,12 +128,114 @@ func runCDCMultipleTablesManualCommit(client *nosqldb.Client) error {
 	}
 }
 
+// Example that runs a single consumer, passing messages to goroutines.
+// The goroutines are responsible for committing the messages when they
+// are finished processing the change data.
+// This returns only when all data for a table has been completely
+// consumed - either because the table was dropped, or its CDC streaming
+// was disabled elsewhere.
+func runCDCManualCommitRoutines(client *nosqldb.Client) error {
+
+	// Assume that there is a mechanism to set this flag elsewhere
+	shouldExit := false
+
+	// Assume table "test_table" exists already and is CDC enabled
+
+	// Create a simple consumer for one table, setting commit mode to manual.
+	// Start at the first uncommitted message in the stream. This setting allows
+	// for this program to be restarted after failure, and consuming will pick up
+	// where the failed process left off.
+	config := client.CreateChangeConsumerConfig().
+		AddTable("test_table", "", nosqldb.FirstUncommitted, nil).
+		GroupID("test_group").
+		CommitManual()
+
+	// Create a channel to pass messages to the goroutines. Use buffering so there
+	// can be many messages waiting in the channel.
+	// Pass pointers in the channel to avoid large memory copies of change data.
+	messageChan := make(chan *nosqldb.ChangeMessageBundle, 10)
+
+	// create a single consumer to read change data from
+	consumer, err := client.CreateChangeConsumer(config)
+	if err != nil {
+		return fmt.Errorf("error creating consumer: %v", err)
+	}
+
+	// Start 4 goroutines that will each read MessageBundles from the channel, and
+	// commit them when they are done processing them
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		go func() {
+			defer wg.Done()
+			// Note we don't have to pass the consumer itself to the goroutines. A pointer to
+			// it is maintained internally in MessageBundles.
+			runChannelConsumer(messageChan)
+		}()
+	}
+
+	// Loop reading messages from the consumer, passing them to the
+	// goroutines via the channel.
+	for {
+		// wait up to one second to read up to 10 messages
+		bundle, err := consumer.Poll(10, time.Duration(1*time.Second))
+		if err != nil {
+			// This will typically only happen if all tables are dropped and all messages
+			// have been consumed, or if the group is manually deleted elsewhere
+			return fmt.Errorf("error polling for CDC messages: %v", err)
+		}
+
+		// The bundle may be empty, if no change data was available in the given timeframe.
+		// no need to send empty bundles to routines. Committing an empty bundle has no effect.
+		if bundle.IsEmpty() {
+			continue
+		}
+
+		// Send message bundle to the channel. This will block if the channel buffer is full.
+		// the readers of the channel are responsible for calling commit.
+		messageChan <- bundle
+
+		// Typically, a loop like this would check for signals/flags to tell it to quit.
+		if shouldExit {
+			close(messageChan)
+			// call close on the consumer to tell the system that it will
+			// no longer be pollng for messages. Note that commits that happen after
+			// the consumer is closed will still succeed.
+			consumer.Close()
+			break
+		}
+	}
+
+	// Wait for the consumers to complete
+	wg.Wait()
+
+	return nil
+}
+
+// Consume messages for by reading them from a channel. Commit each message
+// after processing is done.
+func runChannelConsumer(messageChan chan *nosqldb.ChangeMessageBundle) {
+	// Loop reading messages from the channel
+	for {
+		bundle, ok := <-messageChan
+		if !ok {
+			// channel closed by parent
+			break
+		}
+
+		// Do something with change data in message bundle
+		printCDCMessageBundle(bundle)
+
+		// After completely using the change data, commit the messages in the bundle
+		bundle.Commit(time.Duration(1 * time.Second))
+	}
+}
+
 // Example that runs many consumers in goroutines for
 // a change data capture stream for a single table.
 // This returns only when all data for a table has been completely
 // consumed - either because the table was dropped, or its CDC streaming
 // was disabled elsewhere.
-func runCDCGroupConsumer(client *nosqldb.Client) error {
+func runCDCGroupConsumerRoutines(client *nosqldb.Client) error {
 
 	// Assume table "customer_data" exists already
 

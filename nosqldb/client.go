@@ -257,6 +257,9 @@ type ChangeMessageBundle struct {
 	// Internal: the current cursor group for the table(s) for these events
 	cursorGroup changeCursorGroup
 
+	// Internal: pointer to the consumer that generated this bundle
+	consumer *ChangeConsumer
+
 	// MessagesRemaining specifies an estimate of the number of change messages that are still remaining to
 	// be consumed, not counting the messages in this struct. This can be used to monitor if a reader of
 	// the events consumer is keeping up with change messages for the table.
@@ -266,6 +269,24 @@ type ChangeMessageBundle struct {
 
 	// ChangeMessages is an array of messages containing change event data
 	ChangeMessages []ChangeMessage
+}
+
+// Mark the messages in the bundle as committed: all messages have been
+// fully read and consumed, and the messages should not be read again by any
+// current or future consumer in the group.
+//
+// Note that this commit implies commits on all previously polled messages from the
+// same consumer (that is, messages that were returned from calls to Poll() before
+// this one). Calling Commit() on a previous MessageBundle will have no effect.
+func (mb *ChangeMessageBundle) Commit(time.Duration) error {
+	// TODO
+	return fmt.Errorf("function not implemented yet")
+}
+
+// Return true if the bundle is empty. This may happen if there was no
+// change data to read in the given timeframe of a Poll().
+func (mb *ChangeMessageBundle) IsEmpty() bool {
+	return len(mb.ChangeMessages) == 0
 }
 
 type ChangeLocationType string
@@ -297,8 +318,9 @@ type ChangeStartLocation struct {
 // ChangeConsumerTableConfig represents the details for a single table in
 // a change data capture configuration. It is typically created using API
 // calls:
-//    config := c.CreateChangeConsumerConfig().
-//        AddTable("client_info", "", Latest, nil).
+//
+//	config := c.CreateChangeConsumerConfig().
+//	    AddTable("client_info", "", Latest, nil).
 type ChangeConsumerTableConfig struct {
 	// Name of the table. This is required.
 	TableName string `json:"tableName"`
@@ -315,13 +337,12 @@ type ChangeConsumerTableConfig struct {
 // Typically this struct is created and populated with API calls rather than creating it
 // directly:
 //
-//    config := c.CreateChangeConsumerConfig().
-//        AddTable("client_info", "", Latest, nil).
-//        AddTable("location_data", "", Latest, nil).
-//        GroupID("test_group").
-//        CommitAutomatic()
-//    consumer, err := c.CreateChangeConsumer(config)
-//
+//	config := c.CreateChangeConsumerConfig().
+//	    AddTable("client_info", "", Latest, nil).
+//	    AddTable("location_data", "", Latest, nil).
+//	    GroupID("test_group").
+//	    CommitAutomatic()
+//	consumer, err := c.CreateChangeConsumer(config)
 type ChangeConsumerConfig struct {
 	// Tables to consume from. This array must have at least one table config defined.
 	Tables []ChangeConsumerTableConfig `json:"tables"`
@@ -490,7 +511,11 @@ type changeCursorGroup struct {
 	groupID string
 }
 
-// The main struct used for Change Data Capture
+// The main struct used for Change Data Capture.
+//
+// NOTE: this struct in not thread-safe, with the exception of calling
+// Commit(), which can be done in other threads/goroutines. Calling
+// Poll() from multiple routines/threads will result in undefined behavior.
 type ChangeConsumer struct {
 	group  changeCursorGroup
 	config ChangeConsumerConfig
@@ -541,6 +566,9 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 // Note that the rebalance may not happen immediately; in the NoSQL system,
 // rebalanace operations are rate limitied to avoid excessive resource
 // usage when many consumers are being added to or removed from a group.
+//
+// This method in not thread-safe. Calling Poll() on the same consumer instance
+// from multiple routines/threads will result in undefined behavior.
 func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessageBundle, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
@@ -549,10 +577,28 @@ func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessag
 // Mark the data from the most recent call to [ChangeConsumer.Poll] as committed: the consumer has
 // completely processed the data and it should be considered "consumed".
 //
+// Note that this commit implies commits on all previously polled messages from the
+// same consumer (that is, messages that were returned from calls to Poll() before
+// this one).
+//
 // This method is only necessary when using manual commit mode. Otherwise,
 // in auto commit mode, the commit is implied for all previous data every time [ChangeConsumer.Poll]
 // is called.
 func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
+	return fmt.Errorf("function not implemented yet")
+}
+
+// Mark the data from the given MessageBundle as committed: the consumer has
+// completely processed the data and it should be considered "consumed".
+//
+// Note that this commit implies commits on all previously polled messages from the
+// same consumer (that is, messages that were returned from calls to Poll() before
+// this one). Calling CommitBundle() on a previous MessageBundle will have no effect.
+//
+// This method is only necessary when using manual commit mode. Otherwise,
+// in auto commit mode, the commit is implied for all previous data every time [ChangeConsumer.Poll]
+// is called.
+func (cc *ChangeConsumer) CommitBundle(bundle *ChangeMessageBundle, timeout time.Duration) error {
 	return fmt.Errorf("function not implemented yet")
 }
 
