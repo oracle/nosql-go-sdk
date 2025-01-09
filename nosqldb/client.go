@@ -327,7 +327,7 @@ func (cc *ChangeConsumer) GetMetrics() (*ChangeConsumerMetrics, error) {
 
 // Get metrics for the specified consumer group. The metrics are for the group
 // as a whole (as opposed to metrics for each individual consumer in a group).
-func (c *Client) getChangeConsumerMetrics(groupID string) (*ChangeConsumerMetrics, error) {
+func (c *Client) GetChangeConsumerMetrics(groupID string) (*ChangeConsumerMetrics, error) {
 	// TODO
 	return nil, fmt.Errorf("function not implemented yet")
 }
