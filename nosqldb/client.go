@@ -289,6 +289,49 @@ func (mb *ChangeMessageBundle) IsEmpty() bool {
 	return len(mb.ChangeMessages) == 0
 }
 
+type ChangeConsumerTableMetrics struct {
+	// The table name for this table
+	TableName string
+
+	// The compartment OCID for this table.
+	CompartmentOCID string
+
+	// The number of messages remaining to be consumed. This may be an
+	// estimate, and is based on the number of messages between the last
+	// committed message and the most recent message produced.
+	RemainingMessages uint64
+
+	// The number of bytes remaining to be consumed. This may be an
+	// estimate, and is based on the number of bytes between the last
+	// committed message and the most recent message produced.
+	RemainingBytes uint64
+
+	// The timestamp of the oldest uncommitted message. This maybe an
+	// estimate, and it represents the time that the message was placed
+	// into the stream.
+	OldestMessageTimestamp time.Time
+}
+
+// ChangeConsumerMetrics encapsulates metrics for all tables in a consumer group.
+type ChangeConsumerMetrics struct {
+	TableMetrics []ChangeConsumerTableMetrics
+}
+
+// Get the metrics for this specific consumer. The metrics data returned is
+// relevant only to the change data that this consumer can read (as opposed
+// to the metrics for the group as a whole).
+func (cc *ChangeConsumer) GetMetrics() (*ChangeConsumerMetrics, error) {
+	// TODO
+	return nil, fmt.Errorf("function not implemented yet")
+}
+
+// Get metrics for the specified consumer group. The metrics are for the group
+// as a whole (as opposed to metrics for each individual consumer in a group).
+func (c *Client) getChangeConsumerMetrics(groupID string) (*ChangeConsumerMetrics, error) {
+	// TODO
+	return nil, fmt.Errorf("function not implemented yet")
+}
+
 type ChangeLocationType string
 
 const (

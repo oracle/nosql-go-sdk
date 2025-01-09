@@ -197,16 +197,16 @@ func runCDCManualCommitRoutines(client *nosqldb.Client) error {
 		// Typically, a loop like this would check for signals/flags to tell it to quit.
 		if shouldExit {
 			close(messageChan)
-			// call close on the consumer to tell the system that it will
-			// no longer be pollng for messages. Note that commits that happen after
-			// the consumer is closed will still succeed.
-			consumer.Close()
 			break
 		}
 	}
 
 	// Wait for the consumers to complete
 	wg.Wait()
+
+	// call close on the consumer to tell the system that it will
+	// no longer be polling for messages.
+	consumer.Close()
 
 	return nil
 }
@@ -226,7 +226,11 @@ func runChannelConsumer(messageChan chan *nosqldb.ChangeMessageBundle) {
 		printCDCMessageBundle(bundle)
 
 		// After completely using the change data, commit the messages in the bundle
-		bundle.Commit(time.Duration(1 * time.Second))
+		err := bundle.Commit(time.Duration(1 * time.Second))
+		if err != nil {
+			fmt.Printf("ERROR: could not commit CDC data: %v", err)
+			break
+		}
 	}
 }
 
