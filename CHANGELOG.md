@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   This enables using new regions that may not have been added to the SDK code yet, without
   having to specify a full NoSQL endpoint parameter.
   See [Adding Regions](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdk_adding_new_region_endpoints.htm) for more information.
+- ReprepareQuery error code: This error is returned if a prepared query is executed
+  after (a) the index used by the query has been dropped and then re-created with a
+  different schema, or (b) one or more of the referenced tables has been altered
+  (via the alter table statement).
 
 ## Changed
 - Cloud only: Internal OCI `Region` definitions have been updated to be consistent. Some previous

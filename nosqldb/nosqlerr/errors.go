@@ -280,6 +280,11 @@ const (
 	// UnsupportedQueryVersion error indicates the version of query used in the SDK is
 	// not supported by the server, and the SDK should downgrade its handling of query objects.
 	UnsupportedQueryVersion // 27
+
+	// ReprepareQuery error indicates the prepared query must be re-prepared. This is typically
+	// due to a prepared query being used after DDL changes to the tables and/or indexes accessed
+	// by the query. The application should re-prepare the query and submit the query request again.
+	ReprepareQuery // 28
 )
 
 const (

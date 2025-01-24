@@ -297,9 +297,9 @@ func (suite *QueryTestSuite) TestEvolution() {
 	suite.ExecuteTableDDL(fmt.Sprintf("alter table %s (drop age)", tableName))
 
 	_, err = suite.ExecuteQueryRequest(req)
-	suite.Require().Truef(nosqlerr.IsIllegalArgument(err),
+	suite.Require().Truef(nosqlerr.Is(err, nosqlerr.IllegalArgument, nosqlerr.ReprepareQuery),
 		"Query(%s) should have failed with an "+
-			"IllegalArgument error, got error %v.", stmt, err)
+			"IllegalArgument or ReprepareQuery error, got error %v.", stmt, err)
 }
 
 func (suite *QueryTestSuite) TestPrepare() {
