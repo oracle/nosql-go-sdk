@@ -1010,6 +1010,13 @@ func (r QueryResult) String() string {
 	return jsonutil.AsJSON(r)
 }
 
+type TransactionResult struct {
+	// Context represents the transaction context. This value can be used
+	// to specify that requests are part of a transaction by calling SetTransactionContext()
+	// on requests using this value.
+	Context *common.TransactionContext
+}
+
 func validateWaitTimeout(timeout, pollInterval time.Duration) error {
 	if pollInterval < time.Millisecond {
 		return nosqlerr.NewIllegalArgument("the specified poll interval %v is less than the allowed minimum of %v",

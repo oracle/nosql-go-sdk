@@ -872,6 +872,26 @@ func (c *Client) Query(req *QueryRequest) (*QueryResult, error) {
 	return nil, errUnexpectedResult
 }
 
+// BeginTransaction starts a new transaction based on the given config.
+func (c *Client) BeginTransaction(cfg *types.TransactionConfig) (*TransactionResult, error) {
+	// TODO
+	return nil, errUnexpectedResult
+}
+
+// CommitTransaction commits an existing transaction. After this call, the transaction context
+// becomes invalid and cannot be reused.
+func (c *Client) CommitTransaction(txn *common.TransactionContext) error {
+	// TODO
+	return errUnexpectedResult
+}
+
+// AbortTransaction aborts an existing transaction. After this call, the transaction context
+// becomes invalid and cannot be reused.
+func (c *Client) AbortTransaction(txn *common.TransactionContext) error {
+	// TODO
+	return errUnexpectedResult
+}
+
 // nextRequestID returns the next client-scoped request id. It should be used
 // with the client id to obtain a globally unique scope.
 func (c *Client) nextRequestID() int32 {

@@ -285,6 +285,17 @@ const (
 	// due to a prepared query being used after DDL changes to the tables and/or indexes accessed
 	// by the query. The application should re-prepare the query and submit the query request again.
 	ReprepareQuery // 28
+
+	// TransactionAborted error indicates the transaction has been aborted. This may be from an
+	// explicit AbortTransaction call, from a transaction timing out, or some other unrecoverable
+	// error in processing of the transaction.
+	TransactionAborted // 29
+
+	// TransactionState error indicates the transaction is in an incorrect state to perform the given
+	// operation. For example, if a transaction is already aborted or committed, but the application
+	// is trying to execute a request or abort or commit the transaction again, this error will
+	// be returned.
+	TransactionState // 30
 )
 
 const (

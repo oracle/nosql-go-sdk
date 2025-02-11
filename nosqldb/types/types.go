@@ -565,3 +565,41 @@ const (
 	// It is used to describe the result of a query expression is empty.
 	Empty // 12
 )
+
+type TransactionIsolation int
+
+const (
+	// ReadCommitted specifies that all rows that a transaction retrieves are
+	// committed writes. Dirty reads (aka uncommitted reads) are not permitted
+	// in the transaction.
+	// This is the default transaction isolation level.
+	ReadCommitted = iota // 0
+
+	// ReadUncommitted specifies that a dirty read (aka uncommitted read) occurs
+	// when a transaction retrieves a row that has been updated by another
+	// transaction that is not yet committed.
+	ReadUncommitted // 1
+)
+
+// TransactionConfig specifies configuration settings to use when beginning a new
+// transaction.
+type TransactionConfig struct {
+	// TableName specifies the name of the table for this transaction. It is required
+	// when creating the transaction. Any operation using this transaction must use the
+	// same table (or a child of this table).
+	TableName string
+
+	// IsolationLevel specifies the transaction isolation
+	IsolationLevel TransactionIsolation
+
+	// Timeout defines the maximum time allowed between the transaction begin and commit.
+	// If the application does not commit the transaction within this period, the transaction
+	// will be aborted on the server and any operations attempted using this transaction
+	// afterwards will result in a TransactionAborted error.
+	Timeout time.Duration
+
+	// MaxOperations specifies the maximum number of operations (reads/writes) that are
+	// allowed in a transaction.
+	// The default is zero, which means no maximum.
+	MaxOperations int
+}

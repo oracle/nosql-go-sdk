@@ -21,6 +21,7 @@ type InternalRequestDataInt interface {
 	SetRetryTime(d time.Duration)
 	SetTopology(ti *TopologyInfo)
 	GetTopoSeqNum() int
+	SetTransactionContext(ctx *TransactionContext)
 }
 
 // InternalRequestData is the actual struct that gets included
@@ -29,6 +30,7 @@ type InternalRequestData struct {
 	RateLimiterPair
 	retryTime time.Duration
 	topology  *TopologyInfo
+	ctx       *TransactionContext
 }
 
 // GetRetryTime returns the current time spent in the client in retries
@@ -56,6 +58,14 @@ func (ird *InternalRequestData) GetTopoSeqNum() int {
 		return -1
 	}
 	return ird.topology.SeqNum
+}
+
+// SetTransactionContext sets the transaction context for the request.
+// Note that the first operation performed using a transaction will set its
+// internal shard ID, and all operations thereafter must have a shard key
+// that matches the transaction shard ID.
+func (ird *InternalRequestData) SetTransactionContext(ctx *TransactionContext) {
+	ird.ctx = ctx
 }
 
 // InternalResultDataInt is used to give all requests a
@@ -156,4 +166,18 @@ func (ti *TopologyInfo) GetLastShardID() int {
 		return -1
 	}
 	return ti.ShardIDs[len(ti.ShardIDs)-1]
+}
+
+// TransactionContext specifies the optional request transaction.
+type TransactionContext struct {
+	// ID represents the unique transaction ID.
+	ID uint64
+
+	// The shard ID. This will be negative (invalid) until the first successful
+	// operation using this transaction. Afterwards, all operations must have a
+	// shard key that matches this shard ID.
+	ShardID int
+
+	// context is internal opaque binary data and is not intended for use by the application
+	context []byte
 }
