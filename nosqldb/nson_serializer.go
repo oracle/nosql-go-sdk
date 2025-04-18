@@ -124,7 +124,6 @@ const (
 	SHARD_IDS                  = "sa"
 	SHARD_KEY                  = "sk"
 	SORT_PHASE1_RESULTS        = "p1"
-	SOURCE_TABLE_NAME          = "sn"
 	START                      = "sr"
 	STATEMENT                  = "st"
 	STORAGE_GB                 = "sg"
@@ -152,6 +151,7 @@ const (
 	UPDATE_TTL                 = "ut"
 	VALUE                      = "l"
 	VERSION                    = "v"
+	VIEW_NAME                  = "vn"
 	VSCAN                      = "vs"
 	VSCANS                     = "vssa"
 	VSCAN_JOIN_DESC_RESUME_KEY = "vsjdrk"
@@ -652,14 +652,14 @@ func (req *AddMVIndexRequest) serialize(w proto.Writer, serialVersion int16, _ i
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.AddMVIndex, req.Timeout, req.ViewName, req.GetTopologyInfo()); err != nil {
+	if err = ns.writeHeader(proto.AddMVIndex, req.Timeout, req.SourceTableName, req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
 
 	ns.startPayload()
 
-	if err = ns.writeField(SOURCE_TABLE_NAME, req.SourceTableName); err != nil {
+	if err = ns.writeField(VIEW_NAME, req.ViewName); err != nil {
 		return
 	}
 

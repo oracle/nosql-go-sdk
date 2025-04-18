@@ -156,8 +156,11 @@ const (
 	// it gets the stats for a replicated table
 	GetReplicaStats // 35
 
+    Unused36 // 36
+    Unused37 // 37
+
 	// AddMVIndex is used when adding a Materialized View Index to a table.
-	AddMVIndex // 36
+	AddMVIndex // 38
 )
 
 // Reader is a protocol reader used to read and decode byte sequences.
