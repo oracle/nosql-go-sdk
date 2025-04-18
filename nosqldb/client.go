@@ -343,6 +343,56 @@ func (c *Client) DoTableRequestAndWait(req *TableRequest, timeout, pollInterval 
 	return nil, errUnexpectedResult
 }
 
+// AddMVIndex creates a new Materialized View Index to a table.
+//
+// This operation is implicitly asynchronous. AddMVIndex does not wait
+// for completion of the operation, instead it returns a TableResult that contains an
+// operation id representing the operation being performed. The caller should
+// use the TableResult.WaitForCompletion() method to determine when it has completed.
+func (c *Client) AddMVIndex(req *AddMVIndexRequest) (*TableResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TableResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
+// AddMVIndexAndWait creates a new Materialized View Index to a table and
+// waits for completion of the operation.
+//
+// This operation can potentially take a long time to complete.
+//
+// This method allows specifying a timeout that represents a time duration to
+// wait for completion of the operation, and a pollInterval that represents a
+// time duration to wait between two consecutive polling attempts. If the
+// operation does not complete when the specified timeout elapses, a
+// RequestTimeout error is returned.
+func (c *Client) AddMVIndexAndWait(req *AddMVIndexRequest, timeout, pollInterval time.Duration) (*TableResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TableResult); ok {
+		return res.WaitForCompletion(c, timeout, pollInterval)
+	}
+
+	return nil, errUnexpectedResult
+}
+
 // DoSystemRequest performs a system operation such as administrative operations
 // that do not affect a specific table. For table-specific operations use
 // DoTableRequest() or DoTableRequestAndWait().

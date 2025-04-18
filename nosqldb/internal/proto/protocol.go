@@ -155,6 +155,9 @@ const (
 	// GetReplicaStats is used in the cloud Global Active Tables
 	// it gets the stats for a replicated table
 	GetReplicaStats // 35
+
+	// AddMVIndex is used when adding a Materialized View Index to a table.
+	AddMVIndex // 36
 )
 
 // Reader is a protocol reader used to read and decode byte sequences.

@@ -28,7 +28,10 @@ import (
 
 const (
 	ABORT_ON_FAIL              = "a"
+	ADDL_PRIMARY_KEYS          = "ak"
+	ALL_COLUMNS                = "al"
 	BIND_VARIABLES             = "bv"
+	COLUMNS                    = "cl"
 	COMPARTMENT_OCID           = "cc"
 	CONSISTENCY                = "co"
 	CONSUMED                   = "c"
@@ -119,7 +122,9 @@ const (
 	SERVER_MEMORY_CONSUMPTION  = "sm"
 	SHARD_ID                   = "si"
 	SHARD_IDS                  = "sa"
+	SHARD_KEY                  = "sk"
 	SORT_PHASE1_RESULTS        = "p1"
+	SOURCE_TABLE_NAME          = "sn"
 	START                      = "sr"
 	STATEMENT                  = "st"
 	STORAGE_GB                 = "sg"
@@ -639,6 +644,62 @@ func (res *ReplicaStatsResult) readReplicaStats(r proto.Reader) error {
 		res.StatsRecords[replicaName] = records
 	}
 	return nil
+}
+
+// serialize writes the AddMVIndexRequest to data stream using the specified protocol writer.
+func (req *AddMVIndexRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.AddMVIndex, req.Timeout, req.ViewName, req.GetTopologyInfo()); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	ns.startPayload()
+
+	if err = ns.writeField(SOURCE_TABLE_NAME, req.SourceTableName); err != nil {
+		return
+	}
+
+	if err = ns.writeField(SHARD_KEY, req.ShardKey); err != nil {
+		return
+	}
+
+	if req.AdditionalPrimaryKeys != nil {
+		if err = ns.writeField(ADDL_PRIMARY_KEYS, req.AdditionalPrimaryKeys); err != nil {
+			return
+		}
+	}
+
+	if req.Columns != nil {
+		if err = ns.writeField(COLUMNS, req.Columns); err != nil {
+			return
+		}
+	}
+
+	if req.AllColumns {
+		if err = ns.writeField(ALL_COLUMNS, req.AllColumns); err != nil {
+			return
+		}
+	}
+
+	if req.ReadUnits > 0 {
+		if err = ns.writeField(READ_UNITS, req.ReadUnits); err != nil {
+			return
+		}
+	}
+
+	ns.endPayload()
+
+	endRequest(ns)
+	return
+}
+
+// AddMVIndex requests always return a TableResult
+func (req *AddMVIndexRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
+	return deserializeTableResult(r, serialVersion)
 }
 
 // serialize writes the ListTablesRequest to data stream using the specified protocol writer.

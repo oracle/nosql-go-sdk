@@ -346,6 +346,18 @@ type TableResult struct {
 	// this table. This is only used in the cloud service for Global Active Tables.
 	// Added in SDK Version 1.4.3
 	Replicas []*Replica `json:"replicas"`
+
+	// MVSourceTableName will be non-empty if this table is an MV Index table,
+	// in which case this field is the name of the source table for the MV Index.
+	// This is only used in the cloud service.
+	// Added in SDK Version 1.5.X
+	MVSourceTableName string `json:"mvSourceTableName"`
+
+	// MVSourceTableOCID will be non-empty if this table is an MV Index table,
+	// in which case this field is the OCID of the source table for the MV Index.
+	// This is only used in the cloud service.
+	// Added in SDK Version 1.5.X
+	MVSourceTableOCID string `json:"mvSourceTableOCID"`
 }
 
 // String returns a JSON string representation of the TableResult.

@@ -11,7 +11,10 @@ package nosqldb
 // protocol field name.
 var NsonFieldsMap = map[string]string{
 	ABORT_ON_FAIL:              "ABORT_ON_FAIL",
+	ADDL_PRIMARY_KEYS:          "ADDL_PRIMARY_KEYS",
+	ALL_COLUMNS:                "ALL_COLUMNS",
 	BIND_VARIABLES:             "BIND_VARIABLES",
+	COLUMNS:                    "COLUMNS",
 	COMPARTMENT_OCID:           "COMPARTMENT_OCID",
 	CONSISTENCY:                "CONSISTENCY",
 	CONSUMED:                   "CONSUMED",
@@ -102,6 +105,8 @@ var NsonFieldsMap = map[string]string{
 	SERVER_MEMORY_CONSUMPTION:  "SERVER_MEMORY_CONSUMPTION",
 	SHARD_ID:                   "SHARD_ID",
 	SHARD_IDS:                  "SHARD_IDS",
+	SHARD_KEY:                  "SHARD_KEY",
+	SOURCE_TABLE_NAME:          "SOURCE_TABLE_NAME",
 	START:                      "START",
 	STATEMENT:                  "STATEMENT",
 	STORAGE_GB:                 "STORAGE_GB",

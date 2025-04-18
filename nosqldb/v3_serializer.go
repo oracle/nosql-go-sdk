@@ -9,6 +9,7 @@ package nosqldb
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -1607,3 +1608,12 @@ func deserializeV3OperationResult(r proto.Reader, serialVersion int16) (res *Ope
 
 	return res, nil
 }
+
+// Not implemented in V3
+func (req *AddMVIndexRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
+	return fmt.Errorf("AddMVIndexRequest serialize not valid in V3 protocol")
+}
+func (req *AddMVIndexRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, fmt.Errorf("AddMVIndexRequest deserialize not valid in V3 protocol")
+}
+

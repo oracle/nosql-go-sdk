@@ -1171,14 +1171,14 @@ func (r *DeleteRequest) doesWrites() bool {
 //
 // This request can be used to perform unconditional and conditional puts:
 //
-//   1. Overwrite any existing row. This is the default.
-//   2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
-//      PutOption parameter for this case.
-//   3. Succeed only if the row exists. Specify types.PutIfPresent for the
-//      PutOption parameter for this case.
-//   4. Succeed only if the row exists and its version matches a specific version.
-//      Specify types.PutIfVersion for the PutOption parameter and a desired version
-//      for the MatchVersion parameter for this case.
+//  1. Overwrite any existing row. This is the default.
+//  2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
+//     PutOption parameter for this case.
+//  3. Succeed only if the row exists. Specify types.PutIfPresent for the
+//     PutOption parameter for this case.
+//  4. Succeed only if the row exists and its version matches a specific version.
+//     Specify types.PutIfVersion for the PutOption parameter and a desired version
+//     for the MatchVersion parameter for this case.
 //
 // Information about the existing row can be returned on failure of a put
 // operation by using the ReturnRow option. Use of the ReturnRow option incurs
@@ -2433,6 +2433,138 @@ func (op *WriteOperation) tableName() string {
 	}
 
 	return ""
+}
+
+// AddMVIndexRequest is used to create a new Materialized View Index.
+//
+// This is a cloud-only feature.
+//
+// SourceTableName, ViewName, and ShardKey are required.
+//
+// ShardKey can be a list of columns. At least one column is required.
+// This is the key that will determine the sharding of the MV.
+//
+// AdditionalPrimaryKeys is optional and allows for specifying additional
+// columns to be added to the primary key of the MV. Internally, the MV primary
+// key will be a combination of the supplied shard key(s), any supplied
+// additional keys, and any remaining columns from the source table primary
+// key (to ensure uniqueness).
+//
+// AllColumns is optional. It specifies that all columns from the source
+// table should be added to the MV.
+//
+// Columns is optional. If it is not specified, only columns from the source
+// table's primary key will be added to the MV, unless AllColumns is specified.
+//
+// The resulting list of columns for the MV will be the supplied shard keys, any
+// additional keys, columns given in Columns, and any remaining columns from the
+// source table primary key.
+//
+// It is not an error to specify the same column name in ShardKey,
+// AdditionalPrimaryKeys, and Columns. Any duplicates will be internally de-duped.
+//
+// ReadUnits is optional. It can specify an alternate read unit limit for the
+// MV index table. If not given, the read units from the source table will be used.
+// Write units and storage limits are inherited from the source table. Note: if the
+// source table write/storage limits are modified, those values will be applied to
+// the associated MV table(s) as well.
+//
+// The resulting MV index table will be created, backfilled, and ready for use after
+// the WaitForCompletion() call. If an application does not wish to wait synchronously,
+// it can periodically poll the MV table to find its status using GetTableRequest.
+// When the returned status becomes Active, the MV table has been backfilled and is
+// ready for use. Attempts to read from the MV before it is in Active state will
+// result in an error.
+type AddMVIndexRequest struct {
+	// SourceTableName specifies the name of an existing table to
+	// use as the source of the MV index. It is required.
+	SourceTableName string `json:"sourceTableName"`
+
+	// ViewName specifies the name of the new MV index table to
+	// be created. It is required, and must be unique within the cloud
+	// compartment (i.e. it cannot be the same as SourceTableName).
+	ViewName string `json:"viewName"`
+
+	// ShardKey specifies one or more columns from the source table to use
+	// for the shard key. At least one column is required.
+	ShardKey []string `json:"shardKey"`
+
+	// AdditionalPrimaryKeys is optional and specifies additional
+	// columns to be added to the primary key of the MV.
+	AdditionalPrimaryKeys []string `json:"additionalPrimaryKeys,omitempty"`
+
+	// AllColumns is optional. It specifies that all columns from the source
+	// table should be added to the MV.
+	AllColumns bool `json:"allColumns,omitempty"`
+
+	// Columns is optional. It specifies the remaining columns from the source table to
+	// add to the MV index. If it is not specified, only columns from the source
+	// table's primary key will be added to the MV, unless AllColumns is specified.
+	Columns []string `json:"columns,omitempty"`
+
+	// ReadUnits is optional. It can specify an alternate read unit limit for the
+	// MV index table. If not given, the read units from the source table will be used.
+	ReadUnits int `json:"readUnits,omitempty"`
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultTableRequestTimeout().
+	Timeout time.Duration `json:"timeout,omitempty"`
+
+	common.InternalRequestData
+}
+
+func (r *AddMVIndexRequest) validate() (err error) {
+	if err = validateTableName(r.ViewName); err != nil {
+		return
+	}
+
+	if err = validateTableName(r.SourceTableName); err != nil {
+		return
+	}
+
+	if err = validateTimeout(r.Timeout); err != nil {
+		return
+	}
+
+	if r.ShardKey == nil {
+		return fmt.Errorf("AddMVIndexRequest missing ShardKey")
+	}
+
+	return nil
+}
+
+func (r *AddMVIndexRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *AddMVIndexRequest) shouldRetry() bool {
+	return true
+}
+
+func (r *AddMVIndexRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *AddMVIndexRequest) getTableName() string {
+	return r.ViewName
+}
+
+func (r *AddMVIndexRequest) getNamespace() string {
+	return ""
+}
+
+func (r *AddMVIndexRequest) doesReads() bool {
+	return true
+}
+
+func (r *AddMVIndexRequest) doesWrites() bool {
+	return true
 }
 
 // validateTimeout validates the specified timeout is greater than or equal to 1 millisecond.
