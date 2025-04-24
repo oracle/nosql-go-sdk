@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2025 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -12,6 +12,7 @@ package common
 
 const (
 	RegionAfJohannesburg1 Region = "af-johannesburg-1"
+	RegionApBatam1 Region = "ap-batam-1"
 	RegionApChuncheon1 Region = "ap-chuncheon-1"
 	RegionApHyderabad1 Region = "ap-hyderabad-1"
 	RegionApMelbourne1 Region = "ap-melbourne-1"
@@ -46,6 +47,8 @@ const (
 	RegionSaVinhedo1 Region = "sa-vinhedo-1"
 	RegionUkLondon1 Region = "uk-london-1"
 	RegionUkCardiff1 Region = "uk-cardiff-1"
+	RegionUsAbilene1 Region = "us-abilene-1"
+	RegionUsDallas1 Region = "us-dallas-1"
 	RegionUsPhoenix1 Region = "us-phoenix-1"
 	RegionUsAshburn1 Region = "us-ashburn-1"
 	RegionUsSaltlake2 Region = "us-saltlake-2"
@@ -60,6 +63,7 @@ const (
 	RegionEuFrankfurt2 Region = "eu-frankfurt-2"
 	RegionEuMadrid2 Region = "eu-madrid-2"
 	RegionEuJovanovac1 Region = "eu-jovanovac-1"
+	RegionEuMilan2 Region = "eu-milan-2"
 	RegionUsSomerset1 Region = "us-somerset-1"
 	RegionUsThames1 Region = "us-thames-1"
 	RegionEuCrissier1 Region = "eu-crissier-1"
@@ -72,6 +76,12 @@ const (
 	RegionApSuwon1 Region = "ap-suwon-1"
 	RegionApSeoul2 Region = "ap-seoul-2"
 	RegionApChuncheon2 Region = "ap-chuncheon-2"
+	RegionUsTukwila3 Region = "us-tukwila-3"
+	RegionApOsaka2 Region = "ap-osaka-2"
+	RegionMeDubai3 Region = "me-dubai-3"
+	RegionApPathumthani1 Region = "ap-pathumthani-1"
+	RegionUkLondon2 Region = "uk-london-2"
+	RegionUkLondon3 Region = "uk-london-3"
 	RegionUsGovAshburn1 Region = "us-gov-ashburn-1"
 	RegionUsGovChicago1 Region = "us-gov-chicago-1"
 	RegionUsGovPhoenix1 Region = "us-gov-phoenix-1"
@@ -120,7 +130,13 @@ var realm = map[string]string{
 	"oc3": "oraclegovcloud.com",
 	"oc31": "sovereigncloud.nz",
 	"oc35": "oraclecloud35.com",
+	"oc39": "oraclecloud39.com",
 	"oc4": "oraclegovcloud.uk",
+	"oc40": "jpsovereigncloud.jp",
+	"oc41": "dutechcloud.ae",
+	"oc43": "thaiaiscloud.com",
+	"oc46": "oraclecloud46.com",
+	"oc47": "oraclecloud47.com",
 	"oc5": "oraclecloud5.com",
 	"oc8": "oraclecloud8.com",
 	"oc9": "oraclecloud9.com",
@@ -128,6 +144,7 @@ var realm = map[string]string{
 
 var regionRealm = map[Region]string{
 	RegionAfJohannesburg1: "oc1",
+	RegionApBatam1: "oc1",
 	RegionApChuncheon1: "oc1",
 	RegionApHyderabad1: "oc1",
 	RegionApMelbourne1: "oc1",
@@ -162,6 +179,8 @@ var regionRealm = map[Region]string{
 	RegionSaVinhedo1: "oc1",
 	RegionUkLondon1: "oc1",
 	RegionUkCardiff1: "oc1",
+	RegionUsAbilene1: "oc1",
+	RegionUsDallas1: "oc1",
 	RegionUsPhoenix1: "oc1",
 	RegionUsAshburn1: "oc1",
 	RegionUsSaltlake2: "oc1",
@@ -195,6 +214,7 @@ var regionRealm = map[Region]string{
 	RegionEuJovanovac1: "oc20",
 	RegionMeDccDoha1: "oc21",
 	RegionEuDccRome1: "oc22",
+	RegionEuMilan2: "oc22",
 	RegionUsSomerset1: "oc23",
 	RegionUsThames1: "oc23",
 	RegionEuDccZurich1: "oc24",
@@ -212,10 +232,17 @@ var regionRealm = map[Region]string{
 	RegionApSuwon1: "oc35",
 	RegionApSeoul2: "oc35",
 	RegionApChuncheon2: "oc35",
+	RegionUsTukwila3: "oc39",
+	RegionApOsaka2: "oc40",
+	RegionMeDubai3: "oc41",
+	RegionApPathumthani1: "oc43",
+	RegionUkLondon2: "oc46",
+	RegionUkLondon3: "oc47",
 }
 
 var shortNameRegion = map[string]Region{
 	"jnb": RegionAfJohannesburg1,
+	"hsg": RegionApBatam1,
 	"yny": RegionApChuncheon1,
 	"hyd": RegionApHyderabad1,
 	"mel": RegionApMelbourne1,
@@ -250,6 +277,8 @@ var shortNameRegion = map[string]Region{
 	"vcp": RegionSaVinhedo1,
 	"lhr": RegionUkLondon1,
 	"cwl": RegionUkCardiff1,
+	"abl": RegionUsAbilene1,
+	"dfw": RegionUsDallas1,
 	"phx": RegionUsPhoenix1,
 	"iad": RegionUsAshburn1,
 	"aga": RegionUsSaltlake2,
@@ -283,6 +312,7 @@ var shortNameRegion = map[string]Region{
 	"beg": RegionEuJovanovac1,
 	"doh": RegionMeDccDoha1,
 	"nap": RegionEuDccRome1,
+	"pbv": RegionEuMilan2,
 	"ebb": RegionUsSomerset1,
 	"ebl": RegionUsThames1,
 	"avz": RegionEuDccZurich1,
@@ -300,4 +330,10 @@ var shortNameRegion = map[string]Region{
 	"dln": RegionApSuwon1,
 	"dtz": RegionApSeoul2,
 	"bno": RegionApChuncheon2,
+	"nbq": RegionUsTukwila3,
+	"ibg": RegionApOsaka2,
+	"pcz": RegionMeDubai3,
+	"mez": RegionApPathumthani1,
+	"den": RegionUkLondon2,
+	"kal": RegionUkLondon3,
 }
