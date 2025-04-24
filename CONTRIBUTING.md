@@ -1,6 +1,6 @@
 # Contributing to the Oracle NoSQL Database Cloud Service Go SDK
 
-*Copyright (c) 2019, 2024 Oracle and/or its affiliates. All rights reserved.*
+*Copyright (c) 2019, 2025 Oracle and/or its affiliates. All rights reserved.*
 
 The target readers of this document are those who want to contribute to the
 Oracle NoSQL Database Go SDK project, including but not limited to contributing

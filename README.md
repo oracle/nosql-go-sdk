@@ -579,7 +579,7 @@ Please consult the [security guide](./SECURITY.md) for our responsible security 
 
 ## License
 
-Copyright (C) 2019, 2024 Oracle and/or its affiliates. All rights reserved.
+Copyright (C) 2019, 2025 Oracle and/or its affiliates. All rights reserved.
 
 This SDK is licensed under the Universal Permissive License 1.0. See
 [LICENSE](https://github.com/oracle/nosql-go-sdk/blob/master/LICENSE.txt) for
