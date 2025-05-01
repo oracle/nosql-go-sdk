@@ -361,6 +361,70 @@ func (suite *TableOpsTestSuite) TestGetIndexes() {
 	}
 }
 
+func (suite *TableOpsTestSuite) TestAddMVIndexes() {
+	var stmt string
+	var err error
+	table := suite.GetTableName("MVTest")
+	// Drop and re-create test tables.
+	stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
+		"id LONG, "+
+		"bl BOOLEAN, "+
+		"i INTEGER, "+
+		"f FLOAT,"+
+		"d DOUBLE, "+
+		"n NUMBER, "+
+		"s STRING, "+
+		"e ENUM(red, yellow, blue), "+
+		"ts TIMESTAMP(9), "+
+		"bi BINARY, "+
+		"fbi BINARY(10), "+
+		"json JSON,"+
+		"PRIMARY KEY(shard(id), n)"+
+		")", table)
+	limits := &nosqldb.TableLimits{
+		ReadUnits:  500,
+		WriteUnits: 500,
+		StorageGB:  2,
+	}
+	suite.ReCreateTable(table, stmt, limits)
+
+	shardKey := make([]string, 1)
+	shardKey[0] = "s"
+	mvReq := &nosqldb.AddMVIndexRequest {
+		SourceTableName: table,
+		ViewName: suite.GetTableName("MVTestMV1"),
+		ShardKey: shardKey,
+		//AdditionalPrimaryKeys []string `json:"additionalPrimaryKeys,omitempty"`
+		AllColumns: true,
+		//Columns []string `json:"columns,omitempty"`
+		ReadUnits: 100,
+	}
+
+	res, err := suite.Client.AddMVIndexAndWait(mvReq,
+		time.Duration(10) * time.Second,
+		time.Duration(100) * time.Millisecond)
+	suite.Require().NoErrorf(err, "failed to create MV Index: %v.", err)
+
+	// Check MV create table SQL statement
+	suite.Truef(strings.Contains(res.DDL,
+		" (s STRING, id LONG, n NUMBER, bl BOOLEAN, i INTEGER, f FLOAT, d DOUBLE, e ENUM(red, yellow, blue), ts TIMESTAMP(9), bi BINARY, fbi BINARY(10), json JSON, PRIMARY KEY(SHARD(s), id, n))"),
+		"Did not get expected CREATE TABLE DDL for MVIndex: got '%s'", res.DDL)
+
+	// Check that MVIndex is specified as an MV Index in TableInfo
+	suite.Equalf("MVTest", res.MVSourceTableName, "Error in MVIndex source table name");
+	suite.Equalf("in.valid.iac.name.space:MVTest", res.MVSourceTableOCID, "Error in MVIndex source table OCID");
+
+	// Check read limit is as specified, write limit inherited from source
+
+// Try to create a MV from that MV: should fail
+
+// Try to create MV with Identity column: fail?
+
+// JSON collection?
+}
+
+
+
 func (suite *TableOpsTestSuite) TestListTables() {
 	var tableNames []string
 	var tableLimits []*nosqldb.TableLimits

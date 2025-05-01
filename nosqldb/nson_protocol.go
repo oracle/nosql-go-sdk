@@ -62,6 +62,7 @@ var NsonFieldsMap = map[string]string{
 	MAX_WRITE_KB:               "MAX_WRITE_KB",
 	MAX_SHARD_USAGE_PERCENT:    "MAX_SHARD_USAGE_PERCENT",
 	MODIFIED:                   "MODIFIED",
+	MV_SOURCE_TABLE_OCID:       "MV_SOURCE_TABLE_OCID",
 	NAME:                       "NAME",
 	NAMESPACE:                  "NAMESPACE",
 	NEXT_START_TIME:            "NEXT_START_TIME",

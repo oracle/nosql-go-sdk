@@ -493,6 +493,13 @@ func (w *Writer) WriteFieldValue(value types.FieldValue) (int, error) {
 	case []types.FieldValue:
 		return w.writeArrayValue(v)
 
+	case []string:
+		arr := make([]types.FieldValue, len(v))
+		for i, e := range v {
+			arr[i] = e
+		}
+		return w.writeArrayValue(arr)
+
 	case []interface{}:
 		arr := make([]types.FieldValue, len(v))
 		for i, e := range v {

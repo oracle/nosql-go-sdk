@@ -79,6 +79,7 @@ const (
 	MAX_WRITE_KB               = "mw"
 	MAX_SHARD_USAGE_PERCENT    = "ms"
 	MODIFIED                   = "md"
+	MV_SOURCE_TABLE_OCID       = "mt"
 	NAME                       = "m"
 	NAMESPACE                  = "ns"
 	NEXT_START_TIME            = "ni"
@@ -663,6 +664,10 @@ func (req *AddMVIndexRequest) serialize(w proto.Writer, serialVersion int16, _ i
 		return
 	}
 
+	//interfaceSlice := make([]interface{}, len(req.ShardKey))
+	//for i, str := range req.ShardKey {
+		//interfaceSlice[i] = str
+	//}
 	if err = ns.writeField(SHARD_KEY, req.ShardKey); err != nil {
 		return
 	}
@@ -1752,6 +1757,11 @@ func deserializeTableResult(r proto.Reader, _ int16) (*TableResult, int, error) 
 			res.TableOcid, err = readNsonString(r)
 		case TABLE_SCHEMA:
 			res.Schema, err = readNsonString(r)
+		case MV_SOURCE_TABLE_OCID:
+			res.MVSourceTableOCID, err = readNsonString(r)
+		// TODO: MV source table name in protocol?
+		//case MV_SOURCE_TABLE_NAME:
+			//res.MvSourceTableName, err = readNsonString(r)
 		case TABLE_DDL:
 			res.DDL, err = readNsonString(r)
 		case TABLE_STATE:
