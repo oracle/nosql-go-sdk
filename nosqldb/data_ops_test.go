@@ -16,6 +16,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -58,6 +59,20 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		StorageGB:  50,
 	}
 	suite.ReCreateTable(table, stmt, limits)
+
+	// create a CDC consumer that reads this table.
+	// cloudsim will cache all written values so that CDC poll() will
+	// return them in the same order.
+	config := suite.Client.CreateChangeConsumerConfig().
+		AddTable(table, "", nosqldb.Latest, nil).
+		GroupID("test_group").
+		CommitAutomatic()
+	consumer, err := suite.Client.CreateChangeConsumer(config)
+	if err != nil {
+		// for now, don't fail if we can't create a consumer
+		//return err
+		fmt.Fprintf(os.Stderr, "WARN: can't create CDC consumer: %v\n", err)
+	}
 
 	var putReq *nosqldb.PutRequest
 	var putRes *nosqldb.PutResult
@@ -558,6 +573,19 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			nil,   // expPrevValue
 			nil,   // expPrevVersion
 			recordKB)
+	}
+
+	// If we created a consumer, try consuming all of the above events.
+	if consumer != nil {
+		message, err := consumer.Poll(100, time.Duration(1*time.Second))
+		if err != nil {
+			//return fmt.Errorf("error getting CDC messages: %v", err)
+			fmt.Fprintf(os.Stderr, "WARN: got error in consumer poll: %v\n", err)
+		} else {
+			// If the time elapsed but there were no messages to read, the returned message
+			// will have an empty array of events.
+			fmt.Printf("Received message: %v", message)
+		}
 	}
 }
 

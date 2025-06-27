@@ -20,6 +20,7 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
+	"github.com/oracle/nosql-go-sdk/nosqldb/jsonutil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
@@ -32,7 +33,9 @@ const (
 	COMPARTMENT_OCID           = "cc"
 	CONSISTENCY                = "co"
 	CONSUMED                   = "c"
+	CONSUMER_TABLES            = "ct"
 	CONTINUATION_KEY           = "ck"
+	CURSOR                     = "cu"
 	DATA                       = "d"
 	DEFINED_TAGS               = "dt"
 	DRIVER_QUERY_PLAN          = "dq"
@@ -40,6 +43,20 @@ const (
 	END                        = "en"
 	ERROR_CODE                 = "e"
 	ETAG                       = "et"
+    EVENT_BUNDLE               = "eb"
+    EVENT_ID                   = "ei"
+    EVENT_EVENTS               = "es"
+    EVENT_EXPIRATION_TIME      = "xp"
+    EVENT_MODIFICATION_TIME    = "md"
+    EVENT_PARTITION_ID         = "pi"
+    EVENT_PREV_VALUE           = "pv"
+    EVENT_PREV_METADATA        = "pm"
+    EVENT_RECORD_KEY           = "rk"
+    EVENT_RECORD_METADATA      = "rm"
+    EVENT_RECORD_VALUE         = "rv"
+    EVENT_REGION_ID            = "ri"
+    EVENT_VERSION              = "vs"
+    EVENT_TYPE                 = "ty"
 	EXACT_MATCH                = "ec"
 	EXCEPTION                  = "x"
 	EXISTING_MOD_TIME          = "em"
@@ -47,10 +64,12 @@ const (
 	EXISTING_VERSION           = "ev"
 	EXPIRATION                 = "xp"
 	FIELDS                     = "f"
+	FORCE_RESET                = "fr"
 	FREE_FORM_TAGS             = "ff"
 	GENERATED                  = "gn"
 	GET_QUERY_PLAN             = "gq"
 	GET_QUERY_SCHEMA           = "gs"
+	GROUP_ID                   = "gr"
 	HEADER                     = "h"
 	IDEMPOTENT                 = "ip"
 	IDENTITY_CACHE_SIZE        = "ic"
@@ -68,13 +87,17 @@ const (
 	LIMITS_MODE                = "mo"
 	LIST_MAX_TO_READ           = "lx"
 	LIST_START_INDEX           = "ls"
+	MANUAL_COMMIT              = "ma"
 	MATCH_VERSION              = "mv"
 	MATH_CONTEXT_CODE          = "mc"
 	MATH_CONTEXT_PRECISION     = "cp"
 	MATH_CONTEXT_ROUNDING_MODE = "rm"
+	MAX_EVENTS                 = "me"
+	MAX_POLL_INTERVAL          = "mi"
 	MAX_READ_KB                = "mr"
 	MAX_WRITE_KB               = "mw"
 	MAX_SHARD_USAGE_PERCENT    = "ms"
+	MESSAGES_REMAINING         = "mm"
 	MODIFIED                   = "md"
 	NAME                       = "m"
 	NAMESPACE                  = "ns"
@@ -121,6 +144,8 @@ const (
 	SHARD_IDS                  = "sa"
 	SORT_PHASE1_RESULTS        = "p1"
 	START                      = "sr"
+	START_LOCATION             = "so"
+	START_TIME                 = "se"
 	STATEMENT                  = "st"
 	STORAGE_GB                 = "sg"
 	STORAGE_THROTTLE_COUNT     = "sl"
@@ -163,6 +188,7 @@ const (
 	WM_FAIL_INDEX              = "wi"
 	WM_FAIL_RESULT             = "wr"
 	WM_SUCCESS                 = "ws"
+	WAIT_TIME                  = "wa"
 	WRITE_KB                   = "wk"
 	WRITE_MULTIPLE             = "wm"
 	WRITE_THROTTLE_COUNT       = "wt"
@@ -1076,6 +1102,398 @@ func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 	}
 	return res, 0, nil
 }
+
+// serialize writes the cdcCreateRequest to data stream using the specified protocol writer.
+func (req *cdcCreateRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.CDCCreateConsumer, req.Timeout, "", req.GetTopologyInfo()); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	ns.startPayload()
+	c := req.config
+
+	if err = ns.writeField(GROUP_ID, c.GroupId); err != nil {
+		return
+	}
+
+	if c.CompartmentOCID != "" {
+		if err = ns.writeField(COMPARTMENT_OCID, c.CompartmentOCID); err != nil {
+			return
+		}
+	}
+
+	if err = ns.writeField(MANUAL_COMMIT, c.ManualCommit); err != nil {
+		return
+	}
+
+	maxPollMs := int(c.MaxPollingInterval.Nanoseconds() / 1e6)
+	if err = ns.writeField(MAX_POLL_INTERVAL, maxPollMs); err != nil {
+		return
+	}
+
+	if err = ns.writeField(FORCE_RESET, c.ForceReset); err != nil {
+		return
+	}
+
+	ns.startArray(CONSUMER_TABLES);
+	for _, table := range c.Tables {
+		ns.startArrayField(0)
+		ns.startMap("")
+		if err = ns.writeField(TABLE_NAME, table.TableName); err != nil {
+			return
+		}
+		if table.CompartmentOCID != "" {
+			if err = ns.writeField(COMPARTMENT_OCID, table.CompartmentOCID); err != nil {
+				return
+			}
+		}
+		if table.StartLocation.Location != FirstUncommitted {
+			if err = ns.writeField(START_LOCATION, string(table.StartLocation.Location)); err != nil {
+				return
+			}
+		}
+		if table.StartLocation.Location == AtTime {
+			millis := table.StartLocation.StartTime.UnixMilli();
+			if err = ns.writeField(START_TIME, millis); err != nil {
+				return
+			}
+		}
+		ns.endMap("")
+		ns.endArrayField(0)
+	}
+	ns.endArray(CONSUMER_TABLES);
+
+	ns.endPayload()
+
+	endRequest(ns)
+	return
+}
+
+func (req *cdcCreateRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, code, err
+	}
+
+	res := &cdcCreateResult{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case ERROR_CODE:
+			code, err := walker.handleErrorCode()
+			if err != nil || code != 0 {
+				return nil, code, err
+			}
+		case CONSUMED:
+			res.Capacity, err = readNsonConsumedCapacity(r)
+		case CURSOR:
+			res.cursor, err = readNsonBinary(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, BadProtocol, err
+	}
+	if res.cursor == nil {
+		return nil, BadProtocol, fmt.Errorf("Response missing cursor")
+	}
+	return res, 0, nil
+}
+
+// serialize writes the cdcPollRequest to data stream using the specified protocol writer.
+func (req *cdcPollRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.CDCPoll, req.Timeout, "", req.GetTopologyInfo()); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	ns.startPayload()
+
+	if err = ns.writeField(MAX_EVENTS, req.maxEvents); err != nil {
+		return
+	}
+
+	waitMs := int(req.waitTime.Nanoseconds() / 1e6)
+	if err = ns.writeField(WAIT_TIME, waitMs); err != nil {
+		return
+	}
+
+	if err = ns.writeField(CURSOR, req.consumer.cursor); err != nil {
+		return
+	}
+
+	ns.endPayload()
+
+	endRequest(ns)
+	return
+}
+
+func (req *cdcPollRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
+
+//mv, err := readNsonMapValue(r)
+//if err != nil {
+	//return nil, BadProtocol, err
+//}
+//fmt.Printf("poll result = %s\n", jsonutil.AsJSON(mv))
+
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, code, err
+	}
+
+	var messagesRemaining int64 = 0
+	res := &cdcPollResult{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case ERROR_CODE:
+			code, err := walker.handleErrorCode()
+			if err != nil || code != 0 {
+				return nil, code, err
+			}
+		case CONSUMED:
+			res.Capacity, err = readNsonConsumedCapacity(r)
+		case CURSOR:
+			res.cursor, err = readNsonBinary(r)
+		case MESSAGES_REMAINING:
+			messagesRemaining, err = readNsonLong(r)
+		case EVENT_BUNDLE:
+			res.bundle, err = readNsonMessageBundle(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, BadProtocol, err
+	}
+	if res.cursor == nil {
+		return nil, BadProtocol, fmt.Errorf("Response missing cursor")
+	}
+	if res.bundle == nil {
+		return nil, BadProtocol, fmt.Errorf("Response missing message bundle")
+	}
+	res.bundle.MessagesRemaining = messagesRemaining
+	return res, 0, nil
+}
+
+
+func readNsonMessageBundle(r proto.Reader) (*ChangeMessageBundle, error) {
+
+// EVENT_BUNDLE: [
+//         {
+//           TABLE_OCID: foo,
+//           TABLE_NAME: foo,
+//           COMPARTMENT_OCID: foo,
+//           EVENT_EVENTS: [
+//              binary: event containing one or more records
+//              binary
+//              binary
+//           ]
+//         },
+//         ...
+//      ]
+
+	if err := readNsonType(r, types.Array); err != nil {
+		return nil, err
+	}
+	// length in bytes: ignored
+	if _, err := r.ReadInt(); err != nil {
+		return nil, err
+	}
+	numElements, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	messages := make([]*ChangeMessage, numElements)
+	for i := 0; i < numElements; i++ {
+		walker, _, err := newMapWalker(r)
+		if err != nil {
+			return nil, err
+		}
+		cm := &ChangeMessage{}
+		for err == nil && walker.hasNext() {
+			walker.next()
+			switch name := walker.getCurrentName(); name {
+			case TABLE_OCID:
+				cm.TableName, err = readNsonString(r)
+			case TABLE_NAME:
+				cm.TableOCID, err = readNsonString(r)
+			case COMPARTMENT_OCID:
+				cm.CompartmentOCID, err = readNsonString(r)
+			case EVENT_EVENTS:
+				cm.Events, err = readNsonChangeEvents(r)
+			default:
+				err = skipNsonField(r, name)
+			}
+		}
+		if err != nil {
+			return nil, err
+		}
+		if cm.Events == nil {
+			return nil, fmt.Errorf("Missing EVENTS in poll response")
+		}
+		messages[i] = cm
+	}
+
+	bundle := &ChangeMessageBundle{Messages: messages}
+fmt.Printf("returning bundle: %s\n", jsonutil.AsJSON(bundle))
+	return bundle, nil
+}
+
+func readNsonChangeEvents(r proto.Reader) ([]*ChangeEvent, error) {
+	if err := readNsonType(r, types.Array); err != nil {
+		return nil, err
+	}
+	// length in bytes: ignored
+	if _, err := r.ReadInt(); err != nil {
+		return nil, err
+	}
+	numElements, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	events := make([]*ChangeEvent, numElements)
+	for i := 0; i < numElements; i++ {
+		events[i], err = readNsonChangeEvent(r) // Nson Binary
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return events, nil
+}
+
+func readNsonChangeEvent(r proto.Reader) (*ChangeEvent, error) {
+	arr, err := readNsonBinary(r)
+	if err != nil {
+		return nil, err
+	}
+	tempr := binary.NewReader(bytes.NewBuffer(arr))
+/*
+	if err := readNsonType(r, types.Binary); err != nil {
+		return nil, err
+	}
+	// read and ignore the byte length
+	byteLen, err := r.ReadPackedInt()
+	if err != nil {
+		return nil, err
+	}
+	if byteLen < 1 {
+		return nil, fmt.Errorf("Invalid / empty change event in poll result")
+	}
+	// the bytes should be an nson-encoded map
+	// in theory, reading the map will walk the exact number of bytes
+	// TODO: verify? check offsets before and after?
+*/
+	walker, _, err := newMapWalker(tempr)
+	if err != nil {
+		return nil, err
+	}
+	event := &ChangeEvent{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case EVENT_VERSION:
+			// version currently ignored
+			_, err = readNsonInt(tempr, name)
+		case EVENT_TYPE:
+			// type currently ignored: single or group implied by array size below
+			_, err = readNsonInt(tempr, name)
+		case EVENT_EVENTS:
+			// expect an array of events
+			if err = readNsonType(tempr, types.Array); err != nil {
+				return nil, err
+			}
+			// length in bytes: ignored
+			if _, err = tempr.ReadInt(); err != nil {
+				return nil, err
+			}
+			numElements, err := tempr.ReadInt()
+			if err != nil {
+				return nil, err
+			}
+			event.Records = make([]*ChangeRecord, numElements)
+			for i := 0; i < numElements; i++ {
+				event.Records[i], err = readNsonChangeRecord(tempr)
+			}
+		default:
+			err = skipNsonField(tempr, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	// TODO: check resulting offset
+	return event, nil
+}
+
+func readNsonChangeRecord(r proto.Reader) (*ChangeRecord, error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, err
+	}
+	record := &ChangeRecord{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case EVENT_ID:
+			record.EventID, err = readNsonString(r)
+		case EVENT_MODIFICATION_TIME:
+			timeMs, err := readNsonLong(r)
+			if err == nil && timeMs > 0 {
+				record.ModificationTime = toUnixTime(timeMs)
+			}
+		case EVENT_EXPIRATION_TIME:
+			timeMs, err := readNsonLong(r)
+			if err == nil && timeMs > 0 {
+				record.ExpirationTime = toUnixTime(timeMs)
+			}
+		case EVENT_PARTITION_ID:
+			record.PartitionID, err = readNsonInt(r, name)
+		case EVENT_REGION_ID:
+			record.RegionID, err = readNsonInt(r, name)
+		case EVENT_RECORD_KEY:
+			record.RecordKey, err = readNsonMapValue(r)
+		case EVENT_RECORD_VALUE:
+			if record.CurrentImage == nil {
+				record.CurrentImage = &ChangeImage{}
+			}
+			record.CurrentImage.RecordValue, err = readNsonMapValue(r)
+		case EVENT_RECORD_METADATA:
+			if record.CurrentImage == nil {
+				record.CurrentImage = &ChangeImage{}
+			}
+			record.CurrentImage.RecordMetadata, err = readNsonMapValue(r)
+		case EVENT_PREV_VALUE:
+			if record.BeforeImage == nil {
+				record.BeforeImage = &ChangeImage{}
+			}
+			record.BeforeImage.RecordValue, err = readNsonMapValue(r)
+		case EVENT_PREV_METADATA:
+			if record.BeforeImage == nil {
+				record.BeforeImage = &ChangeImage{}
+			}
+			record.BeforeImage.RecordMetadata, err = readNsonMapValue(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
 
 // serialize writes the TableUsageRequest to data stream using the specified protocol writer.
 //
@@ -2463,7 +2881,7 @@ func readNsonRow(r proto.Reader, res *GetResult) error {
 			if res.StructValue != nil {
 				err = r.ReadStructValue(res.StructValue)
 			} else {
-				res.Value, err = readNsonRowValue(r)
+				res.Value, err = readNsonMapValue(r)
 			}
 		default:
 			err = skipNsonField(r, name)
@@ -2472,7 +2890,7 @@ func readNsonRow(r proto.Reader, res *GetResult) error {
 	return err
 }
 
-func readNsonRowValue(r proto.Reader) (*types.MapValue, error) {
+func readNsonMapValue(r proto.Reader) (*types.MapValue, error) {
 	v, err := r.ReadFieldValue()
 	if err != nil {
 		return nil, err
@@ -2912,7 +3330,7 @@ func readNsonQueryResults(r proto.Reader, qres *QueryResult) (err error) {
 	arr := make([]*types.MapValue, 0, numElements)
 	var val *types.MapValue
 	for i := 0; i < numElements; i++ {
-		val, err = readNsonRowValue(r)
+		val, err = readNsonMapValue(r)
 		if err != nil {
 			return
 		}

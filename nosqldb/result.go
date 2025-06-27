@@ -1015,6 +1015,23 @@ func (r QueryResult) String() string {
 	return jsonutil.AsJSON(r)
 }
 
+type cdcCreateResult struct {
+	Capacity
+	DelayInfo
+	common.InternalResultData
+
+	cursor []byte
+}
+
+type cdcPollResult struct {
+	Capacity
+	DelayInfo
+	common.InternalResultData
+
+	cursor []byte
+	bundle *ChangeMessageBundle
+}
+
 func validateWaitTimeout(timeout, pollInterval time.Duration) error {
 	if pollInterval < time.Millisecond {
 		return nosqlerr.NewIllegalArgument("the specified poll interval %v is less than the allowed minimum of %v",

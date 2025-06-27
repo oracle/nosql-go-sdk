@@ -2384,6 +2384,137 @@ func (r *MultiDeleteRequest) doesWrites() bool {
 	return true
 }
 
+
+// cdcCreateRequest represents the input used to create a Change Data Capture
+// consumer.
+//
+// Applications should not use this request type - instead, they should use
+// Client.CreateChangeConsumer() to create CDC consumers.
+type cdcCreateRequest struct {
+	// Config specifies the configuration to use to create the consumer.
+	config *ChangeConsumerConfig
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
+}
+
+func (r *cdcCreateRequest) validate() (err error) {
+	if r.config == nil {
+		return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
+	}
+	if len(r.config.Tables) == 0 {
+		return fmt.Errorf("ChangeConsumerConfig has no tables defined")
+	}
+	if err = validateTimeout(r.Timeout); err != nil {
+		return
+	}
+	return nil
+}
+
+func (r *cdcCreateRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *cdcCreateRequest) shouldRetry() bool {
+	return true
+}
+
+func (r *cdcCreateRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *cdcCreateRequest) getTableName() string {
+	return ""
+}
+
+func (r *cdcCreateRequest) getNamespace() string {
+	return ""
+}
+
+func (r *cdcCreateRequest) doesReads() bool {
+	return true
+}
+
+func (r *cdcCreateRequest) doesWrites() bool {
+	return false
+}
+
+
+// cdcPollRequest represents the input used to execute a CDC poll request.
+//
+// Applications should not use this request type - instead, they should use
+// ChangeConsumer.Poll() to poll for new data.
+type cdcPollRequest struct {
+	// Consumer represents the consumer doing the poll.
+	consumer *ChangeConsumer
+
+	// maxEvents specifies the maximum number of poll events to return
+	maxEvents int
+
+	// waitTime specifies the maximum amount of time to wait for events
+	waitTime time.Duration
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
+}
+
+func (r *cdcPollRequest) validate() (err error) {
+	if r.consumer == nil {
+		return fmt.Errorf("PollRequest missing ChangeConsumer")
+	}
+	if err = validateTimeout(r.Timeout); err != nil {
+		return
+	}
+	return nil
+}
+
+func (r *cdcPollRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *cdcPollRequest) shouldRetry() bool {
+	return true
+}
+
+func (r *cdcPollRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *cdcPollRequest) getTableName() string {
+	return ""
+}
+
+func (r *cdcPollRequest) getNamespace() string {
+	return ""
+}
+
+func (r *cdcPollRequest) doesReads() bool {
+	return true
+}
+
+func (r *cdcPollRequest) doesWrites() bool {
+	return false
+}
+
+
 // WriteOperation represents a put or delete operation that can be added into
 // a WriteMultipleRequest. Either specify a PutRequest or DeleteRequest for the
 // WriteOperation. Specifying both PutRequest and DeleteRequest in a single

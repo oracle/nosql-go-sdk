@@ -200,38 +200,25 @@ const (
 )
 
 type ChangeImage struct {
-	// RecordKey specifies the fields in the record that make up the primary key.
-	RecordKey *types.MapValue
-
-	// RecordValue specifies the fields of the record. This will be nil if ChangeType == Delete.
+	// RecordValue specifies all of the fields of the record.
 	RecordValue *types.MapValue
 
 	// RecordMetadata represents additional data for the record. Its value is TBD.
-	RecordMetadata map[string]interface{}
+	RecordMetadata *types.MapValue
 }
 
 // ChangeEvent represents a single Change Data Capture event.
-type ChangeEvent struct {
-
-	// The table name for this event
-	TableName string
-
-	// The compartment OCID for this event. If this is empty,
-	// the compartment is assumed to be the default compartment
-	// for the tenancy.
-	CompartmentOCID string
-
-	// The type of change (Put, Delete)
-	ChangeType
+type ChangeRecord struct {
 
 	// ID of the event
 	EventID string
 
-	// Version of the event format
-	Version string
+	// RecordKey specifies the fields in the record that make up the primary key.
+	RecordKey *types.MapValue
 
-	// The current image of the table record
-	CurrentImage ChangeImage
+	// The current image of the table record. If this is nil, this event represents
+	// a Delete operation.
+	CurrentImage *ChangeImage
 
 	// The previous image of the table record, if it existed before this event
 	BeforeImage *ChangeImage
@@ -242,20 +229,44 @@ type ChangeEvent struct {
 	// ExpirationTime specifies a timestamp indicating when the record will expire. This will
 	// be zero for Delete events.
 	ExpirationTime time.Time
+
+	// PartitionID specifies the CDC partition this event originated from.
+	PartitionID int
+
+	// RegionID specifies the NoSQL cloud region this event originated from.
+// TODO: do we need this in CDC???
+	RegionID int
+}
+
+type ChangeEvent struct {
+	// The set of records in the change event. This will typically
+	// be only one record, unless the stream has group-by-transaction
+	// mode enabled, in which case there may be many records.
+	Records []*ChangeRecord
 }
 
 // ChangeMessage represents a single message from the change stream
 type ChangeMessage struct {
-	// ChangeEvents is an array of events. If group-by-transaction mode is enabled for
-	// the change stream, this array may contain many events. Otherwise it will contain a single
-	// event.
-	ChangeEvents []ChangeEvent
+	// The table name for this set of events
+	TableName string
+
+	// The compartment OCID for this set of events. If this is empty,
+	// the compartment is assumed to be the default compartment
+	// for the tenancy.
+	CompartmentOCID string
+
+	// The table OCID for this set of events
+	TableOCID string
+
+	// Version of the event format
+	Version string
+
+	// Events is an array of events.
+	Events []*ChangeEvent
 }
 
 // ChangeMessageBundle represents one or more ChangeMessages returned from a call to Poll().
 type ChangeMessageBundle struct {
-	// Internal: the current cursor group for the table(s) for these events
-	cursorGroup changeCursorGroup
 
 	// Internal: pointer to the consumer that generated this bundle
 	consumer *ChangeConsumer
@@ -265,10 +276,10 @@ type ChangeMessageBundle struct {
 	// the events consumer is keeping up with change messages for the table.
 	// This value applies to only the table data that this specific consumer can receive in Poll() calls,
 	// which may be less than the overall total if this consumer is one in a group of many active consumers.
-	MessagesRemaining uint64
+	MessagesRemaining int64
 
-	// ChangeMessages is an array of messages containing change event data
-	ChangeMessages []ChangeMessage
+	// Messages is an array of messages containing change event data
+	Messages []*ChangeMessage
 }
 
 // Mark the messages in the bundle as committed: all messages have been
@@ -286,7 +297,7 @@ func (mb *ChangeMessageBundle) Commit(time.Duration) error {
 // Return true if the bundle is empty. This may happen if there was no
 // change data to read in the given timeframe of a Poll().
 func (mb *ChangeMessageBundle) IsEmpty() bool {
-	return len(mb.ChangeMessages) == 0
+	return len(mb.Messages) == 0
 }
 
 type ChangeConsumerTableMetrics struct {
@@ -355,7 +366,7 @@ type ChangeStartLocation struct {
 	Location ChangeLocationType `json:"locationType,omitempty"`
 
 	// used for AtTime type
-	StartTime *time.Time `json:"startTime,omitempty"`
+	StartTime time.Time `json:"startTime,omitempty"`
 }
 
 // ChangeConsumerTableConfig represents the details for a single table in
@@ -415,6 +426,10 @@ type ChangeConsumerConfig struct {
 	// This behavior can be changed by setting ForceReset to true in the config.
 	GroupId string `json:"groupId,omitempty"`
 
+	// The compartment ID to use for the consumer group. If this is empty, the
+	// default tenancy ID will be used.
+	CompartmentOCID string `json:"compartmentOcid,omitempty"`
+
 	// Specify the commit mode for the consumer. If this value is true, the system will not
 	// automatically commit messages consumed by Poll(). It is the responsibility of the
 	// application to call Commit() on a timely basis after consumed data has been processed.
@@ -456,7 +471,9 @@ type ChangeConsumerConfig struct {
 func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) *ChangeConsumerConfig {
 	sl := ChangeStartLocation{
 		Location:  startLocation,
-		StartTime: startTime,
+	}
+	if startTime != nil {
+		sl.StartTime = *startTime
 	}
 	tc := ChangeConsumerTableConfig{
 		TableName:       tableName,
@@ -547,21 +564,15 @@ func (c *Client) CreateChangeConsumerConfig() *ChangeConsumerConfig {
 	}
 }
 
-type changeCursorGroup struct {
-	// array of change cursors
-	// TODO
-	// group id
-	groupID string
-}
-
 // The main struct used for Change Data Capture.
 //
 // NOTE: this struct in not thread-safe, with the exception of calling
 // Commit(), which can be done in other threads/goroutines. Calling
 // Poll() from multiple routines/threads will result in undefined behavior.
 type ChangeConsumer struct {
-	group  changeCursorGroup
-	config ChangeConsumerConfig
+	cursor []byte
+	config *ChangeConsumerConfig
+	client *Client
 }
 
 // Create a Change Data Capture consumer based on configuration.
@@ -573,11 +584,19 @@ type ChangeConsumer struct {
 // the consumer group will be applied immediately after this call succeeds.
 // It is not necessary to call Poll() to trigger table changes.
 //
-// Note that rebalancing operations will not take effect after this call
-// succeeds. Rebalancing does not happen until the first call to Poll().
+// Note that rebalancing operations will not take effect after this call.
+// Rebalancing does not happen until the first call to Poll().
 func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeConsumer, error) {
-	// TODO
-	return nil, fmt.Errorf("function not implemented yet")
+	req := &cdcCreateRequest{config: config}
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+	if res, ok := res.(*cdcCreateResult); ok {
+		cc := &ChangeConsumer{config: config, cursor: res.cursor, client: c}
+		return cc, nil
+	}
+	return nil, errUnexpectedResult
 }
 
 // Create a single-table consumer with all default parameters.
@@ -613,8 +632,18 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 // This method in not thread-safe. Calling Poll() on the same consumer instance
 // from multiple routines/threads will result in undefined behavior.
 func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessageBundle, error) {
-	// TODO
-	return nil, fmt.Errorf("function not implemented yet")
+	// TODO waitTime
+	req := &cdcPollRequest{consumer: cc, maxEvents: limit}
+	res, err := cc.client.execute(req)
+	if err != nil {
+		return nil, err
+	}
+	if res, ok := res.(*cdcPollResult); ok {
+		cc.cursor = res.cursor
+		res.bundle.consumer = cc
+		return res.bundle, nil
+	}
+	return nil, errUnexpectedResult
 }
 
 // Mark the data from the most recent call to [ChangeConsumer.Poll] as committed: the consumer has

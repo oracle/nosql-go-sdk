@@ -155,6 +155,23 @@ const (
 	// GetReplicaStats is used in the cloud Global Active Tables
 	// it gets the stats for a replicated table
 	GetReplicaStats // 35
+
+	Unused36 // INTERNAL_DDL(36)
+	Unused37 // INTERNAL_STATUS(37)
+	Unused38 // GET_CONFIGURATION(38),
+	Unused39 // UPDATE_CONFIGURATION(39),
+	Unused40 // GET_CONFIG_KMS_KEY(40),
+	Unused41 // UPDATE_CONFIG_KMS_KEY(41),
+	Unused42 // REMOVE_CONFIG_KMS_KEY(42),
+
+	// CDCCreateConsumer is used when creating a CDC consumer
+	CDCCreateConsumer // 43
+
+	// CDCPoll is used when polling a CDC consumer
+	CDCPoll // 44
+
+	// AddMVIndex is used when adding a Materialized View Index to a table.
+	AddMVIndex // 45
 )
 
 // Reader is a protocol reader used to read and decode byte sequences.
