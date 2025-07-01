@@ -1325,9 +1325,9 @@ func readNsonMessageBundle(r proto.Reader) (*ChangeMessageBundle, error) {
 			walker.next()
 			switch name := walker.getCurrentName(); name {
 			case TABLE_OCID:
-				cm.TableName, err = readNsonString(r)
-			case TABLE_NAME:
 				cm.TableOCID, err = readNsonString(r)
+			case TABLE_NAME:
+				cm.TableName, err = readNsonString(r)
 			case COMPARTMENT_OCID:
 				cm.CompartmentOCID, err = readNsonString(r)
 			case EVENT_EVENTS:

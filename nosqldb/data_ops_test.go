@@ -576,15 +576,18 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	}
 
 	// If we created a consumer, try consuming all of the above events.
-	if consumer != nil {
-		message, err := consumer.Poll(100, time.Duration(1*time.Second))
-		if err != nil {
-			//return fmt.Errorf("error getting CDC messages: %v", err)
-			fmt.Fprintf(os.Stderr, "WARN: got error in consumer poll: %v\n", err)
-		} else {
-			// If the time elapsed but there were no messages to read, the returned message
-			// will have an empty array of events.
-			fmt.Printf("Received message: %v", message)
+	if consumer == nil {
+		return
+	}
+
+	for {
+		message, err := consumer.Poll(2, time.Duration(1*time.Second))
+		suite.NoError(err)
+		// If the time elapsed but there were no messages to read, the returned message
+		// will have an empty array of events.
+		fmt.Printf("Received message: %v", message)
+		if len(message.Messages) == 0 {
+			return
 		}
 	}
 }

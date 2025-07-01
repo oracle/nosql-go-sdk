@@ -1,5 +1,5 @@
 {
- "version": "",
+ "version": "25.3.10",
  "tablePrefix": "Go",
  "reCreateTables": true,
  "verbose": true,
