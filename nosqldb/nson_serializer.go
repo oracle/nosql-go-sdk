@@ -57,6 +57,7 @@ const (
     EVENT_REGION_ID            = "ri"
     EVENT_VERSION              = "vs"
     EVENT_TYPE                 = "ty"
+    EVENTS_REMAINING           = "er"
 	EXACT_MATCH                = "ec"
 	EXCEPTION                  = "x"
 	EXISTING_MOD_TIME          = "em"
@@ -97,7 +98,6 @@ const (
 	MAX_READ_KB                = "mr"
 	MAX_WRITE_KB               = "mw"
 	MAX_SHARD_USAGE_PERCENT    = "ms"
-	MESSAGES_REMAINING         = "mm"
 	MODIFIED                   = "md"
 	NAME                       = "m"
 	NAMESPACE                  = "ns"
@@ -1251,7 +1251,7 @@ func (req *cdcPollRequest) deserialize(r proto.Reader, serialVersion int16, _ in
 		return nil, code, err
 	}
 
-	var messagesRemaining int64 = 0
+	var eventsRemaining int64 = 0
 	res := &cdcPollResult{}
 	for err == nil && walker.hasNext() {
 		walker.next()
@@ -1265,8 +1265,8 @@ func (req *cdcPollRequest) deserialize(r proto.Reader, serialVersion int16, _ in
 			res.Capacity, err = readNsonConsumedCapacity(r)
 		case CURSOR:
 			res.cursor, err = readNsonBinary(r)
-		case MESSAGES_REMAINING:
-			messagesRemaining, err = readNsonLong(r)
+		case EVENTS_REMAINING:
+			eventsRemaining, err = readNsonLong(r)
 		case EVENT_BUNDLE:
 			res.bundle, err = readNsonMessageBundle(r)
 		default:
@@ -1282,7 +1282,8 @@ func (req *cdcPollRequest) deserialize(r proto.Reader, serialVersion int16, _ in
 	if res.bundle == nil {
 		return nil, BadProtocol, fmt.Errorf("Response missing message bundle")
 	}
-	res.bundle.MessagesRemaining = messagesRemaining
+	res.bundle.EventsRemaining = eventsRemaining
+fmt.Printf("returning bundle: %s\n", jsonutil.AsJSON(res.bundle))
 	return res, 0, nil
 }
 
@@ -1346,7 +1347,6 @@ func readNsonMessageBundle(r proto.Reader) (*ChangeMessageBundle, error) {
 	}
 
 	bundle := &ChangeMessageBundle{Messages: messages}
-fmt.Printf("returning bundle: %s\n", jsonutil.AsJSON(bundle))
 	return bundle, nil
 }
 

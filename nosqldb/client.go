@@ -271,12 +271,12 @@ type ChangeMessageBundle struct {
 	// Internal: pointer to the consumer that generated this bundle
 	consumer *ChangeConsumer
 
-	// MessagesRemaining specifies an estimate of the number of change messages that are still remaining to
-	// be consumed, not counting the messages in this struct. This can be used to monitor if a reader of
+	// EventsRemaining specifies an estimate of the number of change events that are still remaining to
+	// be consumed, not counting the events in this struct. This can be used to monitor if a reader of
 	// the events consumer is keeping up with change messages for the table.
 	// This value applies to only the table data that this specific consumer can receive in Poll() calls,
 	// which may be less than the overall total if this consumer is one in a group of many active consumers.
-	MessagesRemaining int64
+	EventsRemaining int64
 
 	// Messages is an array of messages containing change event data
 	Messages []*ChangeMessage
