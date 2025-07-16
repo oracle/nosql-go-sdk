@@ -133,6 +133,9 @@ type ChangeConsumerTableMetrics struct {
 	// The compartment OCID for this table.
 	CompartmentOCID string
 
+	// The table OCID for this table.
+	TableOCID string
+
 	// The number of messages remaining to be consumed. This may be an
 	// estimate, and is based on the number of messages between the last
 	// committed message and the most recent message produced.
@@ -202,15 +205,18 @@ type ChangeStartLocation struct {
 //	config := c.CreateChangeConsumerConfig().
 //	    AddTable("client_info", "", Latest, nil).
 type ChangeConsumerTableConfig struct {
-	// Name of the table. This is required.
-	TableName string `json:"tableName"`
+	// Name of the table. One of tableName or tableOCID are required.
+	tableName string
 
 	// Optional compartment ID for the table. If empty, the default compartment
 	// for the tenancy is used.
-	CompartmentOCID string `json:"compartmentOcid,omitempty"`
+	compartmentOCID string
 
 	// Optional start location. If empty, FirstUncommitted is used as the default.
-	StartLocation ChangeStartLocation `json:"startLocation,omitempty"`
+	startLocation ChangeStartLocation `json:"startLocation,omitempty"`
+
+	// Table OCID. One of tableName or tableOCID are required.
+	tableOCID string
 }
 
 // ChangeConsumerConfig represents the configuration to use when creating a ChangeConsumer.
@@ -282,7 +288,7 @@ type ChangeConsumerConfig struct {
 // AddTable adds a table to the consumer config. The table must have already been
 // CDC enabled via the OCI console or a NoSQL SDK TableRequest call.
 //
-// tablename: required.
+// tableName: required. This may be the OCID of the table, if available.
 //
 // compartmentOCID: This is optional. If empty, the default compartment OCID
 // for the tenancy is used.
@@ -302,9 +308,9 @@ func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID strin
 		sl.StartTime = *startTime
 	}
 	tc := ChangeConsumerTableConfig{
-		TableName:       tableName,
-		CompartmentOCID: compartmentOCID,
-		StartLocation:   sl,
+		tableName:       tableName,
+		compartmentOCID: compartmentOCID,
+		startLocation:   sl,
 	}
 	cc.Tables = append(cc.Tables, tc)
 	return cc
@@ -413,12 +419,37 @@ type ChangeConsumer struct {
 // Note that rebalancing operations will not take effect after this call.
 // Rebalancing does not happen until the first call to Poll().
 func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeConsumer, error) {
-	req := &cdcCreateRequest{config: config}
+	req := &cdcConsumerRequest{config: config, mode: CreateConsumer}
+
+	// Validate all tables in the config. This will also populate the tableOCID
+	// for each table, which is used internally for all accesses.
+	for i, table := range config.Tables {
+		if table.tableOCID != "" {
+			// TODO: verify in OCID format
+			continue
+		}
+		if table.tableName == "" {
+			return nil, fmt.Errorf("missing table name in consumer configuration")
+		}
+		if table.compartmentOCID != "" {
+// TODO: config allows different compartments, but user is in one compartment, and GetTable()
+// uses the single user's compartment.... hmmm.
+		}
+		getTableReq := &GetTableRequest{TableName: table.tableName}
+		res, err := c.GetTable(getTableReq)
+		if err != nil {
+			return nil, fmt.Errorf("can't get table '%s' information: %v\n",
+							table.tableName, err)
+		}
+		config.Tables[i].tableOCID = res.TableOcid
+fmt.Printf("Using ocid=%s for table=%s\n", res.TableOcid, table.tableName)
+	}
+
 	res, err := c.execute(req)
 	if err != nil {
 		return nil, err
 	}
-	if res, ok := res.(*cdcCreateResult); ok {
+	if res, ok := res.(*cdcConsumerResult); ok {
 		cc := &ChangeConsumer{config: config, cursor: res.cursor, client: c}
 		return cc, nil
 	}
@@ -479,9 +510,8 @@ func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessag
 // same consumer (that is, messages that were returned from calls to Poll() before
 // this one).
 //
-// This method is only necessary when using manual commit mode. Otherwise,
-// in auto commit mode, the commit is implied for all previous data every time [ChangeConsumer.Poll]
-// is called.
+// This method is only necessary when using manual commit mode. Otherwise, in auto commit mode, the
+// commit is implied for all previous data every time [ChangeConsumer.Poll] is called.
 func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 	return fmt.Errorf("function not implemented yet")
 }
@@ -493,9 +523,8 @@ func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 // same consumer (that is, messages that were returned from calls to Poll() before
 // this one). Calling CommitBundle() on a previous MessageBundle will have no effect.
 //
-// This method is only necessary when using manual commit mode. Otherwise,
-// in auto commit mode, the commit is implied for all previous data every time [ChangeConsumer.Poll]
-// is called.
+// This method is only necessary when using manual commit mode. Otherwise, in auto commit mode, the
+// commit is implied for all previous data every time [ChangeConsumer.Poll] is called.
 func (cc *ChangeConsumer) CommitBundle(bundle *ChangeMessageBundle, timeout time.Duration) error {
 	return fmt.Errorf("function not implemented yet")
 }
@@ -506,7 +535,7 @@ func (cc *ChangeConsumer) CommitBundle(bundle *ChangeMessageBundle, timeout time
 //
 // Note this will affect all active consumers using the same group ID.
 //
-// tablename: required.
+// tableName: required. This may be the OCID of the table, if available.
 //
 // compartmentOCID: This is optional. If empty, the default compartment OCID
 // for the tenancy is used.
@@ -540,6 +569,9 @@ func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) 
 // this consumer. If this consumer was part of a group and has called Poll(),
 // this call will trigger a rebalance such that data that was being directed
 // to this consumer will now be redistributed to other active consumers.
+//
+// If the consumer is in auto-commit mode, calling Close() will implicitly call
+// Commit() on the most recent events returned from Poll().
 //
 // It is not required to call this method. If a consumer has not called [ChangeConsumer.Poll]
 // within the maximum poll period, it will be considered closed by the system and a

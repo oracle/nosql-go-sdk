@@ -1015,7 +1015,7 @@ func (r QueryResult) String() string {
 	return jsonutil.AsJSON(r)
 }
 
-type cdcCreateResult struct {
+type cdcConsumerResult struct {
 	Capacity
 	DelayInfo
 	common.InternalResultData

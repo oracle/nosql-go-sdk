@@ -1610,11 +1610,11 @@ func deserializeV3OperationResult(r proto.Reader, serialVersion int16) (res *Ope
 }
 
 // Not implemented in V3
-func (req *cdcCreateRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
-	return fmt.Errorf("cdcCreateRequest serialize not valid in V3 protocol")
+func (req *cdcConsumerRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
+	return fmt.Errorf("cdcConsumerRequest serialize not valid in V3 protocol")
 }
-func (req *cdcCreateRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
-	return nil, fmt.Errorf("cdcCreateRequest deserialize not valid in V3 protocol")
+func (req *cdcConsumerRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, fmt.Errorf("cdcConsumerRequest deserialize not valid in V3 protocol")
 }
 func (req *cdcPollRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
 	return fmt.Errorf("cdcPollRequest serialize not valid in V3 protocol")

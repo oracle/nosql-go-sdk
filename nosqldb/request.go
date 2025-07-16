@@ -2384,15 +2384,25 @@ func (r *MultiDeleteRequest) doesWrites() bool {
 	return true
 }
 
+//type consumerRequestMode int
+const (
+	CreateConsumer = iota + 1
+	ModifyConsumer
+	DeleteConsumer
+)
 
-// cdcCreateRequest represents the input used to create a Change Data Capture
+// cdcConsumerRequest represents the input used to create a Change Data Capture
 // consumer.
 //
 // Applications should not use this request type - instead, they should use
 // Client.CreateChangeConsumer() to create CDC consumers.
-type cdcCreateRequest struct {
+type cdcConsumerRequest struct {
 	// Config specifies the configuration to use to create the consumer.
 	config *ChangeConsumerConfig
+
+	// Mode specifies the mode of the request (create, delete, modify)
+	//mode consumerRequestMode
+	mode int
 
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
@@ -2405,7 +2415,7 @@ type cdcCreateRequest struct {
 	common.InternalRequestData
 }
 
-func (r *cdcCreateRequest) validate() (err error) {
+func (r *cdcConsumerRequest) validate() (err error) {
 	if r.config == nil {
 		return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
 	}
@@ -2418,33 +2428,33 @@ func (r *cdcCreateRequest) validate() (err error) {
 	return nil
 }
 
-func (r *cdcCreateRequest) setDefaults(cfg *RequestConfig) {
+func (r *cdcConsumerRequest) setDefaults(cfg *RequestConfig) {
 	if r.Timeout == 0 {
 		r.Timeout = cfg.DefaultRequestTimeout()
 	}
 }
 
-func (r *cdcCreateRequest) shouldRetry() bool {
+func (r *cdcConsumerRequest) shouldRetry() bool {
 	return true
 }
 
-func (r *cdcCreateRequest) timeout() time.Duration {
+func (r *cdcConsumerRequest) timeout() time.Duration {
 	return r.Timeout
 }
 
-func (r *cdcCreateRequest) getTableName() string {
+func (r *cdcConsumerRequest) getTableName() string {
 	return ""
 }
 
-func (r *cdcCreateRequest) getNamespace() string {
+func (r *cdcConsumerRequest) getNamespace() string {
 	return ""
 }
 
-func (r *cdcCreateRequest) doesReads() bool {
+func (r *cdcConsumerRequest) doesReads() bool {
 	return true
 }
 
-func (r *cdcCreateRequest) doesWrites() bool {
+func (r *cdcConsumerRequest) doesWrites() bool {
 	return false
 }
 

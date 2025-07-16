@@ -98,6 +98,7 @@ const (
 	MAX_READ_KB                = "mr"
 	MAX_WRITE_KB               = "mw"
 	MAX_SHARD_USAGE_PERCENT    = "ms"
+	MODE                       = "mm"
 	MODIFIED                   = "md"
 	NAME                       = "m"
 	NAMESPACE                  = "ns"
@@ -1103,13 +1104,13 @@ func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 	return res, 0, nil
 }
 
-// serialize writes the cdcCreateRequest to data stream using the specified protocol writer.
-func (req *cdcCreateRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
+// serialize writes the cdcConsumerRequest to data stream using the specified protocol writer.
+func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
 	// header
 	ns.startHeader()
-	if err = ns.writeHeader(proto.CDCCreateConsumer, req.Timeout, "", req.GetTopologyInfo()); err != nil {
+	if err = ns.writeHeader(proto.CDCConsumer, req.Timeout, "", req.GetTopologyInfo()); err != nil {
 		return
 	}
 	ns.endHeader()
@@ -1118,6 +1119,10 @@ func (req *cdcCreateRequest) serialize(w proto.Writer, serialVersion int16, _ in
 	c := req.config
 
 	if err = ns.writeField(GROUP_ID, c.GroupId); err != nil {
+		return
+	}
+
+	if err = ns.writeField(MODE, req.mode); err != nil {
 		return
 	}
 
@@ -1144,21 +1149,24 @@ func (req *cdcCreateRequest) serialize(w proto.Writer, serialVersion int16, _ in
 	for _, table := range c.Tables {
 		ns.startArrayField(0)
 		ns.startMap("")
-		if err = ns.writeField(TABLE_NAME, table.TableName); err != nil {
+		if table.tableOCID == "" {
+			return fmt.Errorf("missing table OCID in consumer configuration")
+		}
+		if err = ns.writeField(TABLE_OCID, table.tableOCID); err != nil {
 			return
 		}
-		if table.CompartmentOCID != "" {
-			if err = ns.writeField(COMPARTMENT_OCID, table.CompartmentOCID); err != nil {
+		//if table.CompartmentOCID != "" {
+			//if err = ns.writeField(COMPARTMENT_OCID, table.CompartmentOCID); err != nil {
+				//return
+			//}
+		//}
+		if table.startLocation.Location != FirstUncommitted {
+			if err = ns.writeField(START_LOCATION, string(table.startLocation.Location)); err != nil {
 				return
 			}
 		}
-		if table.StartLocation.Location != FirstUncommitted {
-			if err = ns.writeField(START_LOCATION, string(table.StartLocation.Location)); err != nil {
-				return
-			}
-		}
-		if table.StartLocation.Location == AtTime {
-			millis := table.StartLocation.StartTime.UnixMilli();
+		if table.startLocation.Location == AtTime {
+			millis := table.startLocation.StartTime.UnixMilli();
 			if err = ns.writeField(START_TIME, millis); err != nil {
 				return
 			}
@@ -1174,13 +1182,13 @@ func (req *cdcCreateRequest) serialize(w proto.Writer, serialVersion int16, _ in
 	return
 }
 
-func (req *cdcCreateRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
+func (req *cdcConsumerRequest) deserialize(r proto.Reader, serialVersion int16, _ int16) (Result, int, error) {
 	walker, code, err := newMapWalker(r)
 	if err != nil || code != 0 {
 		return nil, code, err
 	}
 
-	res := &cdcCreateResult{}
+	res := &cdcConsumerResult{}
 	for err == nil && walker.hasNext() {
 		walker.next()
 		switch name := walker.getCurrentName(); name {

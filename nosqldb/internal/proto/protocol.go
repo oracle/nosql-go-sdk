@@ -164,8 +164,8 @@ const (
 	Unused41 // UPDATE_CONFIG_KMS_KEY(41),
 	Unused42 // REMOVE_CONFIG_KMS_KEY(42),
 
-	// CDCCreateConsumer is used when creating a CDC consumer
-	CDCCreateConsumer // 43
+	// CDCConsumer is used when creating/modifying/deleting a CDC consumer
+	CDCConsumer // 43
 
 	// CDCPoll is used when polling a CDC consumer
 	CDCPoll // 44
