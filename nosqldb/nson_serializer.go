@@ -30,6 +30,7 @@ import (
 const (
 	ABORT_ON_FAIL              = "a"
 	BIND_VARIABLES             = "bv"
+	CDC_ENABLED                = "ce"
 	COMPARTMENT_OCID           = "cc"
 	CONSISTENCY                = "co"
 	CONSUMED                   = "c"
@@ -440,6 +441,13 @@ func (req *TableRequest) serialize(w proto.Writer, serialVersion int16, _ int16)
 			return
 		}
 	}
+	if req.CDCConfig != nil {
+		// NOTE WELL: Only include this nson field if enabling or disabling CDC
+		if err = ns.writeField(CDC_ENABLED, req.CDCConfig.Enabled); err != nil {
+			return
+		}
+	}
+
 
 	ns.endPayload()
 

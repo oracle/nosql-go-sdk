@@ -60,6 +60,14 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	}
 	suite.ReCreateTable(table, stmt, limits)
 
+	// Enable CDC on the new table
+	tableReq := &nosqldb.TableRequest{
+		TableName:  table,
+		CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
+	}
+	_, err = suite.Client.DoTableRequest(tableReq)
+	suite.NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
+
 	// create a CDC consumer that reads this table.
 	// cloudsim will cache all written values so that CDC poll() will
 	// return them in the same order.

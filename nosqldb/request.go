@@ -781,6 +781,15 @@ func (r *SystemStatusRequest) doesWrites() bool {
 	return false
 }
 
+// TableCDCConfig is used when enabling or disabling Change Data Capture
+// for a specific table.
+type TableCDCConfig struct {
+	// To enable CDC, set Enabled to true and add this config to
+	// the a TableRequest.
+	Enabled bool `json:"enabled"`
+}
+
+
 // TableRequest represents a request used to manage table schema and limits.
 //
 // The following operations are supported by TableRequest:
@@ -884,9 +893,10 @@ type TableRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
-	// CDCEnabled specifies enabling optional Change Data Capture. This is only
-	// applicable to tables in the NoSQL Cloud Service. Default is false.
-	CDCEnabled bool `json:"cdcEnabled,omitempty"`
+	// CDCConfig is used to enable or disable Change Data Capture.
+	// If this field is nil, no CDC change will be made to the table.
+	// This is only applicable to tables in the NoSQL Cloud Service.
+	CDCConfig *TableCDCConfig `json:"cdcConfig,omitempty"`
 
 	common.InternalRequestData
 }
