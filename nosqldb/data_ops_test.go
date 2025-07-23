@@ -60,27 +60,31 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	}
 	suite.ReCreateTable(table, stmt, limits)
 
-	// Enable CDC on the new table
-	tableReq := &nosqldb.TableRequest{
-		TableName:  table,
-		CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
-	}
-	_, err = suite.Client.DoTableRequest(tableReq)
-	suite.NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
+	var consumer *nosqldb.ChangeConsumer = nil
 
-	// create a CDC consumer that reads this table.
-	// cloudsim will cache all written values so that CDC poll() will
-	// return them in the same order.
-	config := suite.Client.CreateChangeConsumerConfig().
-		AddTable(table, "", nosqldb.Latest, nil).
-		GroupID("test_group").
-		CommitAutomatic()
-	consumer, err := suite.Client.CreateChangeConsumer(config)
-	if err != nil {
-		// for now, don't fail if we can't create a consumer
-		//return err
-		fmt.Fprintf(os.Stderr, "WARN: can't create CDC consumer: %v\n", err)
-	}
+	// Enable CDC on the new table
+    if !suite.IsOnPrem() {
+		tableReq := &nosqldb.TableRequest{
+			TableName:  table,
+			CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
+		}
+		_, err = suite.Client.DoTableRequest(tableReq)
+		suite.NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
+
+		// create a CDC consumer that reads this table.
+		// cloudsim will cache all written values so that CDC poll() will
+		// return them in the same order.
+		config := suite.Client.CreateChangeConsumerConfig().
+			AddTable(table, "", nosqldb.Latest, nil).
+			GroupID("test_group").
+			CommitAutomatic()
+		consumer, err = suite.Client.CreateChangeConsumer(config)
+		if err != nil {
+			// for now, don't fail if we can't create a consumer
+			//return err
+			fmt.Fprintf(os.Stderr, "WARN: can't create CDC consumer: %v\n", err)
+		}
+    }
 
 	var putReq *nosqldb.PutRequest
 	var putRes *nosqldb.PutResult
