@@ -1299,7 +1299,6 @@ func (req *cdcPollRequest) deserialize(r proto.Reader, serialVersion int16, _ in
 		return nil, BadProtocol, fmt.Errorf("Response missing message bundle")
 	}
 	res.bundle.EventsRemaining = eventsRemaining
-fmt.Printf("returning bundle: %s\n", jsonutil.AsJSON(res.bundle))
 	return res, 0, nil
 }
 

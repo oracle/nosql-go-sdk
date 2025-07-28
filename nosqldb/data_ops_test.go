@@ -47,7 +47,9 @@ var (
 func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	var stmt string
 	var err error
-	table := suite.GetTableName("TestUsers")
+	//table := suite.GetTableName("TestUsers")
+	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
+	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
 	// Drop and re-create test tables.
 	stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
 		"id INTEGER, "+
@@ -64,6 +66,8 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 
 	// Enable CDC on the new table
     if !suite.IsOnPrem() {
+		// wait a few seconds for producer to notice the table
+		time.Sleep(3 * time.Second)
 		tableReq := &nosqldb.TableRequest{
 			TableName:  table,
 			CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
@@ -84,6 +88,8 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			//return err
 			fmt.Fprintf(os.Stderr, "WARN: can't create CDC consumer: %v\n", err)
 		}
+		// Give the subscriber a few seconds to start
+		time.Sleep(3 * time.Second)
     }
 
 	var putReq *nosqldb.PutRequest
@@ -592,16 +598,63 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		return
 	}
 
-	for {
-		message, err := consumer.Poll(2, time.Duration(1*time.Second))
-		suite.NoError(err)
+	// Give the replication stream a couple seconds to catch up
+	time.Sleep(3 * time.Second)
+
+	numEvents := 0
+	for i:=0; i<10; i++ {
+		bundle, err := consumer.Poll(2, time.Duration(1*time.Second))
+		suite.NoErrorf(err, "Poll returned error: %v", err)
 		// If the time elapsed but there were no messages to read, the returned message
 		// will have an empty array of events.
-		fmt.Printf("Received message: %v", message)
-		if len(message.Messages) == 0 {
-			return
+		if bundle == nil || len(bundle.Messages) == 0 {
+			//fmt.Printf("Received empty message: sleeping for one second\n")
+			time.Sleep(100 * time.Millisecond);
+		} else {
+			fmt.Printf("Received message: %v\n", *bundle)
+			for _, msg := range bundle.Messages {
+				numEvents += len(msg.Events)
+			}
 		}
 	}
+
+	// TODO: check for exact number of CDC events (15?)
+	fmt.Printf("Received %d CDC events\n", numEvents)
+
+	// Do another put/delete cycle, check events again
+	// Put the row back to store
+	putReq = &nosqldb.PutRequest{TableName: table, Value: value}
+	_, err = suite.Client.Put(putReq)
+	suite.NoError(err)
+
+	key.Put("id", 10)
+	delReq = &nosqldb.DeleteRequest{TableName: table, Key: key}
+	delRes, err = suite.Client.Delete(delReq)
+	suite.NoError(err)
+
+
+	// Give the replication stream a couple seconds to catch up
+	time.Sleep(2 * time.Second)
+
+	numEvents = 0
+	for i:=0; i<10; i++ {
+		bundle, err := consumer.Poll(2, time.Duration(1*time.Second))
+		suite.NoErrorf(err, "Poll returned error: %v", err)
+		// If the time elapsed but there were no messages to read, the returned message
+		// will have an empty array of events.
+		if bundle == nil || len(bundle.Messages) == 0 {
+			//fmt.Printf("Received empty message: sleeping for one second\n")
+			time.Sleep(100 * time.Millisecond);
+		} else {
+			fmt.Printf("Received message: %v\n", *bundle)
+			for _, msg := range bundle.Messages {
+				numEvents += len(msg.Events)
+			}
+		}
+	}
+
+	// TODO: check for exact number of CDC events (15?)
+	fmt.Printf("Received %d CDC events\n", numEvents)
 }
 
 // TestPutExactMatch tests put operations with and without "ExactMatch" set.
