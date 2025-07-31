@@ -16,7 +16,6 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -73,23 +72,25 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
 		}
 		_, err = suite.Client.DoTableRequest(tableReq)
-		suite.NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
-
-		// create a CDC consumer that reads this table.
-		// cloudsim will cache all written values so that CDC poll() will
-		// return them in the same order.
-		config := suite.Client.CreateChangeConsumerConfig().
-			AddTable(table, "", nosqldb.Latest, nil).
-			GroupID("test_group").
-			CommitAutomatic()
-		consumer, err = suite.Client.CreateChangeConsumer(config)
 		if err != nil {
-			// for now, don't fail if we can't create a consumer
-			//return err
-			fmt.Fprintf(os.Stderr, "WARN: can't create CDC consumer: %v\n", err)
+			if nosqlerr.Is(err, nosqlerr.OperationNotSupported) {
+				fmt.Printf("Skipping CDC: not supported by server\n")
+			} else {
+				suite.Require().NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
+			}
+		} else {
+			// create a CDC consumer that reads this table.
+			config := suite.Client.CreateChangeConsumerConfig().
+				AddTable(table, "", nosqldb.Latest, nil).
+				GroupID("test_group").
+				CommitAutomatic()
+			consumer, err = suite.Client.CreateChangeConsumer(config)
+			if err != nil {
+				suite.Require().NoErrorf(err, "failed to create CDC consumer: %v", err)
+			}
+			// Give the subscriber a few seconds to start
+			time.Sleep(3 * time.Second)
 		}
-		// Give the subscriber a few seconds to start
-		time.Sleep(3 * time.Second)
     }
 
 	var putReq *nosqldb.PutRequest
@@ -604,7 +605,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	numEvents := 0
 	for i:=0; i<10; i++ {
 		bundle, err := consumer.Poll(2, time.Duration(1*time.Second))
-		suite.NoErrorf(err, "Poll returned error: %v", err)
+		suite.Require().NoErrorf(err, "Poll returned error: %v", err)
 		// If the time elapsed but there were no messages to read, the returned message
 		// will have an empty array of events.
 		if bundle == nil || len(bundle.Messages) == 0 {
@@ -625,12 +626,12 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	// Put the row back to store
 	putReq = &nosqldb.PutRequest{TableName: table, Value: value}
 	_, err = suite.Client.Put(putReq)
-	suite.NoError(err)
+	suite.Require().NoError(err)
 
 	key.Put("id", 10)
 	delReq = &nosqldb.DeleteRequest{TableName: table, Key: key}
 	delRes, err = suite.Client.Delete(delReq)
-	suite.NoError(err)
+	suite.Require().NoError(err)
 
 
 	// Give the replication stream a couple seconds to catch up
@@ -639,7 +640,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	numEvents = 0
 	for i:=0; i<10; i++ {
 		bundle, err := consumer.Poll(2, time.Duration(1*time.Second))
-		suite.NoErrorf(err, "Poll returned error: %v", err)
+		suite.Require().NoErrorf(err, "Poll returned error: %v", err)
 		// If the time elapsed but there were no messages to read, the returned message
 		// will have an empty array of events.
 		if bundle == nil || len(bundle.Messages) == 0 {

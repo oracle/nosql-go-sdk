@@ -9,8 +9,10 @@ package nosqldb
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
@@ -447,6 +449,9 @@ fmt.Printf("Using ocid=%s for table=%s\n", res.TableOcid, table.tableName)
 
 	res, err := c.execute(req)
 	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nil, nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
 		return nil, err
 	}
 	if res, ok := res.(*cdcConsumerResult); ok {
@@ -493,6 +498,9 @@ func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessag
 	req := &cdcPollRequest{consumer: cc, maxEvents: limit}
 	res, err := cc.client.execute(req)
 	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nil, nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
 		return nil, err
 	}
 	if res, ok := res.(*cdcPollResult); ok {
