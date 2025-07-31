@@ -621,6 +621,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 
 	// TODO: check for exact number of CDC events (15?)
 	fmt.Printf("Received %d CDC events\n", numEvents)
+	suite.Require().GreaterOrEqual(numEvents, 15, "expected at least 15 CDC events")
 
 	// Do another put/delete cycle, check events again
 	// Put the row back to store
@@ -654,8 +655,8 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		}
 	}
 
-	// TODO: check for exact number of CDC events (15?)
 	fmt.Printf("Received %d CDC events\n", numEvents)
+	suite.Require().GreaterOrEqual(numEvents, 2, "expected at least 2 more CDC events")
 }
 
 // TestPutExactMatch tests put operations with and without "ExactMatch" set.
