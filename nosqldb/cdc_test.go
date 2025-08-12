@@ -483,6 +483,59 @@ func (suite *CDCTestSuite) getDeleteReadWriteCost(req *nosqldb.DeleteRequest,
 	return readKB, writeKB
 }
 
+
+func (suite *CDCTestSuite) pollAndCheckEvent(consumer *nosqldb.ChangeConsumer,
+                                             tableOCID string,
+                                             expKey *types.MapValue,
+                                             expValue *types.MapValue) {
+	// Poll until we get this event back, then verify the returned CDC event matches
+	// the record that was written.
+	bundle, err := consumer.Poll(1, time.Duration(10*time.Second))
+	suite.Require().NoErrorf(err, "Poll returned error: %v", err)
+	if bundle == nil || len(bundle.Messages) == 0 {
+		suite.Require().Fail("Poll returned no results after 10 seconds")
+	}
+	fmt.Printf("Received bundle: %v\n", *bundle)
+	if len(bundle.Messages) != 1 {
+		suite.Require().Fail("Poll returned %d messages, expected 1", len(bundle.Messages))
+	}
+	message := bundle.Messages[0]
+	fmt.Printf(" message: %v\n", *message)
+	if len(message.Events) != 1 {
+		suite.Require().Fail("Poll returned %d events, expected 1", len(message.Events))
+	}
+	// TODO: check message.TableName against table name (not OCID)
+	// TODO: check message.CompartmentOCID when using a different compartment
+
+	suite.Require().Equal(message.TableOCID, tableOCID, "Table OCID mismatch")
+	event := message.Events[0];
+	fmt.Printf("    event: %v\n", *event)
+	if len(event.Records) != 1 {
+		suite.Require().Fail("Event contained %d records, expected 1", len(event.Records))
+	}
+	record := event.Records[0]
+	fmt.Printf("      record: %v\n", record)
+
+	// TODO: check EventID?
+
+	suite.Require().Equal(expKey, record.RecordKey, "record keys do not match")
+	if expValue != nil {
+		suite.Require().NotNil(record.CurrentImage, "Current image must not be nil")
+		suite.Require().Equal(expValue, record.CurrentImage.RecordValue, "Values do not match")
+		// TODO record.CurrentImage.RecordMetadata
+	} else {
+		suite.Require().Nil(record.CurrentImage, "Current image should be nil")
+	}
+
+	// TODO: beforeImage testing
+	//suite.Require().Nil(record.BeforeImage)
+
+	// TODO record.ModificationTime time.Time
+	// TODO record.ExpirationTime time.Time
+	// TODO record.PartitionID int
+	// TODO record.RegionID int
+}
+
 // Test that every put/delete/insert/update generates an
 // event that matches the operation
 func (suite *CDCTestSuite) TestEcho() {
@@ -509,8 +562,6 @@ func (suite *CDCTestSuite) TestEcho() {
 	var consumer *nosqldb.ChangeConsumer = nil
 
 	// Enable CDC on the new table
-	// wait a few seconds for producer to notice the table
-	time.Sleep(3 * time.Second)
 	tableReq := &nosqldb.TableRequest{
 		TableName:  table,
 		CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
@@ -520,96 +571,63 @@ func (suite *CDCTestSuite) TestEcho() {
 		if nosqlerr.Is(err, nosqlerr.OperationNotSupported) {
 			suite.T().Skipf("Skipping CDC: %v", err)
 		} else {
-			suite.Require().NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
+			suite.Require().Fail("failed to enable CDC streaming on table %s: %v", table, err)
 		}
-	} else {
-		// create a CDC consumer that reads this table.
-		config := suite.Client.CreateChangeConsumerConfig().
-			AddTable(table, "", nosqldb.Latest, nil).
-			GroupID("echoGroup").
-			CommitAutomatic()
-		consumer, err = suite.Client.CreateChangeConsumer(config)
-		if err != nil {
-			suite.Require().NoErrorf(err, "failed to create CDC consumer: %v", err)
-		}
-		defer func() {
-			err := consumer.Close()
-			if err != nil {
-				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
-			}
-		}()
-		// Give the subscriber a few seconds to start
-		time.Sleep(3 * time.Second)
 	}
 
+	// wait a few seconds for producer to notice the table
+	time.Sleep(3 * time.Second)
 
-	var putReq *nosqldb.PutRequest
-	//var oldVersion, ifVersion types.Version
+	// create a CDC consumer that reads this table.
+	config := suite.Client.CreateChangeConsumerConfig().
+		AddTable(table, "", nosqldb.Latest, nil).
+		GroupID("echoGroup").
+		CommitAutomatic()
+	consumer, err = suite.Client.CreateChangeConsumer(config)
+	if err != nil {
+		suite.Require().Fail("failed to create CDC consumer: %v", err)
+	}
+
+	defer func() {
+		err := consumer.Close()
+		if err != nil {
+			fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+		}
+	}()
+
+	// Give the subscriber a few seconds to start
+	time.Sleep(3 * time.Second)
+
+
 	name := test.GenString(100)
-	value := types.NewOrderedMapValue()
-	value.Put("id", 10).Put("name", name)
-	//newValue := &types.NewOrderedMapValue()
-	//newValue.Put("id", 11).Put("name", name)
+	value := types.NewOrderedMapValue().Put("id", 10).Put("name", name)
 
 	// Put a row.
-	putReq = &nosqldb.PutRequest{
-		TableName: table,
-		Value:     value,
-	}
-	//putRes, err := suite.Client.Put(putReq)
+	putReq := &nosqldb.PutRequest{TableName: table, Value: value}
 	_, err = suite.Client.Put(putReq)
 	suite.Require().NoError(err, "Put failed")
-	//oldVersion = putRes.Version
 
 	// Poll until we get this event back, then verify the returned CDC event matches
 	// the record that was written.
-	bundle, err := consumer.Poll(1, time.Duration(10*time.Second))
-	suite.Require().NoErrorf(err, "Poll returned error: %v", err)
-	if bundle == nil || len(bundle.Messages) == 0 {
-		suite.Require().Fail("Poll returned no results after 10 seconds")
-	}
-	fmt.Printf("Received message: %v\n", *bundle)
-	if len(bundle.Messages) != 1 {
-		suite.Require().Fail("Poll returned %d messages, expected 1", len(bundle.Messages))
-	}
-	message := bundle.Messages[0]
-	if len(message.Events) != 1 {
-		suite.Require().Fail("Poll returned %d events, expected 1", len(message.Events))
-	}
-	// TODO check message.TableName against table name (not OCID)
-	// TODO: check message.CompartmentOCID when using a different compartment
-	suite.Require().Equal(message.TableOCID, table, "Table OCID mismatch")
-	// TODO: Version string?
-	event := message.Events[0];
-	fmt.Printf("Received event: %v\n", event)
-	if len(event.Records) != 1 {
-		suite.Require().Fail("Event contained %d records, expected 1", len(event.Records))
-	}
-	record := event.Records[0]
-	fmt.Printf("Received record: %v\n", record)
-
-	//EventID string
-
-	expKey := types.NewOrderedMapValue()
-	expKey.Put("id", 10)
-	suite.Require().Equal(expKey, record.RecordKey, "record keys do not match")
-	suite.Require().NotNil(record.CurrentImage, "Current image must not be nil")
 	// CDC returns record values that do NOT have the key fields in them...
-	expValue := types.NewOrderedMapValue()
-	expValue.Put("name", name)
-	suite.Require().Equal(expValue, record.CurrentImage.RecordValue, "Values do not match")
-	// TODO record.CurrentImage.RecordMetadata
+	expKey := types.NewOrderedMapValue().Put("id", 10)
+	expValue := types.NewOrderedMapValue().Put("name", name)
+	suite.pollAndCheckEvent(consumer, table, expKey, expValue)
 
-	suite.Require().Nil(record.BeforeImage)
-	// TODO record.ModificationTime time.Time
-	// TODO record.ExpirationTime time.Time
-	// TODO record.PartitionID int
-	// TODO record.RegionID int
-
-	// TODO: how to compare record Versions?
-
-	// TODO: Put row again. Even though it's the same, it should
+	// Put row again. Even though it's the same, it should
 	// generate a new CDC event.
+	putReq = &nosqldb.PutRequest{TableName: table, Value: value}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "Put failed")
+	// TODO: this time it should have a beforeImage
+	suite.pollAndCheckEvent(consumer, table, expKey, expValue)
+
+	// Now delete the row. We should get a new delete event.
+	delReq := &nosqldb.DeleteRequest{TableName: table, Key: expKey}
+	_, err = suite.Client.Delete(delReq)
+	suite.Require().NoError(err, "Delete failed")
+	// TODO: this time it should have a beforeImage
+	suite.pollAndCheckEvent(consumer, table, expKey, nil)
 }
 
 func TestCDCOperations(t *testing.T) {
