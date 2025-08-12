@@ -117,9 +117,8 @@ type ChangeMessageBundle struct {
 // Note that this commit implies commits on all previously polled messages from the
 // same consumer (that is, messages that were returned from calls to Poll() before
 // this one). Calling Commit() on a previous MessageBundle will have no effect.
-func (mb *ChangeMessageBundle) Commit(time.Duration) error {
-	// TODO
-	return fmt.Errorf("function not implemented yet")
+func (mb *ChangeMessageBundle) Commit(timeout time.Duration) error {
+	return mb.consumer.Commit(timeout)
 }
 
 // Return true if the bundle is empty. This may happen if there was no
@@ -545,7 +544,23 @@ func (cc *ChangeConsumer) pollOnce(limit int) (*ChangeMessageBundle, error) {
 // This method is only necessary when using manual commit mode. Otherwise, in auto commit mode, the
 // commit is implied for all previous data every time [ChangeConsumer.Poll] is called.
 func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
-	return fmt.Errorf("function not implemented yet")
+	// TODO: use timeout
+	req := &cdcConsumerRequest{cursor: cc.cursor, mode: CommitConsumer}
+	res, err := cc.client.execute(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
+		return err
+	}
+	if res, ok := res.(*cdcConsumerResult); ok {
+		// TODO: should commit update the cursor?
+		if res.cursor != nil {
+			return nosqlerr.New(nosqlerr.UnknownError, "Consumer not committed on server side")
+		}
+		return nil
+	}
+	return errUnexpectedResult
 }
 
 // Mark the data from the given MessageBundle as committed: the consumer has

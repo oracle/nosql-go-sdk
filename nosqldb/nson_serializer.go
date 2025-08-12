@@ -1130,7 +1130,7 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 		return
 	}
 
-	if req.mode == CloseConsumer {
+	if req.mode == CloseConsumer || req.mode == CommitConsumer {
 		if err = ns.writeField(CURSOR, req.cursor); err != nil {
 			return
 		}

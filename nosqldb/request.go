@@ -2400,6 +2400,7 @@ const (
 	ModifyConsumer
 	CloseConsumer
 	DeleteConsumer
+	CommitConsumer
 )
 
 // cdcConsumerRequest represents the input used to create a Change Data Capture
@@ -2430,7 +2431,7 @@ type cdcConsumerRequest struct {
 }
 
 func (r *cdcConsumerRequest) validate() (err error) {
-	if r.mode != CloseConsumer {
+	if r.mode != CloseConsumer && r.mode != CommitConsumer {
 		if r.config == nil {
 			return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
 		}
@@ -2439,7 +2440,7 @@ func (r *cdcConsumerRequest) validate() (err error) {
 		}
 	} else {
 		if r.cursor == nil {
-			return fmt.Errorf("consumer.Close missing cursor details")
+			return fmt.Errorf("consumer operation missing cursor details")
 		}
 	}
 	if err = validateTimeout(r.Timeout); err != nil {
