@@ -2398,6 +2398,7 @@ func (r *MultiDeleteRequest) doesWrites() bool {
 const (
 	CreateConsumer = iota + 1
 	ModifyConsumer
+	CloseConsumer
 	DeleteConsumer
 )
 
@@ -2410,9 +2411,12 @@ type cdcConsumerRequest struct {
 	// Config specifies the configuration to use to create the consumer.
 	config *ChangeConsumerConfig
 
-	// Mode specifies the mode of the request (create, delete, modify)
+	// Mode specifies the mode of the request (create, modify, close, delete)
 	//mode consumerRequestMode
 	mode int
+
+	// cursor is used when closing a consumer
+	cursor []byte
 
 	// Timeout specifies the timeout value for the request.
 	// It is optional.
@@ -2426,11 +2430,17 @@ type cdcConsumerRequest struct {
 }
 
 func (r *cdcConsumerRequest) validate() (err error) {
-	if r.config == nil {
-		return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
-	}
-	if len(r.config.Tables) == 0 {
-		return fmt.Errorf("ChangeConsumerConfig has no tables defined")
+	if r.mode != CloseConsumer {
+		if r.config == nil {
+			return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
+		}
+		if len(r.config.Tables) == 0 {
+			return fmt.Errorf("ChangeConsumerConfig has no tables defined")
+		}
+	} else {
+		if r.cursor == nil {
+			return fmt.Errorf("consumer.Close missing cursor details")
+		}
 	}
 	if err = validateTimeout(r.Timeout); err != nil {
 		return

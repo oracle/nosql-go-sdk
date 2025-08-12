@@ -1126,11 +1126,20 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 	ns.startPayload()
 	c := req.config
 
-	if err = ns.writeField(GROUP_ID, c.GroupId); err != nil {
+	if err = ns.writeField(MODE, req.mode); err != nil {
 		return
 	}
 
-	if err = ns.writeField(MODE, req.mode); err != nil {
+	if req.mode == CloseConsumer {
+		if err = ns.writeField(CURSOR, req.cursor); err != nil {
+			return
+		}
+		ns.endPayload()
+		endRequest(ns)
+		return
+	}
+
+	if err = ns.writeField(GROUP_ID, c.GroupId); err != nil {
 		return
 	}
 
@@ -1216,9 +1225,9 @@ func (req *cdcConsumerRequest) deserialize(r proto.Reader, serialVersion int16, 
 	if err != nil {
 		return nil, BadProtocol, err
 	}
-	if res.cursor == nil {
-		return nil, BadProtocol, fmt.Errorf("Response missing cursor")
-	}
+	//if res.cursor == nil {
+		//return nil, BadProtocol, fmt.Errorf("Response missing cursor")
+	//}
 	return res, 0, nil
 }
 

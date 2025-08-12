@@ -454,8 +454,11 @@ fmt.Printf("Using ocid=%s for table=%s\n", res.TableOcid, table.tableName)
 		}
 		return nil, err
 	}
-	if res, ok := res.(*cdcConsumerResult); ok {
-		cc := &ChangeConsumer{config: config, cursor: res.cursor, client: c}
+	if resp, ok := res.(*cdcConsumerResult); ok {
+		if resp.cursor == nil {
+			return nil, nosqlerr.New(nosqlerr.BadProtocolMessage, "Response missing cursor")
+		}
+		cc := &ChangeConsumer{config: config, cursor: resp.cursor, client: c}
 		return cc, nil
 	}
 	return nil, errUnexpectedResult
@@ -493,8 +496,29 @@ func (c *Client) CreateSimpleChangeConsumer(tableName, groupID string) (*ChangeC
 //
 // This method in not thread-safe. Calling Poll() on the same consumer instance
 // from multiple routines/threads will result in undefined behavior.
-func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (*ChangeMessageBundle, error) {
-	// TODO waitTime
+func (cc *ChangeConsumer) Poll(limit int, waitTime time.Duration) (bundle *ChangeMessageBundle, err error) {
+	pollInterval := 100 * time.Millisecond // TODO: config?
+	start := time.Now();
+	for {
+		bundle, err = cc.pollOnce(limit)
+		if err != nil {
+			return
+		}
+		if len(bundle.Messages) > 0 {
+			return
+		}
+		// if no messages, sleep for a short period and retry
+		// TODO: backoff algorithm?
+		// if nearing end of waitTime, bail out
+		if time.Since(start) + pollInterval > waitTime {
+			return
+		}
+
+		time.Sleep(pollInterval)
+	}
+}
+
+func (cc *ChangeConsumer) pollOnce(limit int) (*ChangeMessageBundle, error) {
 	req := &cdcPollRequest{consumer: cc, maxEvents: limit}
 	res, err := cc.client.execute(req)
 	if err != nil {
@@ -571,7 +595,7 @@ func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) 
 	return fmt.Errorf("function not implemented yet")
 }
 
-// Close and release all resources for this consumer.
+// Close and release all resources for this consumer instance.
 //
 // Call this method if the application does not intend to continue using
 // this consumer. If this consumer was part of a group and has called Poll(),
@@ -585,8 +609,21 @@ func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) 
 // within the maximum poll period, it will be considered closed by the system and a
 // rebalance may be triggered at that point.
 func (cc *ChangeConsumer) Close() error {
-	// TODO
-	return fmt.Errorf("function not implemented yet")
+	req := &cdcConsumerRequest{cursor: cc.cursor, mode: CloseConsumer}
+	res, err := cc.client.execute(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
+		return err
+	}
+	if res, ok := res.(*cdcConsumerResult); ok {
+		if res.cursor != nil {
+			return nosqlerr.New(nosqlerr.UnknownError, "Consumer not closed on server side")
+		}
+		return nil
+	}
+	return errUnexpectedResult
 }
 
 // Get the minimum number of consumers needed in order to process all change

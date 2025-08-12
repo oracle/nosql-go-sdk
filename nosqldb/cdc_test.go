@@ -29,9 +29,9 @@ type CDCTestSuite struct {
 
 // Test Put/Get/Delete APIs with different operation options.
 func (suite *CDCTestSuite) TestPutGetDelete() {
-    if suite.IsOnPrem() {
-        suite.T().Skip("Skipping CDC tests in onprem mode")
-    }
+	if suite.IsOnPrem() {
+	    suite.T().Skip("Skipping CDC tests in onprem mode")
+	}
 	var stmt string
 	var err error
 	//table := suite.GetTableName("TestUsers")
@@ -69,19 +69,27 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		// create a CDC consumer that reads this table.
 		config := suite.Client.CreateChangeConsumerConfig().
 			AddTable(table, "", nosqldb.Latest, nil).
-			GroupID("test_group").
+			GroupID("putGetDeleteGroup").
 			CommitAutomatic()
 		consumer, err = suite.Client.CreateChangeConsumer(config)
 		if err != nil {
 			suite.Require().NoErrorf(err, "failed to create CDC consumer: %v", err)
 		}
+		defer func() {
+			err := consumer.Close()
+			if err != nil {
+				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+			}
+		}()
 		// Give the subscriber a few seconds to start
 		time.Sleep(3 * time.Second)
 	}
 
+	// keep track of how many CDC events these operations should generate
+	expectedEvents := 0
+
 	var putReq *nosqldb.PutRequest
-	var putRes *nosqldb.PutResult
-	var curVersion, oldVersion, ifVersion, newVersion types.Version
+	var oldVersion, ifVersion types.Version
 	recordKB := 2
 	name := test.GenString((recordKB - 1) * 1024)
 	value := &types.MapValue{}
@@ -94,63 +102,27 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		TableName: table,
 		Value:     value,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true,  // shouldSucceed
-			false, // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-		curVersion = putRes.Version
-	}
+	putRes, err := suite.Client.Put(putReq)
+	suite.Require().NoError(err, "Put failed")
+	oldVersion = putRes.Version
+	expectedEvents++
 
-	// Put row again with ReturnRow=true
-	// If server serial version > V4, expect previous row data returned.
-	// Otherwise no row data should be returned.
+	// Put row again. Even though it's the same, it should
+	// generate a new CDC event.
 	putReq.ReturnRow = true
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
-			value,  // expPrevValue
-			curVersion,  // expPrevVersion
-			recordKB)
-		oldVersion = putRes.Version
-	}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "Put failed")
+	expectedEvents++
 
-	// PutIfAbsent an existing row, it should fail.
+	// PutIfAbsent an existing row, it should not create an event
 	putReq = &nosqldb.PutRequest{
 		TableName: table,
 		Value:     value,
 		PutOption: types.PutIfAbsent,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			false, // shouldSucceed
-			true,  // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
-
-	// PutIfAbsent fails + ReturnRow=true, return existing value and version
-	putReq.ReturnRow = true
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			false,      // shouldSucceed
-			true,       // rowPresent
-			true, // returnPrevRow
-			value,      // expPrevValue
-			oldVersion, // expPrevVersion
-			recordKB)
-	}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "PutIfAbsent failed")
+	//expectedEvents++
 
 	// PutIfPresent an existing row, it should succeed
 	putReq = &nosqldb.PutRequest{
@@ -159,62 +131,19 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		PutOption: types.PutIfPresent,
 	}
 	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-		oldVersion = putRes.Version
-	}
+	suite.Require().NoError(err, "PutIfPresent failed")
+	ifVersion = putRes.Version
+	expectedEvents++
 
-	// PutIfPresent succeed + ReturnRow=true
-	// If server serial version > V4, expect previous row data returned.
-	// Otherwise no row data should be returned.
-	putReq.ReturnRow = true
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
-			value,  // expPrevValue
-			oldVersion,  // expPrevVersion
-			recordKB)
-		ifVersion = putRes.Version
-	}
-
-	// PutIfPresent an new row, it should fail
+	// PutIfPresent an new row, it should not generate an event
 	putReq = &nosqldb.PutRequest{
 		TableName: table,
 		Value:     newValue,
 		PutOption: types.PutIfPresent,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			false, // shouldSucceed
-			false, // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
-
-	// PutIfPresent fail + ReturnRow=true, expect no previous row
-	putReq.ReturnRow = true
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			false, // shouldSucceed
-			false, // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "PutIfPresent failed")
+	//expectedEvents++
 
 	// PutIfAbsent an new row, it should succeed
 	putReq = &nosqldb.PutRequest{
@@ -222,16 +151,9 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		Value:     newValue,
 		PutOption: types.PutIfAbsent,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true,  // shouldSucceed
-			false, // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "PutIfAbsent failed")
+	expectedEvents++
 
 	// PutIfVersion an existing row with unmatched version, it should fail.
 	putReq = &nosqldb.PutRequest{
@@ -240,29 +162,9 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		PutOption:    types.PutIfVersion,
 		MatchVersion: oldVersion,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			false, // shouldSucceed
-			true,  // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
-
-	// PutIfVersion fails + ReturnRow=true
-	putReq.ReturnRow = true
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			false,     // shouldSucceed
-			true,      // rowPresent
-			true,      // returnPrevRow
-			value,     // expPrevValue
-			ifVersion, // expPrevVersion
-			recordKB)
-	}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "PutIfVersion failed")
+	//expectedEvents++
 
 	// Put an existing row with matching version, it should succeed.
 	putReq = &nosqldb.PutRequest{
@@ -271,314 +173,36 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		PutOption:    types.PutIfVersion,
 		MatchVersion: ifVersion,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-		ifVersion = putRes.Version
-	}
-
-	// PutIfVersion succeed + ReturnRow=true
-	putReq.MatchVersion = ifVersion
-	putReq.ReturnRow = true
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-		newVersion = putRes.Version
-	}
-
-	// Put with IfVersion but no matched version is specified, put should fail.
-	putReq = &nosqldb.PutRequest{
-		TableName: table,
-		Value:     value,
-		PutOption: types.PutIfVersion,
-	}
-	putRes, err = suite.Client.Put(putReq)
-	suite.Truef(nosqlerr.IsIllegalArgument(err),
-		"PutIfVersion without a match version specified should have been failed with an IllegalArgument error")
-
-	// Test Get operations
-	var getReq *nosqldb.GetRequest
-	var getRes *nosqldb.GetResult
-
-	expOrderedValue := types.NewOrderedMapValue()
-	expOrderedValue.Put("id", 10).Put("name", name)
-
-	// Get a row.
-	key := types.ToMapValue("id", 10)
-	getReq = &nosqldb.GetRequest{
-		TableName: table,
-		Key:       key,
-	}
-	getRes, err = suite.Client.Get(getReq)
-	if suite.NoError(err) {
-		suite.checkGetResult(getReq, getRes,
-			true,            // rowPresent
-			true,            // checkFieldOrder
-			expOrderedValue, // expected value
-			nil,             // Don't check version if use Eventual consistency
-			recordKB)
-	}
-
-	// Get a row with Absolute consistency
-	getReq.Consistency = types.Absolute
-	getRes, err = suite.Client.Get(getReq)
-	if suite.NoError(err) {
-		suite.checkGetResult(getReq, getRes,
-			true,            // rowPresent
-			true,            // checkFieldOrder
-			expOrderedValue, // expected value
-			newVersion,      // expected version
-			recordKB)
-	}
-
-	// Get the version of the row using a query. Validate that the
-	// version returned matches the version returned from the previous get.
-	stmt = fmt.Sprintf("select row_version($t) as version from %s $t where id = 10", table)
-	qReq := &nosqldb.QueryRequest{
-		Statement:   stmt,
-		Consistency: types.Absolute,
-	}
-	qRes, err := suite.Client.Query(qReq)
-	results, rerr := qRes.GetResults()
-	ver, _ := results[0].GetBinary("version")
-	if suite.NoError(err) && suite.NoError(rerr) {
-		suite.checkGetResult(getReq, getRes,
-			true,               // rowPresent
-			true,               // checkFieldOrder
-			nil,                // expected value
-			types.Version(ver), // expected version
-			recordKB)
-	}
-
-	// Update the row with a PutIfVersion using the version returned by the
-	// row_version query. This should succeed.
-	putReq = &nosqldb.PutRequest{
-		TableName:    table,
-		Value:        value,
-		PutOption:    types.PutIfVersion,
-		MatchVersion: types.Version(ver),
-	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		suite.checkPutResult(putReq, putRes,
-			true,  // shouldSucceed
-			false, // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
-
-	// Get non-existing row
-	key.Put("id", 100)
-	getReq = &nosqldb.GetRequest{
-		TableName: table,
-		Key:       key,
-	}
-	getRes, err = suite.Client.Get(getReq)
-	if suite.NoError(err) {
-		suite.checkGetResult(getReq, getRes,
-			false, // rowPresent
-			false, // checkFieldOrder
-			nil,   // expected value
-			nil,   // expected version
-			recordKB)
-	}
-
-	// Get non-existing row with Absolute consistency
-	getReq.Consistency = types.Absolute
-	getRes, err = suite.Client.Get(getReq)
-	if suite.NoError(err) {
-		suite.checkGetResult(getReq, getRes,
-			false, // rowPresent
-			false, // checkFieldOrder
-			nil,   // expected value
-			nil,   // expected version
-			recordKB)
-	}
-
-	// Test Delete operations
-	var delReq *nosqldb.DeleteRequest
-	var delRes *nosqldb.DeleteResult
-
-	// Delete a row
-	key.Put("id", 10)
-	delReq = &nosqldb.DeleteRequest{
-		TableName: table,
-		Key:       key,
-	}
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			false, // shouldReturnPrev
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-	}
-
-	// Put the row back to store
-	putReq = &nosqldb.PutRequest{
-		TableName: table,
-		Value:     value,
-	}
 	_, err = suite.Client.Put(putReq)
-	suite.NoError(err)
+	suite.Require().NoError(err, "PutIfVersion failed")
+	expectedEvents++
 
-	// Delete succeed + ReturnRow=true
-	delReq.ReturnRow = true
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-	}
-
-	// Delete fail + ReturnRow=true, no existing row returned.
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			false, // shouldSucceed
-			false, // rowPresent
-			false, // shouldReturnPrev
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
-
-	// Put the row back to store
-	putReq = &nosqldb.PutRequest{
+	// Test Get operation: should not generate an event
+	key := types.ToMapValue("id", 10)
+	getReq := &nosqldb.GetRequest{
 		TableName: table,
-		Value:     value,
+		Key:       key,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		ifVersion = putRes.Version
-	}
+	_, err = suite.Client.Get(getReq)
+	suite.Require().NoError(err, "Get failed")
+	//expectedEvents++
 
-	// DeleteIfVersion with unmatched version, it should fail
-	delReq = &nosqldb.DeleteRequest{
-		TableName:    table,
-		Key:          key,
-		MatchVersion: oldVersion,
-	}
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			false, // shouldSucceed
-			true,  // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
+	// TODO: Insert row with a query. Should generate an event.
 
-	// DeleteIfVersion with unmatched version + ReturnRow=true, the existing row returned.
-	delReq.ReturnRow = true
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			false,     // shouldSucceed
-			true,      // rowPresent
-			true,      // returnPrevRow
-			value,     // expPrevValue
-			ifVersion, // expPrevVersion
-			recordKB)
-	}
-
-	// DeleteIfVersion with matched version, it should succeed.
-	delReq = &nosqldb.DeleteRequest{
-		TableName:    table,
-		Key:          key,
-		MatchVersion: ifVersion,
-	}
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-	}
-
-	// Put the row back to store
-	putReq = &nosqldb.PutRequest{
+	// Delete a row: should genrate an event
+	key.Put("id", 10)
+	delReq := &nosqldb.DeleteRequest{
 		TableName: table,
-		Value:     value,
+		Key:       key,
 	}
-	putRes, err = suite.Client.Put(putReq)
-	if suite.NoError(err) {
-		ifVersion = putRes.Version
-	}
+	_, err = suite.Client.Delete(delReq)
+	suite.Require().NoError(err, "Delete failed")
+	expectedEvents++
 
-	// DeleteIfVersion with matched version + ReturnRow=true,
-	// it should succeed but no existing row returned.
-	delReq = &nosqldb.DeleteRequest{
-		TableName:    table,
-		Key:          key,
-		MatchVersion: ifVersion,
-		ReturnRow:    true,
-	}
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
-			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
-			recordKB)
-	}
-
-	// DeleteIfVersion with a key not existed, it should fail.
-	delReq = &nosqldb.DeleteRequest{
-		TableName:    table,
-		Key:          key,
-		MatchVersion: ifVersion,
-	}
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			false, // shouldSucceed
-			false, // rowPresent
-			false, // returnPrevRow
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
-
-	// DeleteIfVersion with a key not existed + ReturnRow=true,
-	// it should fail and no existing row returned.
-	delReq.ReturnRow = true
-	delRes, err = suite.Client.Delete(delReq)
-	if suite.NoError(err) {
-		suite.checkDeleteResult(delReq, delRes,
-			false, // shouldSucceed
-			false, // rowPresent
-			false, // shouldReturnPrev
-			nil,   // expPrevValue
-			nil,   // expPrevVersion
-			recordKB)
-	}
+	// Delete fail: should not generate event
+	_, err = suite.Client.Delete(delReq)
+	suite.Require().NoError(err, "Delete failed")
+	//expectedEvents++
 
 	// Give the replication stream a couple seconds to catch up
 	time.Sleep(3 * time.Second)
@@ -600,9 +224,13 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		}
 	}
 
-	// TODO: check for exact number of CDC events (15?)
+	// check for exact number of CDC events
 	fmt.Printf("Received %d CDC events\n", numEvents)
-	suite.Require().GreaterOrEqual(numEvents, 15, "expected at least 15 CDC events")
+	// NOTE: Cloudsim using internal CDC test client will generate more events,
+	// because it doesn't manage ifVersion properly. We currently can't
+	// tell from the SDK side if we're using cloudsim with internal
+	// test client or if it's cloudsim running against the real CDC client.
+	suite.Require().GreaterOrEqual(numEvents, expectedEvents, "Did not get expected number of events")
 
 	// Do another put/delete cycle, check events again
 	// Put the row back to store
@@ -612,7 +240,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 
 	key.Put("id", 10)
 	delReq = &nosqldb.DeleteRequest{TableName: table, Key: key}
-	delRes, err = suite.Client.Delete(delReq)
+	_, err = suite.Client.Delete(delReq)
 	suite.Require().NoError(err)
 
 
@@ -853,6 +481,135 @@ func (suite *CDCTestSuite) getDeleteReadWriteCost(req *nosqldb.DeleteRequest,
 	}
 
 	return readKB, writeKB
+}
+
+// Test that every put/delete/insert/update generates an
+// event that matches the operation
+func (suite *CDCTestSuite) TestEcho() {
+	if suite.IsOnPrem() {
+	    suite.T().Skip("Skipping CDC tests in onprem mode")
+	}
+	var stmt string
+	var err error
+	//table := suite.GetTableName("TestUsers")
+	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
+	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
+	// Drop and re-create test tables.
+	stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
+		"id INTEGER, "+
+		"name STRING, "+
+		"PRIMARY KEY(id))", table)
+	limits := &nosqldb.TableLimits{
+		ReadUnits:  500,
+		WriteUnits: 500,
+		StorageGB:  50,
+	}
+	suite.ReCreateTable(table, stmt, limits)
+
+	var consumer *nosqldb.ChangeConsumer = nil
+
+	// Enable CDC on the new table
+	// wait a few seconds for producer to notice the table
+	time.Sleep(3 * time.Second)
+	tableReq := &nosqldb.TableRequest{
+		TableName:  table,
+		CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
+	}
+	_, err = suite.Client.DoTableRequest(tableReq)
+	if err != nil {
+		if nosqlerr.Is(err, nosqlerr.OperationNotSupported) {
+			suite.T().Skipf("Skipping CDC: %v", err)
+		} else {
+			suite.Require().NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
+		}
+	} else {
+		// create a CDC consumer that reads this table.
+		config := suite.Client.CreateChangeConsumerConfig().
+			AddTable(table, "", nosqldb.Latest, nil).
+			GroupID("echoGroup").
+			CommitAutomatic()
+		consumer, err = suite.Client.CreateChangeConsumer(config)
+		if err != nil {
+			suite.Require().NoErrorf(err, "failed to create CDC consumer: %v", err)
+		}
+		defer func() {
+			err := consumer.Close()
+			if err != nil {
+				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+			}
+		}()
+		// Give the subscriber a few seconds to start
+		time.Sleep(3 * time.Second)
+	}
+
+
+	var putReq *nosqldb.PutRequest
+	//var oldVersion, ifVersion types.Version
+	name := test.GenString(100)
+	value := types.NewOrderedMapValue()
+	value.Put("id", 10).Put("name", name)
+	//newValue := &types.NewOrderedMapValue()
+	//newValue.Put("id", 11).Put("name", name)
+
+	// Put a row.
+	putReq = &nosqldb.PutRequest{
+		TableName: table,
+		Value:     value,
+	}
+	//putRes, err := suite.Client.Put(putReq)
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "Put failed")
+	//oldVersion = putRes.Version
+
+	// Poll until we get this event back, then verify the returned CDC event matches
+	// the record that was written.
+	bundle, err := consumer.Poll(1, time.Duration(10*time.Second))
+	suite.Require().NoErrorf(err, "Poll returned error: %v", err)
+	if bundle == nil || len(bundle.Messages) == 0 {
+		suite.Require().Fail("Poll returned no results after 10 seconds")
+	}
+	fmt.Printf("Received message: %v\n", *bundle)
+	if len(bundle.Messages) != 1 {
+		suite.Require().Fail("Poll returned %d messages, expected 1", len(bundle.Messages))
+	}
+	message := bundle.Messages[0]
+	if len(message.Events) != 1 {
+		suite.Require().Fail("Poll returned %d events, expected 1", len(message.Events))
+	}
+	// TODO check message.TableName against table name (not OCID)
+	// TODO: check message.CompartmentOCID when using a different compartment
+	suite.Require().Equal(message.TableOCID, table, "Table OCID mismatch")
+	// TODO: Version string?
+	event := message.Events[0];
+	fmt.Printf("Received event: %v\n", event)
+	if len(event.Records) != 1 {
+		suite.Require().Fail("Event contained %d records, expected 1", len(event.Records))
+	}
+	record := event.Records[0]
+	fmt.Printf("Received record: %v\n", record)
+
+	//EventID string
+
+	expKey := types.NewOrderedMapValue()
+	expKey.Put("id", 10)
+	suite.Require().Equal(expKey, record.RecordKey, "record keys do not match")
+	suite.Require().NotNil(record.CurrentImage, "Current image must not be nil")
+	// CDC returns record values that do NOT have the key fields in them...
+	expValue := types.NewOrderedMapValue()
+	expValue.Put("name", name)
+	suite.Require().Equal(expValue, record.CurrentImage.RecordValue, "Values do not match")
+	// TODO record.CurrentImage.RecordMetadata
+
+	suite.Require().Nil(record.BeforeImage)
+	// TODO record.ModificationTime time.Time
+	// TODO record.ExpirationTime time.Time
+	// TODO record.PartitionID int
+	// TODO record.RegionID int
+
+	// TODO: how to compare record Versions?
+
+	// TODO: Put row again. Even though it's the same, it should
+	// generate a new CDC event.
 }
 
 func TestCDCOperations(t *testing.T) {
