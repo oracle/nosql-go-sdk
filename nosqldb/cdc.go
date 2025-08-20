@@ -257,6 +257,9 @@ type ChangeConsumerConfig struct {
 	// specified in the config is ignored). If a table is not in the existing group (or if this the
 	// first consumer in this group), the StartLocation in the table config will be used.
 	// This behavior can be changed by setting ForceReset to true in the config.
+	//
+	// Note: the struct element here has a lowercase 'd' to avoid collision with the
+	// GroupID() method.
 	GroupId string `json:"groupId,omitempty"`
 
 	// The compartment ID to use for the consumer group. If this is empty, the
@@ -297,8 +300,8 @@ type ChangeConsumerConfig struct {
 // startLocation: Specify the position of the first element to read in the change stream.
 // If a table is already being consumed by other consumers in this group, this
 // consumer's start location for the table will be FirstUncommitted (the start location
-// specified in the config is ignored). If a table is not in the existing group (or if this the
-// first consumer in this group), the startLocation in the table config will be used.
+// specified here is ignored). If a table is not in the existing group (or if this the
+// first consumer in this group), the startLocation specified here will be used.
 //
 // startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
 func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) *ChangeConsumerConfig {
@@ -308,6 +311,7 @@ func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID strin
 	if startTime != nil {
 		sl.StartTime = *startTime
 	}
+	// TODO: check if table already in config
 	tc := ChangeConsumerTableConfig{
 		tableName:       tableName,
 		compartmentOCID: compartmentOCID,
@@ -408,6 +412,48 @@ type ChangeConsumer struct {
 	client *Client
 }
 
+func (c *Client) validateTableConfig(config *ChangeConsumerConfig) error {
+	// Validate all tables in the config. This will also populate the tableOCID
+	// for each table, which is used internally for all accesses.
+	for i, table := range config.Tables {
+		if table.tableOCID != "" {
+			// TODO: verify in OCID format
+			continue
+		}
+		if table.tableName == "" {
+			return fmt.Errorf("missing table name in consumer configuration")
+		}
+		if table.compartmentOCID != "" {
+// TODO: config allows different compartments, but user is in one compartment, and GetTable()
+// uses the single user's compartment.... hmmm.
+		}
+		getTableReq := &GetTableRequest{TableName: table.tableName}
+		res, err := c.GetTable(getTableReq)
+		if err != nil {
+			return fmt.Errorf("can't get table '%s' information: %v\n",
+							table.tableName, err)
+		}
+		config.Tables[i].tableOCID = res.TableOcid
+fmt.Printf("Using ocid=%s for table=%s\n", res.TableOcid, table.tableName)
+	}
+	return nil
+}
+
+// Enable Change Data Capture on an existing table.
+//
+// This is a convenience method to simplify enabling CDC. It creates and
+// executes a TableRequest with CDCEnabled set to true.
+func (c *Client) EnableChangeDataCapture(tableName string, compartmentOCID string) error {
+	// TODO: resolve compartmentOCID: this is currently on a per-handle-only basis
+	tableReq := &TableRequest{
+		TableName: tableName,
+		CDCConfig: &TableCDCConfig{Enabled: true},
+	}
+	_, err := c.DoTableRequest(tableReq)
+	// TODO: is this an async operation? Should it wait for completion?
+	return err
+}
+
 // Create a Change Data Capture consumer based on configuration.
 //
 // This will make a server-side call to validate all configuration and
@@ -420,32 +466,12 @@ type ChangeConsumer struct {
 // Note that rebalancing operations will not take effect after this call.
 // Rebalancing does not happen until the first call to Poll().
 func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeConsumer, error) {
-	req := &cdcConsumerRequest{config: config, mode: CreateConsumer}
-
-	// Validate all tables in the config. This will also populate the tableOCID
-	// for each table, which is used internally for all accesses.
-	for i, table := range config.Tables {
-		if table.tableOCID != "" {
-			// TODO: verify in OCID format
-			continue
-		}
-		if table.tableName == "" {
-			return nil, fmt.Errorf("missing table name in consumer configuration")
-		}
-		if table.compartmentOCID != "" {
-// TODO: config allows different compartments, but user is in one compartment, and GetTable()
-// uses the single user's compartment.... hmmm.
-		}
-		getTableReq := &GetTableRequest{TableName: table.tableName}
-		res, err := c.GetTable(getTableReq)
-		if err != nil {
-			return nil, fmt.Errorf("can't get table '%s' information: %v\n",
-							table.tableName, err)
-		}
-		config.Tables[i].tableOCID = res.TableOcid
-fmt.Printf("Using ocid=%s for table=%s\n", res.TableOcid, table.tableName)
+	err := c.validateTableConfig(config)
+	if err != nil {
+		return nil, err
 	}
 
+	req := &cdcConsumerRequest{config: config, mode: CreateConsumer}
 	res, err := c.execute(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "unknown opcode") {
@@ -591,8 +617,37 @@ func (cc *ChangeConsumer) CommitBundle(bundle *ChangeMessageBundle, timeout time
 //
 // startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
 func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) error {
-	// TODO
-	return fmt.Errorf("function not implemented yet")
+	// get existing config
+	if cc.config == nil {
+		return fmt.Errorf("can't add table to consumer: missing internal config")
+	}
+	if cc.cursor == nil {
+		return fmt.Errorf("can't add table to consumer: missing cursor information")
+	}
+	// add table to config
+	cc.config.AddTable(tableName, compartmentOCID, startLocation, startTime)
+	err := cc.client.validateTableConfig(cc.config)
+	if err != nil {
+		return err
+	}
+
+	// call method to update config on cursor
+	req := &cdcConsumerRequest{config: cc.config, cursor: cc.cursor, mode: UpdateConsumer}
+	res, err := cc.client.execute(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
+		return err
+	}
+	if resp, ok := res.(*cdcConsumerResult); ok {
+		if resp.cursor == nil {
+			return nosqlerr.New(nosqlerr.BadProtocolMessage, "Response missing cursor")
+		}
+		cc.cursor = resp.cursor
+		return nil
+	}
+	return errUnexpectedResult
 }
 
 // RemoveTable removes a table from an existing change consumer group.
@@ -710,14 +765,32 @@ func (c *Client) RemoveTableFromChangeConsumerGroup(groupID string, tableName st
 // Any active consumers currently polling this group will get errors on
 // all successive calls to Poll() after this call completes.
 //
+// compartmentOCID: This is optional. If empty, the default compartment OCID
+// for the tenancy is used.
+//
 //	Note: This method is dangerous, as it will affect any currently
 //	      running consumers for this group.
 //
 // This method is typically used during testing, where it may be desirable
 // to immediately stop and clean up all resources used by a group.
-func (c *Client) DeleteChangeConsumerGroup(groupID string) error {
-	// TODO
-	return fmt.Errorf("function not implemented yet")
+func (c *Client) DeleteChangeConsumerGroup(groupID string, compartmentOCID string) error {
+	cfg := &ChangeConsumerConfig{GroupId: groupID, CompartmentOCID: compartmentOCID}
+	req := &cdcConsumerRequest{config: cfg, mode: DeleteConsumer}
+	res, err := c.execute(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
+		return err
+	}
+	if res, ok := res.(*cdcConsumerResult); ok {
+		// delete should never return a cursor
+		if res.cursor != nil {
+			return nosqlerr.New(nosqlerr.UnknownError, "Consumer not deleted on server side")
+		}
+		return nil
+	}
+	return errUnexpectedResult
 }
 
 func (c *Client) simpleCDCTest() error {

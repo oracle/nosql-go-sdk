@@ -1143,6 +1143,12 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 		return
 	}
 
+	if req.mode == UpdateConsumer {
+		if err = ns.writeField(CURSOR, req.cursor); err != nil {
+			return
+		}
+	}
+
 	if c.CompartmentOCID != "" {
 		if err = ns.writeField(COMPARTMENT_OCID, c.CompartmentOCID); err != nil {
 			return

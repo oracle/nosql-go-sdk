@@ -785,7 +785,7 @@ func (r *SystemStatusRequest) doesWrites() bool {
 // for a specific table.
 type TableCDCConfig struct {
 	// To enable CDC, set Enabled to true and add this config to
-	// the a TableRequest.
+	// the TableRequest.
 	Enabled bool `json:"enabled"`
 }
 
@@ -2397,7 +2397,7 @@ func (r *MultiDeleteRequest) doesWrites() bool {
 //type consumerRequestMode int
 const (
 	CreateConsumer = iota + 1
-	ModifyConsumer
+	UpdateConsumer
 	CloseConsumer
 	DeleteConsumer
 	CommitConsumer
@@ -2431,20 +2431,30 @@ type cdcConsumerRequest struct {
 }
 
 func (r *cdcConsumerRequest) validate() (err error) {
-	if r.mode != CloseConsumer && r.mode != CommitConsumer {
-		if r.config == nil {
-			return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
+	if err = validateTimeout(r.Timeout); err != nil {
+		return
+	}
+	if r.mode == DeleteConsumer {
+		if r.config == nil || r.config.GroupId == "" {
+			return fmt.Errorf("delete operation missing group ID")
 		}
-		if len(r.config.Tables) == 0 {
-			return fmt.Errorf("ChangeConsumerConfig has no tables defined")
-		}
-	} else {
+		return nil
+	}
+	if r.mode == CloseConsumer || r.mode == CommitConsumer {
 		if r.cursor == nil {
 			return fmt.Errorf("consumer operation missing cursor details")
 		}
+		return nil
 	}
-	if err = validateTimeout(r.Timeout); err != nil {
-		return
+	if r.mode == UpdateConsumer && r.cursor == nil {
+		return fmt.Errorf("consumer update operation missing cursor details")
+	}
+	// Create and Update
+	if r.config == nil {
+		return fmt.Errorf("CreateRequest missing ChangeConsumerConfig")
+	}
+	if len(r.config.Tables) == 0 {
+		return fmt.Errorf("ChangeConsumerConfig has no tables defined")
 	}
 	return nil
 }

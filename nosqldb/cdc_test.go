@@ -50,6 +50,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	suite.ReCreateTable(table, stmt, limits)
 
 	var consumer *nosqldb.ChangeConsumer = nil
+	groupID := "putGetDeleteGroup"
 
 	// Enable CDC on the new table
 	// wait a few seconds for producer to notice the table
@@ -69,7 +70,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		// create a CDC consumer that reads this table.
 		config := suite.Client.CreateChangeConsumerConfig().
 			AddTable(table, "", nosqldb.Latest, nil).
-			GroupID("putGetDeleteGroup").
+			GroupID(groupID).
 			CommitAutomatic()
 		consumer, err = suite.Client.CreateChangeConsumer(config)
 		if err != nil {
@@ -79,6 +80,10 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 			err := consumer.Close()
 			if err != nil {
 				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+			}
+			err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
+			if err != nil {
+				fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
 			}
 		}()
 		// Give the subscriber a few seconds to start
@@ -536,37 +541,33 @@ func (suite *CDCTestSuite) pollAndCheckEvent(consumer *nosqldb.ChangeConsumer,
 	// TODO record.RegionID int
 }
 
+func (suite *CDCTestSuite) createBasicTable(tableName string) {
+	stmt := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
+		"id INTEGER, "+
+		"name STRING, "+
+		"PRIMARY KEY(id))", tableName)
+	limits := &nosqldb.TableLimits{
+		ReadUnits:  500,
+		WriteUnits: 500,
+		StorageGB:  50,
+	}
+	suite.ReCreateTable(tableName, stmt, limits)
+}
+
 // Test that every put/delete/insert/update generates an
 // event that matches the operation
 func (suite *CDCTestSuite) TestEcho() {
 	if suite.IsOnPrem() {
 	    suite.T().Skip("Skipping CDC tests in onprem mode")
 	}
-	var stmt string
-	var err error
 	//table := suite.GetTableName("TestUsers")
 	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
+	// "ocid1_nosqltable_cloudsim_" is a hardcoded ocid prefix in cloudsim
 	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
-	// Drop and re-create test tables.
-	stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
-		"id INTEGER, "+
-		"name STRING, "+
-		"PRIMARY KEY(id))", table)
-	limits := &nosqldb.TableLimits{
-		ReadUnits:  500,
-		WriteUnits: 500,
-		StorageGB:  50,
-	}
-	suite.ReCreateTable(table, stmt, limits)
-
-	var consumer *nosqldb.ChangeConsumer = nil
+	suite.createBasicTable(table)
 
 	// Enable CDC on the new table
-	tableReq := &nosqldb.TableRequest{
-		TableName:  table,
-		CDCConfig: &nosqldb.TableCDCConfig{Enabled: true},
-	}
-	_, err = suite.Client.DoTableRequest(tableReq)
+	err := suite.Client.EnableChangeDataCapture(table, "")
 	if err != nil {
 		if nosqlerr.Is(err, nosqlerr.OperationNotSupported) {
 			suite.T().Skipf("Skipping CDC: %v", err)
@@ -579,9 +580,12 @@ func (suite *CDCTestSuite) TestEcho() {
 	time.Sleep(3 * time.Second)
 
 	// create a CDC consumer that reads this table.
+	var consumer *nosqldb.ChangeConsumer = nil
+	groupID := "echoGroup"
+
 	config := suite.Client.CreateChangeConsumerConfig().
 		AddTable(table, "", nosqldb.Latest, nil).
-		GroupID("echoGroup").
+		GroupID(groupID).
 		CommitAutomatic()
 	consumer, err = suite.Client.CreateChangeConsumer(config)
 	if err != nil {
@@ -592,6 +596,10 @@ func (suite *CDCTestSuite) TestEcho() {
 		err := consumer.Close()
 		if err != nil {
 			fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+		}
+		err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
+		if err != nil {
+			fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
 		}
 	}()
 
@@ -628,6 +636,19 @@ func (suite *CDCTestSuite) TestEcho() {
 	suite.Require().NoError(err, "Delete failed")
 	// TODO: this time it should have a beforeImage
 	suite.pollAndCheckEvent(consumer, table, expKey, nil)
+
+// temporary
+// add a table to the consumer. this should fail as it's not supported yet.
+	table2 := "ocid1_nosqltable_cloudsim_GoTestUsers2"
+	suite.createBasicTable(table2)
+
+	// Enable CDC on the new table
+	err = suite.Client.EnableChangeDataCapture(table2, "")
+	if err != nil {
+		suite.Require().Fail("failed to enable CDC streaming on table %s: %v", table, err)
+	}
+	err = consumer.AddTable(table2, "", nosqldb.Latest, nil)
+	suite.Require().NoError(err, "Adding second table failed")
 }
 
 func TestCDCOperations(t *testing.T) {
