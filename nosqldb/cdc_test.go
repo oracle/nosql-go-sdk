@@ -651,6 +651,90 @@ func (suite *CDCTestSuite) TestEcho() {
 	suite.Require().NoError(err, "Adding second table failed")
 }
 
+
+// Test functionality that currently should pass.
+func (suite *CDCTestSuite) TestMinimalPassing() {
+	if suite.IsOnPrem() {
+	    suite.T().Skip("Skipping CDC tests in onprem mode")
+	}
+	//table := suite.GetTableName("TestUsers")
+	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
+	// "ocid1_nosqltable_cloudsim_" is a hardcoded ocid prefix in cloudsim
+	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
+	suite.createBasicTable(table)
+
+	// Enable CDC on the new table
+	err := suite.Client.EnableChangeDataCapture(table, "")
+	if err != nil {
+		if nosqlerr.Is(err, nosqlerr.OperationNotSupported) {
+			suite.T().Skipf("Skipping CDC: %v", err)
+		} else {
+			suite.Require().Fail("failed to enable CDC streaming on table %s: %v", table, err)
+		}
+	}
+
+	// wait a few seconds for producer to notice the table
+	time.Sleep(3 * time.Second)
+
+	// create a CDC consumer that reads this table.
+	var consumer *nosqldb.ChangeConsumer = nil
+	groupID := "echoGroup"
+
+	config := suite.Client.CreateChangeConsumerConfig().
+		AddTable(table, "", nosqldb.Latest, nil).
+		GroupID(groupID).
+		CommitAutomatic()
+	consumer, err = suite.Client.CreateChangeConsumer(config)
+	if err != nil {
+		suite.Require().Fail("failed to create CDC consumer: %v", err)
+	}
+
+	//defer func() {
+		//err := consumer.Close()
+		//if err != nil {
+			//fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+		//}
+		//err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
+		//if err != nil {
+			//fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
+		//}
+	//}()
+
+	// Give the subscriber a few seconds to start
+	time.Sleep(3 * time.Second)
+
+
+	name := test.GenString(100)
+	value := types.NewOrderedMapValue().Put("id", 10).Put("name", name)
+
+	// Put a row.
+	putReq := &nosqldb.PutRequest{TableName: table, Value: value}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "Put failed")
+
+	// Poll until we get this event back, then verify the returned CDC event matches
+	// the record that was written.
+	// CDC returns record values that do NOT have the key fields in them...
+	expKey := types.NewOrderedMapValue().Put("id", 10)
+	expValue := types.NewOrderedMapValue().Put("name", name)
+	suite.pollAndCheckEvent(consumer, table, expKey, expValue)
+
+	// Put row again. Even though it's the same, it should
+	// generate a new CDC event.
+	putReq = &nosqldb.PutRequest{TableName: table, Value: value}
+	_, err = suite.Client.Put(putReq)
+	suite.Require().NoError(err, "Put failed")
+	// TODO: this time it should have a beforeImage
+	suite.pollAndCheckEvent(consumer, table, expKey, expValue)
+
+	// Now delete the row. We should get a new delete event.
+	delReq := &nosqldb.DeleteRequest{TableName: table, Key: expKey}
+	_, err = suite.Client.Delete(delReq)
+	suite.Require().NoError(err, "Delete failed")
+	// TODO: this time it should have a beforeImage
+	suite.pollAndCheckEvent(consumer, table, expKey, nil)
+}
+
 func TestCDCOperations(t *testing.T) {
 	test := &CDCTestSuite{
 		NoSQLTestSuite: test.NewNoSQLTestSuite(),

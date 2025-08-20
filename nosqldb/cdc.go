@@ -99,6 +99,9 @@ type ChangeMessageBundle struct {
 	// Internal: pointer to the consumer that generated this bundle
 	consumer *ChangeConsumer
 
+	// Internal: cursor data from the Poll() that created this bundle
+	cursor []byte
+
 	// EventsRemaining specifies an estimate of the number of change events that are still remaining to
 	// be consumed, not counting the events in this struct. This can be used to monitor if a reader of
 	// the events consumer is keeping up with change messages for the table.
@@ -555,6 +558,7 @@ func (cc *ChangeConsumer) pollOnce(limit int) (*ChangeMessageBundle, error) {
 	if res, ok := res.(*cdcPollResult); ok {
 		cc.cursor = res.cursor
 		res.bundle.consumer = cc
+		res.bundle.cursor = res.cursor
 		return res.bundle, nil
 	}
 	return nil, errUnexpectedResult
@@ -570,9 +574,13 @@ func (cc *ChangeConsumer) pollOnce(limit int) (*ChangeMessageBundle, error) {
 // This method is only necessary when using manual commit mode. Otherwise, in auto commit mode, the
 // commit is implied for all previous data every time [ChangeConsumer.Poll] is called.
 func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
+	return cc.client.commitInternal(cc.cursor, timeout)
+}
+
+func (c *Client) commitInternal(cursor []byte, timeout time.Duration) error {
 	// TODO: use timeout
-	req := &cdcConsumerRequest{cursor: cc.cursor, mode: CommitConsumer}
-	res, err := cc.client.execute(req)
+	req := &cdcConsumerRequest{cursor: cursor, mode: CommitConsumer}
+	res, err := c.execute(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "unknown opcode") {
 			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
@@ -599,7 +607,7 @@ func (cc *ChangeConsumer) Commit(timeout time.Duration) error {
 // This method is only necessary when using manual commit mode. Otherwise, in auto commit mode, the
 // commit is implied for all previous data every time [ChangeConsumer.Poll] is called.
 func (cc *ChangeConsumer) CommitBundle(bundle *ChangeMessageBundle, timeout time.Duration) error {
-	return fmt.Errorf("function not implemented yet")
+	return cc.client.commitInternal(bundle.cursor, timeout)
 }
 
 // AddTable adds a table to an existing consumer. The table must have already been
