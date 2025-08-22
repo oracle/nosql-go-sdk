@@ -1021,6 +1021,7 @@ type cdcConsumerResult struct {
 	common.InternalResultData
 
 	cursor []byte
+	metadata *types.MapValue
 }
 
 type cdcPollResult struct {

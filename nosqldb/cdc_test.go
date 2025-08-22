@@ -651,6 +651,22 @@ func (suite *CDCTestSuite) TestEcho() {
 	suite.Require().NoError(err, "Adding second table failed")
 }
 
+// consumers may have metadata associated with them for debugging/testing purposes.
+// One value indicates if the CDC operations are limited due to using CloudSim.
+// Note this is independent of the "cloudsim" test mode, because that can use
+// either internal proxy cloudsim CDC client, or the real cloud CDC client.
+func isCloudsimCDC(consumer *nosqldb.ChangeConsumer) bool {
+	if consumer.Metadata == nil {
+		return false
+	}
+	if val, ok := consumer.Metadata.GetString("cloudsim"); ok {
+		if val != "" {
+			return true
+		}
+	}
+	return false
+}
+
 
 // Test functionality that currently should pass.
 func (suite *CDCTestSuite) TestMinimalPassing() {
@@ -689,16 +705,21 @@ func (suite *CDCTestSuite) TestMinimalPassing() {
 		suite.Require().Fail("failed to create CDC consumer: %v", err)
 	}
 
-	//defer func() {
-		//err := consumer.Close()
-		//if err != nil {
-			//fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
-		//}
-		//err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
-		//if err != nil {
-			//fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
-		//}
-	//}()
+	cloudsimCDC := isCloudsimCDC(consumer)
+
+	defer func() {
+		if cloudsimCDC {
+			fmt.Printf("Using cloudsim CDC: calling close/delete...\n")
+			err := consumer.Close()
+			if err != nil {
+				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+			}
+			err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
+			if err != nil {
+				fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
+			}
+		}
+	}()
 
 	// Give the subscriber a few seconds to start
 	time.Sleep(3 * time.Second)

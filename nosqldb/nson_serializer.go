@@ -35,6 +35,7 @@ const (
 	CONSISTENCY                = "co"
 	CONSUMED                   = "c"
 	CONSUMER_TABLES            = "ct"
+	CONSUMER_METADATA          = "cm"
 	CONTINUATION_KEY           = "ck"
 	CURSOR                     = "cu"
 	DATA                       = "d"
@@ -1224,6 +1225,8 @@ func (req *cdcConsumerRequest) deserialize(r proto.Reader, serialVersion int16, 
 			res.Capacity, err = readNsonConsumedCapacity(r)
 		case CURSOR:
 			res.cursor, err = readNsonBinary(r)
+		case CONSUMER_METADATA:
+			res.metadata, err = readNsonMapValue(r)
 		default:
 			err = skipNsonField(r, name)
 		}

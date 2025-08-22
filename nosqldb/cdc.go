@@ -314,7 +314,10 @@ func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID strin
 	if startTime != nil {
 		sl.StartTime = *startTime
 	}
-	// TODO: check if table already in config
+	// check if table already in config
+	if cc.tableIndex(tableName, compartmentOCID) >= 0 {
+		return cc
+	}
 	tc := ChangeConsumerTableConfig{
 		tableName:       tableName,
 		compartmentOCID: compartmentOCID,
@@ -413,6 +416,7 @@ type ChangeConsumer struct {
 	cursor []byte
 	config *ChangeConsumerConfig
 	client *Client
+	Metadata *types.MapValue
 }
 
 func (c *Client) validateTableConfig(config *ChangeConsumerConfig) error {
@@ -486,7 +490,7 @@ func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeCons
 		if resp.cursor == nil {
 			return nil, nosqlerr.New(nosqlerr.BadProtocolMessage, "Response missing cursor")
 		}
-		cc := &ChangeConsumer{config: config, cursor: resp.cursor, client: c}
+		cc := &ChangeConsumer{config: config, cursor: resp.cursor, client: c, Metadata: resp.metadata}
 		return cc, nil
 	}
 	return nil, errUnexpectedResult
@@ -632,6 +636,10 @@ func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, sta
 	if cc.cursor == nil {
 		return fmt.Errorf("can't add table to consumer: missing cursor information")
 	}
+	// check if table already in config
+	if cc.config.tableIndex(tableName, compartmentOCID) >= 0 {
+		return nil
+	}
 	// add table to config
 	cc.config.AddTable(tableName, compartmentOCID, startLocation, startTime)
 	err := cc.client.validateTableConfig(cc.config)
@@ -658,6 +666,18 @@ func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, sta
 	return errUnexpectedResult
 }
 
+func (cc *ChangeConsumerConfig) tableIndex(tableName, compartmentOCID string) int {
+	for x, elem := range cc.Tables {
+		if strings.EqualFold(elem.tableName, tableName) ||
+			strings.EqualFold(elem.tableOCID, tableName) {
+			if strings.EqualFold(elem.compartmentOCID, compartmentOCID) {
+				return x
+			}
+		}
+	}
+	return -1
+}
+
 // RemoveTable removes a table from an existing change consumer group.
 // If the given table does not exist in the group, this call is ignored and
 // will return no error.
@@ -669,8 +689,51 @@ func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, sta
 // compartmentOCID: This is optional. If empty, the default compartment OCID
 // for the tenancy is used.
 func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) error {
-	// TODO
-	return fmt.Errorf("function not implemented yet")
+	// get existing config
+	if cc.config == nil {
+		return fmt.Errorf("can't remove table from consumer: missing internal config")
+	}
+	if cc.cursor == nil {
+		return fmt.Errorf("can't remove table from consumer: missing cursor information")
+	}
+
+	// remove table from config
+	index := cc.config.tableIndex(tableName, compartmentOCID)
+	if index < 0 {
+		return nil
+	}
+	numTables := len(cc.config.Tables)
+	if numTables == 1 {
+		return fmt.Errorf("can't remove last table from consumer: use DeleteChangeConsumerGroup() instead")
+	}
+	n := index
+	for ; n < (numTables - 1) ; n++ {
+		cc.config.Tables[n] = cc.config.Tables[n+1]
+	}
+	cc.config.Tables = cc.config.Tables[:n]
+
+	err := cc.client.validateTableConfig(cc.config)
+	if err != nil {
+		return err
+	}
+
+	// call method to update config on cursor
+	req := &cdcConsumerRequest{config: cc.config, cursor: cc.cursor, mode: UpdateConsumer}
+	res, err := cc.client.execute(req)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown opcode") {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
+		return err
+	}
+	if resp, ok := res.(*cdcConsumerResult); ok {
+		if resp.cursor == nil {
+			return nosqlerr.New(nosqlerr.BadProtocolMessage, "Response missing cursor")
+		}
+		cc.cursor = resp.cursor
+		return nil
+	}
+	return errUnexpectedResult
 }
 
 // Close and release all resources for this consumer instance.
