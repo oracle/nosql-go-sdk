@@ -66,17 +66,20 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		} else {
 			suite.Require().NoErrorf(err, "failed to enable CDC streaming on table %s: %v", table, err)
 		}
-	} else {
-		// create a CDC consumer that reads this table.
-		config := suite.Client.CreateChangeConsumerConfig().
-			AddTable(table, "", nosqldb.Latest, nil).
-			GroupID(groupID).
-			CommitAutomatic()
-		consumer, err = suite.Client.CreateChangeConsumer(config)
-		if err != nil {
-			suite.Require().NoErrorf(err, "failed to create CDC consumer: %v", err)
-		}
-		defer func() {
+	}
+	// create a CDC consumer that reads this table.
+	config := suite.Client.CreateChangeConsumerConfig().
+		AddTable(table, "", nosqldb.Latest, nil).
+		GroupID(groupID).
+		CommitAutomatic()
+	consumer, err = suite.Client.CreateChangeConsumer(config)
+	if err != nil {
+		suite.Require().NoErrorf(err, "failed to create CDC consumer: %v", err)
+	}
+	cloudsimCDC := isCloudsimCDC(consumer)
+	defer func() {
+		// currently the real cloud CDC fails these. TODO
+		if cloudsimCDC {
 			err := consumer.Close()
 			if err != nil {
 				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
@@ -85,12 +88,14 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 			if err != nil {
 				fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
 			}
-		}()
-		// Give the subscriber a few seconds to start
-		time.Sleep(3 * time.Second)
-	}
+		}
+	}()
+	// Give the subscriber a few seconds to start
+	time.Sleep(3 * time.Second)
 
 	// keep track of how many CDC events these operations should generate
+	// NOTE: Cloudsim using internal CDC test client will generate more events,
+	// because it doesn't manage ifVersion properly.
 	expectedEvents := 0
 
 	var putReq *nosqldb.PutRequest
@@ -127,7 +132,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 	_, err = suite.Client.Put(putReq)
 	suite.Require().NoError(err, "PutIfAbsent failed")
-	//expectedEvents++
+	if cloudsimCDC { expectedEvents++ }
 
 	// PutIfPresent an existing row, it should succeed
 	putReq = &nosqldb.PutRequest{
@@ -148,7 +153,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 	_, err = suite.Client.Put(putReq)
 	suite.Require().NoError(err, "PutIfPresent failed")
-	//expectedEvents++
+	if cloudsimCDC { expectedEvents++ }
 
 	// PutIfAbsent an new row, it should succeed
 	putReq = &nosqldb.PutRequest{
@@ -169,7 +174,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 	_, err = suite.Client.Put(putReq)
 	suite.Require().NoError(err, "PutIfVersion failed")
-	//expectedEvents++
+	if cloudsimCDC { expectedEvents++ }
 
 	// Put an existing row with matching version, it should succeed.
 	putReq = &nosqldb.PutRequest{
@@ -207,7 +212,6 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	// Delete fail: should not generate event
 	_, err = suite.Client.Delete(delReq)
 	suite.Require().NoError(err, "Delete failed")
-	//expectedEvents++
 
 	// Give the replication stream a couple seconds to catch up
 	time.Sleep(3 * time.Second)
@@ -231,11 +235,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 
 	// check for exact number of CDC events
 	fmt.Printf("Received %d CDC events\n", numEvents)
-	// NOTE: Cloudsim using internal CDC test client will generate more events,
-	// because it doesn't manage ifVersion properly. We currently can't
-	// tell from the SDK side if we're using cloudsim with internal
-	// test client or if it's cloudsim running against the real CDC client.
-	suite.Require().GreaterOrEqual(numEvents, expectedEvents, "Did not get expected number of events")
+	suite.Require().Equal(numEvents, expectedEvents, "Did not get expected number of events")
 
 	// Do another put/delete cycle, check events again
 	// Put the row back to store
@@ -270,7 +270,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 
 	fmt.Printf("Received %d CDC events\n", numEvents)
-	suite.Require().GreaterOrEqual(numEvents, 2, "expected at least 2 more CDC events")
+	suite.Require().Equal(numEvents, 2, "expected 2 more CDC events")
 }
 
 func (suite *CDCTestSuite) checkPutResult(req *nosqldb.PutRequest, res *nosqldb.PutResult,
