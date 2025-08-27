@@ -1185,7 +1185,7 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 			//}
 		//}
 		if table.startLocation.Location != FirstUncommitted {
-			if err = ns.writeField(START_LOCATION, string(table.startLocation.Location)); err != nil {
+			if err = ns.writeField(START_LOCATION, int(table.startLocation.Location)); err != nil {
 				return
 			}
 		}

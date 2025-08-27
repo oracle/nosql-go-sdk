@@ -176,21 +176,21 @@ func (c *Client) GetChangeConsumerMetrics(groupID string) (*ChangeConsumerMetric
 	return nil, fmt.Errorf("function not implemented yet")
 }
 
-type ChangeLocationType string
+type ChangeLocationType int
 
 const (
 	// Start consuming at the first uncommitted message in the stream. This is
 	// the default.
-	FirstUncommitted ChangeLocationType = "firstUncommitted"
+	FirstUncommitted ChangeLocationType = iota + 1
 
 	// Start consuming from the earliest (oldest) available message in the stream.
-	Earliest ChangeLocationType = "earliest"
+	Earliest
 
 	// Start consuming messages that were published after the start of the consumer.
-	Latest ChangeLocationType = "latest"
+	Latest
 
 	// Start consuming from a given time.
-	AtTime ChangeLocationType = "atTime"
+	AtTime
 )
 
 type ChangeStartLocation struct {
