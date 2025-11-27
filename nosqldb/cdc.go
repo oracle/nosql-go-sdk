@@ -221,6 +221,9 @@ type ChangeConsumerTableConfig struct {
 
 	// Table OCID. One of tableName or tableOCID are required.
 	tableOCID string
+
+	// isRemove spcifies that this config is being used to remove a table from a consumer group.
+	isRemove bool
 }
 
 // ChangeConsumerConfig represents the configuration to use when creating a ChangeConsumer.
@@ -327,6 +330,17 @@ func (cc *ChangeConsumerConfig) AddTable(tableName string, compartmentOCID strin
 	return cc
 }
 
+// Internal use only
+func (cc *ChangeConsumerConfig) RemoveTable(tableName string, compartmentOCID string) *ChangeConsumerConfig {
+	tc := ChangeConsumerTableConfig{
+		tableName:       tableName,
+		compartmentOCID: compartmentOCID,
+		isRemove:        true,
+	}
+	cc.Tables = append(cc.Tables, tc)
+	return cc
+}
+
 // Specify the group ID. In NoSQL Change Data Capture, every consumer is part of a "group".
 // The group may have a single consumer, or may have multiple consumers.
 //
@@ -414,7 +428,7 @@ func (c *Client) CreateChangeConsumerConfig() *ChangeConsumerConfig {
 // Poll() from multiple routines/threads will result in undefined behavior.
 type ChangeConsumer struct {
 	cursor []byte
-	config *ChangeConsumerConfig
+	//config *ChangeConsumerConfig
 	client *Client
 	Metadata *types.MapValue
 }
@@ -458,6 +472,13 @@ func (c *Client) EnableChangeDataCapture(tableName string, compartmentOCID strin
 	}
 	_, err := c.DoTableRequest(tableReq)
 	// TODO: is this an async operation? Should it wait for completion?
+	if err != nil {
+		// For CDC operations, convert the error be more meaningful if
+		// the server doesn't support CDC
+		if strings.Contains(err.Error(), "must have either statement or limits") {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
+		}
+	}
 	return err
 }
 
@@ -490,7 +511,7 @@ func (c *Client) CreateChangeConsumer(config *ChangeConsumerConfig) (*ChangeCons
 		if resp.cursor == nil {
 			return nil, nosqlerr.New(nosqlerr.BadProtocolMessage, "Response missing cursor")
 		}
-		cc := &ChangeConsumer{config: config, cursor: resp.cursor, client: c, Metadata: resp.metadata}
+		cc := &ChangeConsumer{cursor: resp.cursor, client: c, Metadata: resp.metadata}
 		return cc, nil
 	}
 	return nil, errUnexpectedResult
@@ -629,26 +650,21 @@ func (cc *ChangeConsumer) CommitBundle(bundle *ChangeMessageBundle, timeout time
 //
 // startTime: If start location specifies AtTime, the startTime field is required to be non-nil.
 func (cc *ChangeConsumer) AddTable(tableName string, compartmentOCID string, startLocation ChangeLocationType, startTime *time.Time) error {
-	// get existing config
-	if cc.config == nil {
-		return fmt.Errorf("can't add table to consumer: missing internal config")
-	}
 	if cc.cursor == nil {
 		return fmt.Errorf("can't add table to consumer: missing cursor information")
 	}
-	// check if table already in config
-	if cc.config.tableIndex(tableName, compartmentOCID) >= 0 {
-		return nil
-	}
-	// add table to config
-	cc.config.AddTable(tableName, compartmentOCID, startLocation, startTime)
-	err := cc.client.validateTableConfig(cc.config)
+	// add table to temp config
+	config := cc.client.CreateChangeConsumerConfig().
+		AddTable(tableName, compartmentOCID, startLocation, startTime)
+
+	// this will get the ocid for the table
+	err := cc.client.validateTableConfig(config)
 	if err != nil {
 		return err
 	}
 
 	// call method to update config on cursor
-	req := &cdcConsumerRequest{config: cc.config, cursor: cc.cursor, mode: UpdateConsumer}
+	req := &cdcConsumerRequest{config: config, cursor: cc.cursor, mode: UpdateConsumer}
 	res, err := cc.client.execute(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "unknown opcode") {
@@ -689,36 +705,22 @@ func (cc *ChangeConsumerConfig) tableIndex(tableName, compartmentOCID string) in
 // compartmentOCID: This is optional. If empty, the default compartment OCID
 // for the tenancy is used.
 func (cc *ChangeConsumer) RemoveTable(tableName string, compartmentOCID string) error {
-	// get existing config
-	if cc.config == nil {
-		return fmt.Errorf("can't remove table from consumer: missing internal config")
-	}
 	if cc.cursor == nil {
 		return fmt.Errorf("can't remove table from consumer: missing cursor information")
 	}
 
-	// remove table from config
-	index := cc.config.tableIndex(tableName, compartmentOCID)
-	if index < 0 {
-		return nil
-	}
-	numTables := len(cc.config.Tables)
-	if numTables == 1 {
-		return fmt.Errorf("can't remove last table from consumer: use DeleteChangeConsumerGroup() instead")
-	}
-	n := index
-	for ; n < (numTables - 1) ; n++ {
-		cc.config.Tables[n] = cc.config.Tables[n+1]
-	}
-	cc.config.Tables = cc.config.Tables[:n]
+	// create config with "remove" on given table
+	config := cc.client.CreateChangeConsumerConfig().
+		RemoveTable(tableName, compartmentOCID)
 
-	err := cc.client.validateTableConfig(cc.config)
+	// This will populate the table OCID
+	err := cc.client.validateTableConfig(config)
 	if err != nil {
 		return err
 	}
 
 	// call method to update config on cursor
-	req := &cdcConsumerRequest{config: cc.config, cursor: cc.cursor, mode: UpdateConsumer}
+	req := &cdcConsumerRequest{config: config, cursor: cc.cursor, mode: UpdateConsumer}
 	res, err := cc.client.execute(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "unknown opcode") {

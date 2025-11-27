@@ -82,6 +82,7 @@ const (
 	INITIALIZED                = "it"
 	IS_JSON                    = "j"
 	IS_PREPARED                = "is"
+	IS_REMOVE                  = "ir"
 	IS_SIMPLE_QUERY            = "iq"
 	KEY                        = "k"
 	KV_VERSION                 = "kv"
@@ -1140,8 +1141,10 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 		return
 	}
 
-	if err = ns.writeField(GROUP_ID, c.GroupId); err != nil {
-		return
+	if c.GroupId != "" {
+		if err = ns.writeField(GROUP_ID, c.GroupId); err != nil {
+			return
+		}
 	}
 
 	if req.mode == UpdateConsumer {
@@ -1179,11 +1182,11 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 		if err = ns.writeField(TABLE_OCID, table.tableOCID); err != nil {
 			return
 		}
-		//if table.CompartmentOCID != "" {
-			//if err = ns.writeField(COMPARTMENT_OCID, table.CompartmentOCID); err != nil {
-				//return
-			//}
-		//}
+		if table.isRemove {
+			if err = ns.writeField(IS_REMOVE, table.isRemove); err != nil {
+				return
+			}
+		}
 		if table.startLocation.Location != FirstUncommitted {
 			if err = ns.writeField(START_LOCATION, int(table.startLocation.Location)); err != nil {
 				return

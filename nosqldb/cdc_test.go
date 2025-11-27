@@ -34,9 +34,9 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 	var stmt string
 	var err error
-	//table := suite.GetTableName("TestUsers")
+	table := suite.GetTableName("PutGetDelete")
 	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
-	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
+	//table := "ocid1_nosqltable_cloudsim_GoTestUsers"
 	// Drop and re-create test tables.
 	stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
 		"id INTEGER, "+
@@ -78,16 +78,13 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 	cloudsimCDC := isCloudsimCDC(consumer)
 	defer func() {
-		// currently the real cloud CDC fails these. TODO
-		if cloudsimCDC {
-			err := consumer.Close()
-			if err != nil {
-				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
-			}
-			err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
-			if err != nil {
-				fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
-			}
+		err := consumer.Close()
+		if err != nil {
+			fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+		}
+		err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
+		if err != nil {
+			fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
 		}
 	}()
 	// Give the subscriber a few seconds to start
@@ -209,9 +206,10 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	suite.Require().NoError(err, "Delete failed")
 	expectedEvents++
 
-	// Delete fail: should not generate event
+	// Delete again, fail: should not generate event
 	_, err = suite.Client.Delete(delReq)
 	suite.Require().NoError(err, "Delete failed")
+	if cloudsimCDC { expectedEvents++ }
 
 	// Give the replication stream a couple seconds to catch up
 	time.Sleep(3 * time.Second)
@@ -223,19 +221,25 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 		// If the time elapsed but there were no messages to read, the returned message
 		// will have an empty array of events.
 		if bundle == nil || len(bundle.Messages) == 0 {
-			//fmt.Printf("Received empty message: sleeping for one second\n")
+			//fmt.Printf("Received empty message: sleeping for 100ms\n")
 			time.Sleep(100 * time.Millisecond);
 		} else {
-			fmt.Printf("Received message: %v\n", *bundle)
+			//fmt.Printf("Received message: %v\n", *bundle)
 			for _, msg := range bundle.Messages {
 				numEvents += len(msg.Events)
+				fmt.Printf("Received message: ocid=%s\n", msg.TableOCID)
+				for _, ev := range msg.Events {
+					for _, rec := range ev.Records {
+						fmt.Printf("   Received record: key=%v  cur=%v\n", *rec.RecordKey, rec.CurrentImage)
+					}
+				}
 			}
 		}
 	}
 
 	// check for exact number of CDC events
 	fmt.Printf("Received %d CDC events\n", numEvents)
-	suite.Require().Equal(numEvents, expectedEvents, "Did not get expected number of events")
+	suite.Require().Equal(expectedEvents, numEvents, "Did not get expected number of events")
 
 	// Do another put/delete cycle, check events again
 	// Put the row back to store
@@ -270,7 +274,7 @@ func (suite *CDCTestSuite) TestPutGetDelete() {
 	}
 
 	fmt.Printf("Received %d CDC events\n", numEvents)
-	suite.Require().Equal(numEvents, 2, "expected 2 more CDC events")
+	suite.Require().Equal(2, numEvents, "expected 2 more CDC events")
 }
 
 func (suite *CDCTestSuite) checkPutResult(req *nosqldb.PutRequest, res *nosqldb.PutResult,
@@ -560,10 +564,10 @@ func (suite *CDCTestSuite) TestEcho() {
 	if suite.IsOnPrem() {
 	    suite.T().Skip("Skipping CDC tests in onprem mode")
 	}
-	//table := suite.GetTableName("TestUsers")
+	table := suite.GetTableName("Echo")
 	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
 	// "ocid1_nosqltable_cloudsim_" is a hardcoded ocid prefix in cloudsim
-	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
+	//table := "ocid1_nosqltable_cloudsim_GoTestUsers"
 	suite.createBasicTable(table)
 
 	// Enable CDC on the new table
@@ -637,9 +641,8 @@ func (suite *CDCTestSuite) TestEcho() {
 	// TODO: this time it should have a beforeImage
 	suite.pollAndCheckEvent(consumer, table, expKey, nil)
 
-// temporary
-// add a table to the consumer. this should fail as it's not supported yet.
-	table2 := "ocid1_nosqltable_cloudsim_GoTestUsers2"
+	//table2 := "ocid1_nosqltable_cloudsim_GoTestUsers2"
+	table2 := suite.GetTableName("Echo2")
 	suite.createBasicTable(table2)
 
 	// Enable CDC on the new table
@@ -673,10 +676,10 @@ func (suite *CDCTestSuite) TestMinimalPassing() {
 	if suite.IsOnPrem() {
 	    suite.T().Skip("Skipping CDC tests in onprem mode")
 	}
-	//table := suite.GetTableName("TestUsers")
+	table := suite.GetTableName("MinimalPassing")
 	// temporary: use full ocid for tablename to avoid kv<-->cdc<-->proxy mismatch
 	// "ocid1_nosqltable_cloudsim_" is a hardcoded ocid prefix in cloudsim
-	table := "ocid1_nosqltable_cloudsim_GoTestUsers"
+	//table := "ocid1_nosqltable_cloudsim_GoTestUsers"
 	suite.createBasicTable(table)
 
 	// Enable CDC on the new table
@@ -705,19 +708,14 @@ func (suite *CDCTestSuite) TestMinimalPassing() {
 		suite.Require().Fail("failed to create CDC consumer: %v", err)
 	}
 
-	cloudsimCDC := isCloudsimCDC(consumer)
-
 	defer func() {
-		if cloudsimCDC {
-			fmt.Printf("Using cloudsim CDC: calling close/delete...\n")
-			err := consumer.Close()
-			if err != nil {
-				fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
-			}
-			err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
-			if err != nil {
-				fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
-			}
+		err := consumer.Close()
+		if err != nil {
+			fmt.Printf("ERROR: closing consumer generated error: %v\n", err)
+		}
+		err = suite.Client.DeleteChangeConsumerGroup(groupID, "")
+		if err != nil {
+			fmt.Printf("ERROR: deleting consumer group generated error: %v\n", err)
 		}
 	}()
 

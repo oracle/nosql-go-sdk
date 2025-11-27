@@ -300,11 +300,6 @@ func (c *Client) DoTableRequest(req *TableRequest) (*TableResult, error) {
 
 	res, err := c.execute(req)
 	if err != nil {
-		// For CDC operations, convert the error be more meaningful if
-		// the server doesn't support CDC
-		if strings.Contains(err.Error(), "must have either statement or limits") {
-			return nil, nosqlerr.New(nosqlerr.OperationNotSupported, "CDC not supported by server")
-		}
 		return nil, err
 	}
 
