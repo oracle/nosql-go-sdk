@@ -1187,14 +1187,15 @@ func (req *cdcConsumerRequest) serialize(w proto.Writer, serialVersion int16, _ 
 				return
 			}
 		}
-		if table.startLocation.Location != FirstUncommitted {
-			if err = ns.writeField(START_LOCATION, int(table.startLocation.Location)); err != nil {
-				return
-			}
-		}
+		// START_TIME must be before START_LOCATION in nson stream
 		if table.startLocation.Location == AtTime {
 			millis := table.startLocation.StartTime.UnixMilli();
 			if err = ns.writeField(START_TIME, millis); err != nil {
+				return
+			}
+		}
+		if table.startLocation.Location != FirstUncommitted {
+			if err = ns.writeField(START_LOCATION, int(table.startLocation.Location)); err != nil {
 				return
 			}
 		}
