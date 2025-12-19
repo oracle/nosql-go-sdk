@@ -39,6 +39,14 @@ type Request interface {
 	common.InternalRequestDataInt
 }
 
+// TransactionalRequest is an interface for operations that support transaction
+type TransactionalRequest interface {
+	isBindingOp() bool
+	getTransaction() *Transaction
+	tryBindWithTransaction() bool
+	unbindFromTransaction() bool
+}
+
 // functions common to both V3(binary) and V4(nson)
 
 func checkRequestSizeLimit(req Request, size int) error {

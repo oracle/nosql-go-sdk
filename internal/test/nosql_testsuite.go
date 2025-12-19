@@ -9,6 +9,7 @@ package test
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -60,13 +61,13 @@ func (suite *NoSQLTestSuite) SetupSuite() {
 // This implements the suite.TearDownAllSuite interface defined in the testify package.
 func (suite *NoSQLTestSuite) TearDownSuite() {
 	if suite.DropTablesOnTearDown {
-		for _, table := range suite.allTables {
-			stmt := "DROP TABLE IF EXISTS " + table
-			req := &nosqldb.TableRequest{
-				Statement: stmt,
-			}
-			// Do not wait for completion of the drop table operation.
-			suite.Client.DoTableRequest(req)
+		tables := suite.allTables
+		sort.Slice(tables, func(i, j int) bool {
+			return strings.ToLower(tables[i]) > strings.ToLower(tables[j])
+		})
+		for _, table := range tables {
+			// Drop table operation and wait for completion
+			suite.DropTable(table, true)
 		}
 	}
 

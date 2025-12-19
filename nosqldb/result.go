@@ -989,6 +989,19 @@ func (r *QueryResult) getContinuationKey() ([]byte, error) {
 	return r.continuationKey, nil
 }
 
+type TransactionResult struct {
+	Capacity
+	DelayInfo
+	common.InternalResultData
+
+	Transaction *Transaction
+}
+
+// String returns a JSON string representation of the MultiDeleteResult.
+func (r TransactionResult) String() string {
+	return jsonutil.AsJSON(r)
+}
+
 // ConsumedCapacity returns the consumed capacity by the query request.
 //
 // This implements the Result interface.

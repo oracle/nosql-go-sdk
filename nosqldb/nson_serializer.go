@@ -27,146 +27,156 @@ import (
 // NSON versions of all serializers
 
 const (
-	ABORT_ON_FAIL              = "a"
-	BIND_VARIABLES             = "bv"
-	COMPARTMENT_OCID           = "cc"
-	CONSISTENCY                = "co"
-	CONSUMED                   = "c"
-	CONTINUATION_KEY           = "ck"
-	DATA                       = "d"
-	DEFINED_TAGS               = "dt"
-	DRIVER_QUERY_PLAN          = "dq"
-	DURABILITY                 = "du"
-	END                        = "en"
-	ERROR_CODE                 = "e"
-	ETAG                       = "et"
-	EXACT_MATCH                = "ec"
-	EXCEPTION                  = "x"
-	EXISTING_MOD_TIME          = "em"
-	EXISTING_VALUE             = "el"
-	EXISTING_VERSION           = "ev"
-	EXPIRATION                 = "xp"
-	FIELDS                     = "f"
-	FREE_FORM_TAGS             = "ff"
-	GENERATED                  = "gn"
-	GET_QUERY_PLAN             = "gq"
-	GET_QUERY_SCHEMA           = "gs"
-	HEADER                     = "h"
-	IDEMPOTENT                 = "ip"
-	IDENTITY_CACHE_SIZE        = "ic"
-	INCLUSIVE                  = "in"
-	INDEX                      = "i"
-	INDEXES                    = "ix"
-	INITIALIZED                = "it"
-	IS_JSON                    = "j"
-	IS_PREPARED                = "is"
-	IS_SIMPLE_QUERY            = "iq"
-	KEY                        = "k"
-	KV_VERSION                 = "kv"
-	LAST_INDEX                 = "li"
-	LIMITS                     = "lm"
-	LIMITS_MODE                = "mo"
-	LIST_MAX_TO_READ           = "lx"
-	LIST_START_INDEX           = "ls"
-	MATCH_VERSION              = "mv"
-	MATH_CONTEXT_CODE          = "mc"
-	MATH_CONTEXT_PRECISION     = "cp"
-	MATH_CONTEXT_ROUNDING_MODE = "rm"
-	MAX_READ_KB                = "mr"
-	MAX_WRITE_KB               = "mw"
-	MAX_SHARD_USAGE_PERCENT    = "ms"
-	MODIFIED                   = "md"
-	NAME                       = "m"
-	NAMESPACE                  = "ns"
-	NEXT_START_TIME            = "ni"
-	NOT_TARGET_TABLES          = "nt"
-	NUMBER_LIMIT               = "nl"
-	NUM_DELETIONS              = "nd"
-	NUM_OPERATIONS             = "no"
-	NUM_RESULTS                = "nr"
-	OP_CODE                    = "o"
-	OPERATIONS                 = "os"
-	OPERATION_ID               = "od"
-	PATH                       = "pt"
-	PAYLOAD                    = "p"
-	PREPARE                    = "pp"
-	PREPARED_QUERY             = "pq"
-	PREPARED_STATEMENT         = "ps"
-	PROXY_TOPO_SEQNUM          = "pn"
-	QUERY                      = "q"
-	QUERY_NAME                 = "qn"
-	QUERY_OPERATION            = "qo"
-	QUERY_PLAN_STRING          = "qs"
-	QUERY_RESULTS              = "qr"
-	QUERY_RESULT_SCHEMA        = "qc"
-	QUERY_VERSION              = "qv"
-	RANGE                      = "rg"
-	RANGE_PATH                 = "rp"
-	REACHED_LIMIT              = "re"
-	READ_KB                    = "rk"
-	READ_THROTTLE_COUNT        = "rt"
-	READ_UNITS                 = "ru"
-	REGION                     = "rn"
-	REPLICAS                   = "rc"
-	REPLICA_LAG                = "rl"
-	REPLICA_STATS              = "ra"
-	RETRY_HINT                 = "rh"
-	RETURN_INFO                = "ri"
-	RETURN_ROW                 = "rr"
-	ROW                        = "r"
-	ROW_VERSION                = "rv"
-	SCHEMA_FROZEN              = "sf"
-	SERVER_MEMORY_CONSUMPTION  = "sm"
-	SHARD_ID                   = "si"
-	SHARD_IDS                  = "sa"
-	SORT_PHASE1_RESULTS        = "p1"
-	START                      = "sr"
-	STATEMENT                  = "st"
-	STORAGE_GB                 = "sg"
-	STORAGE_THROTTLE_COUNT     = "sl"
-	SUCCESS                    = "ss"
-	SYSOP_RESULT               = "rs"
-	SYSOP_STATE                = "ta"
-	TABLES                     = "tb"
-	TABLE_ACCESS_INFO          = "ai"
-	TABLE_DDL                  = "td"
-	TABLE_NAME                 = "n"
-	TABLE_OCID                 = "to"
-	TABLE_SCHEMA               = "ac"
-	TABLE_STATE                = "as"
-	TABLE_USAGE                = "u"
-	TABLE_USAGE_PERIOD         = "pd"
-	TIME                       = "tm"
-	TIMEOUT                    = "t"
-	TOPOLOGY_INFO              = "tp"
-	TOPO_SEQ_NUM               = "ts"
-	TRACE_LEVEL                = "tl"
-	TRACE_AT_LOG_FILES         = "tf"
-	TTL                        = "tt"
-	TYPE                       = "y"
-	UPDATE_TTL                 = "ut"
-	VALUE                      = "l"
-	VERSION                    = "v"
-	VSCAN                      = "vs"
-	VSCANS                     = "vssa"
-	VSCAN_JOIN_DESC_RESUME_KEY = "vsjdrk"
-	VSCAN_JOIN_PATH_TABLES     = "vsjpt"
-	VSCAN_JOIN_PATH_KEY        = "vsjpk"
-	VSCAN_JOIN_PATH_SEC_KEY    = "vsjpsk"
-	VSCAN_JOIN_PATH_MATCHED    = "vsjpm"
-	VSCAN_MOVE_AFTER           = "vsma"
-	VSCAN_PID                  = "vspid"
-	VSCAN_PRIM_KEY             = "vspk"
-	VSCAN_SEC_KEY              = "vssk"
-	VSCAN_SID                  = "vssid"
-	WM_FAILURE                 = "wf"
-	WM_FAIL_INDEX              = "wi"
-	WM_FAIL_RESULT             = "wr"
-	WM_SUCCESS                 = "ws"
-	WRITE_KB                   = "wk"
-	WRITE_MULTIPLE             = "wm"
-	WRITE_THROTTLE_COUNT       = "wt"
-	WRITE_UNITS                = "wu"
+	ABORT_ON_FAIL               = "a"
+	BIND_VARIABLES              = "bv"
+	COMPARTMENT_OCID            = "cc"
+	CONSISTENCY                 = "co"
+	CONSUMED                    = "c"
+	CONTINUATION_KEY            = "ck"
+	DATA                        = "d"
+	DEFINED_TAGS                = "dt"
+	DRIVER_QUERY_PLAN           = "dq"
+	DURABILITY                  = "du"
+	END                         = "en"
+	ERROR_CODE                  = "e"
+	ETAG                        = "et"
+	EXACT_MATCH                 = "ec"
+	EXCEPTION                   = "x"
+	EXISTING_MOD_TIME           = "em"
+	EXISTING_VALUE              = "el"
+	EXISTING_VERSION            = "ev"
+	EXPIRATION                  = "xp"
+	FIELDS                      = "f"
+	FREE_FORM_TAGS              = "ff"
+	GENERATED                   = "gn"
+	GET_QUERY_PLAN              = "gq"
+	GET_QUERY_SCHEMA            = "gs"
+	HEADER                      = "h"
+	IDEMPOTENT                  = "ip"
+	IDENTITY_CACHE_SIZE         = "ic"
+	INCLUSIVE                   = "in"
+	INDEX                       = "i"
+	INDEXES                     = "ix"
+	INITIALIZED                 = "it"
+	IS_JSON                     = "j"
+	IS_PREPARED                 = "is"
+	IS_SIMPLE_QUERY             = "iq"
+	KEY                         = "k"
+	KV_VERSION                  = "kv"
+	LAST_INDEX                  = "li"
+	LIMITS                      = "lm"
+	LIMITS_MODE                 = "mo"
+	LIST_MAX_TO_READ            = "lx"
+	LIST_START_INDEX            = "ls"
+	MATCH_VERSION               = "mv"
+	MATH_CONTEXT_CODE           = "mc"
+	MATH_CONTEXT_PRECISION      = "cp"
+	MATH_CONTEXT_ROUNDING_MODE  = "rm"
+	MAX_READ_KB                 = "mr"
+	MAX_WRITE_KB                = "mw"
+	MAX_SHARD_USAGE_PERCENT     = "ms"
+	MODIFIED                    = "md"
+	NAME                        = "m"
+	NAMESPACE                   = "ns"
+	NEXT_START_TIME             = "ni"
+	NOT_TARGET_TABLES           = "nt"
+	NUMBER_LIMIT                = "nl"
+	NUM_DELETIONS               = "nd"
+	NUM_OPERATIONS              = "no"
+	NUM_RESULTS                 = "nr"
+	OP_CODE                     = "o"
+	OPERATIONS                  = "os"
+	OPERATION_ID                = "od"
+	PATH                        = "pt"
+	PAYLOAD                     = "p"
+	PREPARE                     = "pp"
+	PREPARED_QUERY              = "pq"
+	PREPARED_STATEMENT          = "ps"
+	PROXY_TOPO_SEQNUM           = "pn"
+	QUERY                       = "q"
+	QUERY_NAME                  = "qn"
+	QUERY_OPERATION             = "qo"
+	QUERY_PLAN_STRING           = "qs"
+	QUERY_RESULTS               = "qr"
+	QUERY_RESULT_SCHEMA         = "qc"
+	QUERY_VERSION               = "qv"
+	RANGE                       = "rg"
+	RANGE_PATH                  = "rp"
+	REACHED_LIMIT               = "re"
+	READ_KB                     = "rk"
+	READ_THROTTLE_COUNT         = "rt"
+	READ_UNITS                  = "ru"
+	REGION                      = "rn"
+	REPLICAS                    = "rc"
+	REPLICA_LAG                 = "rl"
+	REPLICA_STATS               = "ra"
+	RETRY_HINT                  = "rh"
+	RETURN_INFO                 = "ri"
+	RETURN_ROW                  = "rr"
+	ROW                         = "r"
+	ROW_VERSION                 = "rv"
+	SCHEMA_FROZEN               = "sf"
+	SERVER_MEMORY_CONSUMPTION   = "sm"
+	SHARD_ID                    = "si"
+	SHARD_IDS                   = "sa"
+	SORT_PHASE1_RESULTS         = "p1"
+	START                       = "sr"
+	STATEMENT                   = "st"
+	STORAGE_GB                  = "sg"
+	STORAGE_THROTTLE_COUNT      = "sl"
+	SUCCESS                     = "ss"
+	SYSOP_RESULT                = "rs"
+	SYSOP_STATE                 = "ta"
+	TABLES                      = "tb"
+	TABLE_ACCESS_INFO           = "ai"
+	TABLE_DDL                   = "td"
+	TABLE_NAME                  = "n"
+	TABLE_OCID                  = "to"
+	TABLE_SCHEMA                = "ac"
+	TABLE_STATE                 = "as"
+	TABLE_USAGE                 = "u"
+	TABLE_USAGE_PERIOD          = "pd"
+	TIME                        = "tm"
+	TIMEOUT                     = "t"
+	TOPOLOGY_INFO               = "tp"
+	TOPO_SEQ_NUM                = "ts"
+	TRACE_LEVEL                 = "tl"
+	TRACE_AT_LOG_FILES          = "tf"
+	TRANSACTION                 = "tx"
+	TRANSACTION_BINDING_OP      = "txb"
+	TRANSACTION_BINDING_OP_DONE = "txbd"
+	TRANSACTION_ELAPSED_TIME_MS = "txet"
+	TRANSACTION_ISOLATION       = "txi"
+	TRANSACTION_KV_BYTES        = "txk"
+	TRANSACTION_MAX_WRITES      = "txw"
+	TRANSACTION_NUM_READS       = "txnr"
+	TRANSACTION_NUM_WRITES      = "txnw"
+	TRANSACTION_TIMEOUT         = "txt"
+	TTL                         = "tt"
+	TYPE                        = "y"
+	UPDATE_TTL                  = "ut"
+	VALUE                       = "l"
+	VERSION                     = "v"
+	VSCAN                       = "vs"
+	VSCANS                      = "vssa"
+	VSCAN_JOIN_DESC_RESUME_KEY  = "vsjdrk"
+	VSCAN_JOIN_PATH_TABLES      = "vsjpt"
+	VSCAN_JOIN_PATH_KEY         = "vsjpk"
+	VSCAN_JOIN_PATH_SEC_KEY     = "vsjpsk"
+	VSCAN_JOIN_PATH_MATCHED     = "vsjpm"
+	VSCAN_MOVE_AFTER            = "vsma"
+	VSCAN_PID                   = "vspid"
+	VSCAN_PRIM_KEY              = "vspk"
+	VSCAN_SEC_KEY               = "vssk"
+	VSCAN_SID                   = "vssid"
+	WM_FAILURE                  = "wf"
+	WM_FAIL_INDEX               = "wi"
+	WM_FAIL_RESULT              = "wr"
+	WM_SUCCESS                  = "ws"
+	WRITE_KB                    = "wk"
+	WRITE_MULTIPLE              = "wm"
+	WRITE_THROTTLE_COUNT        = "wt"
+	WRITE_UNITS                 = "wu"
 )
 
 // Constants to make code cleaner
@@ -186,11 +196,12 @@ func SetNsonDebug(d bool) {
 //
 // The fields of GetRequest are written in the following order:
 //
-//	OpCode: Get
-//	Timeout
-//	TableName
-//	Consistency
-//	Key
+//		OpCode: Get
+//		Timeout
+//		TableName
+//		Consistency
+//		Key
+//	    Transaction(txnKVbytes, isBindOp)
 func (req *GetRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
@@ -217,6 +228,7 @@ func (req *GetRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (
 	} else {
 		return fmt.Errorf("missing Key or StructValue in GetRequest")
 	}
+	ns.writeTransaction(req.Transaction, req.bindingOp)
 	ns.endPayload()
 
 	endRequest(ns)
@@ -248,6 +260,8 @@ func (req *GetRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 			err = readNsonRow(r, res)
 		case TOPOLOGY_INFO:
 			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
+		case TRANSACTION:
+			err = readTransaction(r, req.Transaction)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -806,12 +820,13 @@ func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16, _
 //
 // The fields of DeleteRequest are written in the following order:
 //
-//	OpCode: Delete or DeleteIfVersion
-//	Timeout: skip if the request is a a sub request.
-//	TableName: skip if the request is a sub request.
-//	ReturnRow
-//	Key
-//	MatchVersion: skip if it is nil
+//		OpCode: Delete or DeleteIfVersion
+//		Timeout: skip if the request is a a sub request.
+//		TableName: skip if the request is a sub request.
+//		ReturnRow
+//		Key
+//		MatchVersion: skip if it is nil
+//	    Transaction(txnKVbytes, isBindOp)
 func (req *DeleteRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	return req.serializeInternal(w, serialVersion, true)
 }
@@ -882,6 +897,7 @@ func (req *DeleteRequest) serializeInternal(w proto.Writer, _ int16, addTableNam
 	}
 
 	if !req.isSubRequest {
+		ns.writeTransaction(req.Transaction, req.bindingOp)
 		ns.endPayload()
 	}
 
@@ -911,6 +927,8 @@ func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16, _ int
 			res.WriteResult, err = readNsonWriteResult(r)
 		case TOPOLOGY_INFO:
 			err = res.SetTopologyOrErr(readNsonTopologyInfo(r))
+		case TRANSACTION:
+			err = readTransaction(r, req.Transaction)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -925,16 +943,17 @@ func (req *DeleteRequest) deserialize(r proto.Reader, serialVersion int16, _ int
 //
 // The fields of PutRequest are written in the following order:
 //
-//	OpCode: either Put, PutIfAbsent, PutIfPresent or PutIfVersion.
-//	Timeout: skip if the request is a a sub request.
-//	TableName: skip if the request is a sub request.
-//	ReturnRow
-//	ExactMatch
-//	IdentityCacheSize
-//	Value
-//	UpdateTTL: this is true if UseTableTTL or TTL is set.
-//	TTL
-//	MatchVersion: skip if it is nil.
+//		OpCode: either Put, PutIfAbsent, PutIfPresent or PutIfVersion.
+//		Timeout: skip if the request is a a sub request.
+//		TableName: skip if the request is a sub request.
+//		ReturnRow
+//		ExactMatch
+//		IdentityCacheSize
+//		Value
+//		UpdateTTL: this is true if UseTableTTL or TTL is set.
+//		TTL
+//		MatchVersion: skip if it is nil.
+//	    Transaction(txnKVbytes, isBindOp)
 func (req *PutRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	return req.serializeInternal(w, serialVersion, true)
 }
@@ -1036,6 +1055,7 @@ func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName b
 	}
 
 	if !req.isSubRequest {
+		ns.writeTransaction(req.Transaction, req.bindingOp)
 		ns.endPayload()
 	}
 
@@ -1067,6 +1087,8 @@ func (req *PutRequest) deserialize(r proto.Reader, serialVersion int16, _ int16)
 			res.WriteResult, err = readNsonWriteResult(r)
 		case GENERATED:
 			res.GeneratedValue, err = r.ReadFieldValue()
+		case TRANSACTION:
+			err = readTransaction(r, req.Transaction)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -1168,13 +1190,14 @@ func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16, _
 //
 // The fields of MultiDeleteRequest are written in the following order:
 //
-//	OpCode: MultiDelete
-//	Timeout
-//	TableName
-//	Key
-//	FieldRange
-//	MaxWriteKB
-//	ContinuationKey
+//		OpCode: MultiDelete
+//		Timeout
+//		TableName
+//		Key
+//		FieldRange
+//		MaxWriteKB
+//		ContinuationKey
+//	    Transaction(txnKVbytes, isBindOp)
 func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
@@ -1207,6 +1230,8 @@ func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16, _ 
 		return
 	}
 
+	ns.writeTransaction(req.Transaction, req.bindingOp)
+
 	ns.endPayload()
 
 	endRequest(ns)
@@ -1235,6 +1260,8 @@ func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16, 
 			res.NumDeleted, err = readNsonInt(r, name)
 		case CONTINUATION_KEY:
 			res.ContinuationKey, err = readNsonBinary(r)
+		case TRANSACTION:
+			err = readTransaction(r, req.Transaction)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -1249,11 +1276,12 @@ func (req *MultiDeleteRequest) deserialize(r proto.Reader, serialVersion int16, 
 //
 // The fields of WriteMultipleRequest are written in the following order:
 //
-//	OpCode: WriteMultiple
-//	Timeout
-//	TableName
-//	Number of operations
-//	All sub operations: either put or delete operation
+//		OpCode: WriteMultiple
+//		Timeout
+//		TableName
+//		Number of operations
+//		All sub operations: either put or delete operation
+//	    Transaction(txnKVbytes, isBindOp)
 func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16, _ int16) (err error) {
 	ns := startRequest(w)
 
@@ -1326,6 +1354,8 @@ func (req *WriteMultipleRequest) serialize(w proto.Writer, serialVersion int16, 
 	}
 	ns.endArray(OPERATIONS)
 
+	ns.writeTransaction(req.Transaction, req.bindingOp)
+
 	ns.endPayload()
 
 	endRequest(ns)
@@ -1394,6 +1424,8 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16
 					err = skipNsonField(r, name)
 				}
 			}
+		case TRANSACTION:
+			err = readTransaction(r, req.Transaction)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -1413,6 +1445,7 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16
 //	Statement
 //	QueryVersion
 //	GetQueryPlan
+//	Transaction(txnKVbytes, isBindOp)
 func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
 	ns := startRequest(w)
 
@@ -1442,6 +1475,8 @@ func (req *PrepareRequest) serialize(w proto.Writer, serialVersion int16, queryV
 			return
 		}
 	}
+
+	ns.writeTransaction(req.Transaction, req.bindingOp)
 
 	ns.endPayload()
 
@@ -1546,6 +1581,8 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16, queryVer
 		}
 	}
 
+	ns.writeTransaction(req.Transaction, req.bindingOp)
+
 	ns.endPayload()
 
 	endRequest(ns)
@@ -1628,6 +1665,131 @@ func (req *QueryRequest) deserialize(r proto.Reader, serialVersion int16, queryV
 	qres := newQueryResult(req, true)
 	code, err = readNsonPrepareOrQuery(req, qres, nil, nil, r, serialVersion, queryVersion)
 	return qres, code, err
+}
+
+// serialize writes the BeginTransactionRequest to data stream using the specified protocol writer.
+//
+// The fields of BeginTransactionRequest are written in the following order:
+//
+//		OpCode: BeginTransaction
+//		Timeout
+//		TableName
+//		TransactionIsolation
+//	 	TransactionMaxWrites
+//		TransactionTimeout
+func (req *BeginTransactionRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.BeginTransaction, req.Timeout, req.TableName, req.GetTopologyInfo()); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	// payload
+	ns.startPayload()
+	if req.TransactionIsolation != types.IsolationUnset {
+		var iso = int(req.TransactionIsolation) - 1
+		if err = ns.writeField(TRANSACTION_ISOLATION, iso); err != nil {
+			return
+		}
+	}
+
+	if err = ns.writeNZLongField(TRANSACTION_MAX_WRITES, req.TransactionMaxNumWrites); err != nil {
+		return
+	}
+
+	if err = ns.writeNZLongField(TRANSACTION_TIMEOUT, req.TransactionTimeoutMs); err != nil {
+		return
+	}
+	ns.endPayload()
+
+	endRequest(ns)
+	return nil
+}
+
+func (req *BeginTransactionRequest) deserialize(r proto.Reader, serialVersion int16, queryVersion int16) (res Result, code int, err error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, code, err
+	}
+
+	tres := &TransactionResult{}
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case ERROR_CODE:
+			code, err := walker.handleErrorCode()
+			if err != nil || code != 0 {
+				return nil, code, err
+			}
+		case TRANSACTION:
+			tres.Transaction = &Transaction{
+				TableName: req.TableName,
+				Active:    true,
+			}
+			err = readTransaction(r, tres.Transaction)
+		case CONSUMED:
+			tres.Capacity, err = readNsonConsumedCapacity(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, BadProtocol, err
+	}
+	return tres, 0, nil
+}
+
+// serialize writes the CommitTransactionRequest to data stream using the specified protocol writer.
+//
+// The fields of CommitTransactionRequest are written in the following order:
+//
+//		OpCode: EndTransaction
+//		Timeout
+//		TableName
+//		Type
+//	 	Transaction: txnKVBytes
+func (req *CommitTransactionRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
+	return req.serializeEndTransaction(w, types.Commit)
+}
+
+func (req *CommitTransactionRequest) deserialize(r proto.Reader, serialVersion int16, queryVersion int16) (res Result, code int, err error) {
+	return deserializeEndTransactionResult(r, serialVersion, &req.EndTransactionRequest)
+}
+
+func (req *AbortTransactionRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
+	return req.serializeEndTransaction(w, types.Abort)
+}
+
+func (req *AbortTransactionRequest) deserialize(r proto.Reader, serialVersion int16, queryVersion int16) (res Result, code int, err error) {
+	return deserializeEndTransactionResult(r, serialVersion, &req.EndTransactionRequest)
+}
+
+func (req *EndTransactionRequest) serializeEndTransaction(w proto.Writer, opType types.EndTransactionType) (err error) {
+	ns := startRequest(w)
+
+	// header
+	ns.startHeader()
+	if err = ns.writeHeader(proto.EndTransaction, req.Timeout, req.Transaction.TableName, req.GetTopologyInfo()); err != nil {
+		return
+	}
+	ns.endHeader()
+
+	// payload
+	ns.startPayload()
+	if err = ns.writeField(TYPE, int(opType)); err != nil {
+		return
+	}
+
+	if err = ns.writeField(TRANSACTION, req.Transaction.kvTxnBytes); err != nil {
+		return
+	}
+	ns.endPayload()
+
+	endRequest(ns)
+	return nil
 }
 
 func deserializeSystemResult(r proto.Reader) (*SystemResult, int, error) {
@@ -1753,6 +1915,42 @@ func deserializeTableResult(r proto.Reader, _ int16) (*TableResult, int, error) 
 	if err != nil {
 		return nil, BadProtocol, err
 	}
+	return res, 0, nil
+}
+
+func deserializeEndTransactionResult(r proto.Reader, _ int16, req *EndTransactionRequest) (*TransactionResult, int, error) {
+	walker, code, err := newMapWalker(r)
+	if err != nil || code != 0 {
+		return nil, code, err
+	}
+	res := &TransactionResult{}
+	txn := req.Transaction
+	for err == nil && walker.hasNext() {
+		walker.next()
+		switch name := walker.getCurrentName(); name {
+		case ERROR_CODE:
+			code, err := walker.handleErrorCode()
+			if err != nil || code != 0 {
+				return nil, code, err
+			}
+		case TRANSACTION_NUM_WRITES:
+			txn.NumWrites, err = readNsonLong(r)
+		case TRANSACTION_NUM_READS:
+			txn.NumReads, err = readNsonLong(r)
+		case TRANSACTION_ELAPSED_TIME_MS:
+			txn.ElapsedTimeMs, err = readNsonLong(r)
+		case CONSUMED:
+			res.Capacity, err = readNsonConsumedCapacity(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	if err != nil {
+		return nil, BadProtocol, err
+	}
+
+	txn.Active = false
+	res.Transaction = txn
 	return res, 0, nil
 }
 
@@ -2040,6 +2238,30 @@ func (ns *NsonSerializer) writeFieldRange(value *types.FieldRange) (err error) {
 	}
 
 	ns.endMap(RANGE)
+	return nil
+}
+
+func (ns *NsonSerializer) writeTransactionIsolation(value types.TransactionIsolation) (err error) {
+	if value == 0 {
+		return nil
+	}
+	return ns.writeField(TRANSACTION_ISOLATION, int(value)-1)
+}
+
+// Writes transaction information of data operation request
+//
+//	TRANSACTION: {
+//	  TRANSACTION_KV_BYTES: []byte
+//	  TRANSACTION_BINDING_OP: bool
+//	}
+func (ns *NsonSerializer) writeTransaction(txn *Transaction, isBindingOp bool) (err error) {
+	if txn == nil {
+		return nil
+	}
+	ns.startMap(TRANSACTION)
+	ns.writeField(TRANSACTION_KV_BYTES, txn.kvTxnBytes)
+	ns.writeField(TRANSACTION_BINDING_OP, isBindingOp)
+	ns.endMap(TRANSACTION)
 	return nil
 }
 
@@ -2609,6 +2831,23 @@ func readNsonIndexInfo(r proto.Reader) (res *IndexInfo, err error) {
 	return res, nil
 }
 
+func readTransaction(r proto.Reader, txn *Transaction) (err error) {
+	var lw *mapWalker
+	lw, _, err = newMapWalker(r)
+	for err == nil && lw.hasNext() {
+		lw.next()
+		switch name := lw.getCurrentName(); name {
+		case TRANSACTION_KV_BYTES:
+			txn.kvTxnBytes, err = readNsonBinary(r)
+		case TRANSACTION_BINDING_OP_DONE:
+			txn.bindingOpDone, err = readNsonBoolean(r)
+		default:
+			err = skipNsonField(r, name)
+		}
+	}
+	return err
+}
+
 type driverPlanInfo struct {
 	driverQueryPlan planIter
 	numIterators    int
@@ -2715,6 +2954,8 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 			if err == nil {
 				operation = byte(val)
 			}
+		case TRANSACTION:
+			err = readTransaction(r, qreq.Transaction)
 		default:
 			err = skipNsonField(r, name)
 		}

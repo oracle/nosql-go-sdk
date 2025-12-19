@@ -21,13 +21,30 @@ func (c *Client) SetResponseHandler(fn HandleResponse) {
 }
 
 func (c *Client) ProcessRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
-	return c.processRequest(req)
+	data, serialVerUsed, queryVerUsed, _, err = c.processRequest(req)
+	return data, serialVerUsed, queryVerUsed, err
 }
 
 func (c *Client) DoExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16) (Result, error) {
-	return c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed)
+	return c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed, bindStateNone)
 }
 
 func (p *PreparedStatement) GetStatement() []byte {
 	return p.statement
+}
+
+func IsTxnBindingOp(transactionalReq TransactionalRequest) bool {
+	return transactionalReq.isBindingOp()
+}
+
+func TryBindWithTransaction(transactionalReq TransactionalRequest) bool {
+	return transactionalReq.tryBindWithTransaction()
+}
+
+func UnbindFromTransaction(transactionalReq TransactionalRequest) bool {
+	return transactionalReq.unbindFromTransaction()
+}
+
+func TransactionBoundWithOp(txn *Transaction) bool {
+	return txn.isBindToOperation()
 }

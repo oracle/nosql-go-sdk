@@ -342,6 +342,37 @@ func (st OperationState) GoString() string {
 	return "\"" + st.String() + "\""
 }
 
+// TransactionIsolation defines the transaction isolation level, which controls
+// the visibility and interaction of data changes among concurrent transactions.
+type TransactionIsolation int
+
+const (
+	// 0: Unset
+	IsolationUnset TransactionIsolation = iota
+
+	// 1: A dirty read (aka uncommitted read) occurs when a transaction
+	// retrieves a row that has been updated by another transaction that
+	// is not yet committed.
+	ReadCommitted
+
+	// 2: All rows that a transaction retrieves are committed writes, in
+	// other words, dirty reads (aka uncommitted read) are not permitted
+	// in transaction. This is the default transaction isolation level.
+	ReadUncommitted
+)
+
+// EndTransactionType represents the type of action used to complete a
+// transaction.
+type EndTransactionType int
+
+const (
+	// 0: Commit indicates that the transaction will be committed.
+	Commit EndTransactionType = iota
+
+	// 1: Abort indicates that the transaction will be aborted.
+	Abort
+)
+
 // Version represents the version of a row in the database.
 // This is an opaque object from an application perspective.
 //

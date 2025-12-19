@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
@@ -76,6 +77,11 @@ type GetRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// The transaction for the request
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -97,6 +103,10 @@ func (r *GetRequest) validate() (err error) {
 	}
 
 	if err = validateConsistency(r.Consistency); err != nil {
+		return
+	}
+
+	if err = validateTransactionTable(r.Transaction, r.TableName); err != nil {
 		return
 	}
 
@@ -141,6 +151,18 @@ func (r *GetRequest) doesReads() bool {
 
 func (r *GetRequest) doesWrites() bool {
 	return false
+}
+
+func (r *GetRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *GetRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *GetRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
 }
 
 // GetTableRequest represents a request for retrieving table information from server.
@@ -1112,6 +1134,11 @@ type DeleteRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// The transaction for the request
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -1128,6 +1155,10 @@ func (r *DeleteRequest) validate() (err error) {
 		if err = validateTimeout(r.Timeout); err != nil {
 			return
 		}
+	}
+
+	if err = validateTransactionTable(r.Transaction, r.TableName); err != nil {
+		return
 	}
 
 	return
@@ -1167,18 +1198,30 @@ func (r *DeleteRequest) doesWrites() bool {
 	return true
 }
 
+func (r *DeleteRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *DeleteRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *DeleteRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
+}
+
 // PutRequest represents a request used to put a row into a table.
 //
 // This request can be used to perform unconditional and conditional puts:
 //
-//   1. Overwrite any existing row. This is the default.
-//   2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
-//      PutOption parameter for this case.
-//   3. Succeed only if the row exists. Specify types.PutIfPresent for the
-//      PutOption parameter for this case.
-//   4. Succeed only if the row exists and its version matches a specific version.
-//      Specify types.PutIfVersion for the PutOption parameter and a desired version
-//      for the MatchVersion parameter for this case.
+//  1. Overwrite any existing row. This is the default.
+//  2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
+//     PutOption parameter for this case.
+//  3. Succeed only if the row exists. Specify types.PutIfPresent for the
+//     PutOption parameter for this case.
+//  4. Succeed only if the row exists and its version matches a specific version.
+//     Specify types.PutIfVersion for the PutOption parameter and a desired version
+//     for the MatchVersion parameter for this case.
 //
 // Information about the existing row can be returned on failure of a put
 // operation by using the ReturnRow option. Use of the ReturnRow option incurs
@@ -1296,6 +1339,11 @@ type PutRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// Transaction for the operationRequest
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -1320,6 +1368,10 @@ func (r *PutRequest) validate() (err error) {
 
 	if r.UseTableTTL && r.TTL != nil {
 		return nosqlerr.NewIllegalArgument("PutRequest: UseTableTTL and TTL are mutual exclusive, cannot specify both of them")
+	}
+
+	if err = validateTransactionTable(r.Transaction, r.TableName); err != nil {
+		return
 	}
 
 	return nil
@@ -1363,6 +1415,18 @@ func (r *PutRequest) doesWrites() bool {
 // It returns true if the operation specifies the UseTableTTL option or sets a TTL value.
 func (r *PutRequest) updateTTL() bool {
 	return r.UseTableTTL || r.TTL != nil
+}
+
+func (r *PutRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *PutRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *PutRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
 }
 
 // TableUsageRequest represents the input of a Client.GetTableUsage() operation
@@ -1521,6 +1585,11 @@ type PrepareRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// The transaction for the request
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -1569,6 +1638,18 @@ func (r *PrepareRequest) doesReads() bool {
 
 func (r *PrepareRequest) doesWrites() bool {
 	return false
+}
+
+func (r *PrepareRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *PrepareRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *PrepareRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
 }
 
 // FPArithSpec specifies the desired representation in terms of decimal
@@ -1756,6 +1837,11 @@ type QueryRequest struct {
 	// be accessed by the GetStructResults method of QueryResult.
 	StructType reflect.Type
 
+	// The transaction for the request
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -1770,6 +1856,10 @@ func (r *QueryRequest) validate() (err error) {
 
 	if r.Statement == "" && r.PreparedStatement == nil {
 		return nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set")
+	}
+
+	if err = validateTransactionTable(r.Transaction, r.TableName); err != nil {
+		return
 	}
 
 	return
@@ -1815,6 +1905,18 @@ func (r *QueryRequest) doesWrites() bool {
 
 func (r *QueryRequest) getVirtualScan() *virtualScan {
 	return r.virtualScan
+}
+
+func (r *QueryRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *QueryRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *QueryRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
 }
 
 // copyInternal creates an internal QueryRequest out of the application provided QueryRequest.
@@ -2125,6 +2227,11 @@ type WriteMultipleRequest struct {
 	// be ignored.
 	Namespace string `json:"namespace,omitempty"`
 
+	// The transaction for the request
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -2141,6 +2248,10 @@ func (r *WriteMultipleRequest) validate() (err error) {
 		return nil
 	}
 
+	if err = validateTransactionTable(r.Transaction, r.TableName); err != nil {
+		return
+	}
+
 	return r.validateTables()
 }
 
@@ -2154,10 +2265,10 @@ func (r *WriteMultipleRequest) validateTables() (err error) {
 			return
 		}
 		if topTableName == "" {
-			topTableName = r.getTopTableName(op.tableName())
+			topTableName = getTopTableName(op.tableName())
 		} else {
 			// check for parent/child table names
-			opTopTable := r.getTopTableName(op.tableName())
+			opTopTable := getTopTableName(op.tableName())
 			if !strings.EqualFold(topTableName, opTopTable) {
 				return nosqlerr.NewIllegalArgument("WriteMultipleRequest: "+
 					"All sub requests should operate on the same table or "+
@@ -2211,14 +2322,6 @@ func (r *WriteMultipleRequest) Clear() {
 	r.Operations = nil
 }
 
-// return the top table name based on dot (".") separators
-func (r *WriteMultipleRequest) getTopTableName(tableName string) string {
-	if tableName == "" {
-		return tableName
-	}
-	return strings.Split(tableName, ".")[0]
-}
-
 // AddPutRequest adds a Put request as a sub request of the WriteMultiple request.
 // If abortOnFail is set to true, the WriteMultiple request will fail if any of
 // the sub requests fail.
@@ -2255,6 +2358,18 @@ func (r *WriteMultipleRequest) AddDeleteRequest(d *DeleteRequest, abortOnFail bo
 	}
 	r.Operations = append(r.Operations, op)
 	return r.validateTables()
+}
+
+func (r *WriteMultipleRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *WriteMultipleRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *WriteMultipleRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
 }
 
 // MultiDeleteRequest represents the input to a Client.MultiDelete operation
@@ -2322,6 +2437,11 @@ type MultiDeleteRequest struct {
 	// Server versions 23.3 and above.
 	Namespace string `json:"namespace,omitempty"`
 
+	// The transaction for the request
+	Transaction *Transaction `json:"transaction"`
+
+	TransactionBinding
+
 	common.InternalRequestData
 }
 
@@ -2379,6 +2499,18 @@ func (r *MultiDeleteRequest) doesWrites() bool {
 	return true
 }
 
+func (r *MultiDeleteRequest) getTransaction() *Transaction {
+	return r.Transaction
+}
+
+func (r *MultiDeleteRequest) tryBindWithTransaction() bool {
+	return r.TransactionBinding.tryBindWithTransaction(r.Transaction)
+}
+
+func (r *MultiDeleteRequest) unbindFromTransaction() bool {
+	return r.TransactionBinding.unbindFromTransaction(r.Transaction)
+}
+
 // WriteOperation represents a put or delete operation that can be added into
 // a WriteMultipleRequest. Either specify a PutRequest or DeleteRequest for the
 // WriteOperation. Specifying both PutRequest and DeleteRequest in a single
@@ -2433,6 +2565,245 @@ func (op *WriteOperation) tableName() string {
 	}
 
 	return ""
+}
+
+// Represents the input to a Client.BeginTransaction operation to begin a
+// Transaction.
+type BeginTransactionRequest struct {
+
+	// TableName specifies the name of table on which the transction will begin.
+	// It is required and must be non-empty.
+	TableName string `json:"tableName"`
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	// Transaction isolation level
+	TransactionIsolation types.TransactionIsolation `json:"transactionIsolation"`
+
+	// The maximum number of writes operations in the transaction
+	TransactionMaxNumWrites int64 `json:"transactionMaxNumWrites"`
+
+	// The transaction timeout in milliseconds
+	TransactionTimeoutMs int64 `json:"transactionTimeoutMs"`
+
+	common.InternalRequestData
+}
+
+func (r *BeginTransactionRequest) validate() (err error) {
+	if err = validateTableName(r.TableName); err != nil {
+		return
+	}
+
+	if err = validateTimeout(r.Timeout); err != nil {
+		return
+	}
+
+	r.TableName = getTopTableName(r.TableName)
+	return
+}
+
+// setDefaults sets default timeout and consistency values specified in
+// RequestConfig if they are not specified for the request.
+func (r *BeginTransactionRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *BeginTransactionRequest) shouldRetry() bool {
+	return true
+}
+
+func (r *BeginTransactionRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *BeginTransactionRequest) getTableName() string {
+	return r.TableName
+}
+
+func (r *BeginTransactionRequest) getNamespace() string {
+	return ""
+}
+
+func (r *BeginTransactionRequest) doesReads() bool {
+	return false
+}
+
+func (r *BeginTransactionRequest) doesWrites() bool {
+	return false
+}
+
+type CommitTransactionRequest struct {
+	EndTransactionRequest
+}
+
+type AbortTransactionRequest struct {
+	EndTransactionRequest
+}
+
+// Represents the input to a Client.CommitTransaction operation to commit a
+// Transaction.
+type EndTransactionRequest struct {
+
+	// The transaction to be committed
+	Transaction *Transaction `json:"transaction"`
+
+	// Timeout specifies the timeout value for the request.
+	// It is optional.
+	// If set, it must be greater than or equal to 1 millisecond, otherwise an
+	// IllegalArgument error will be returned.
+	// If not set, the default timeout value configured for Client is used,
+	// which is determined by RequestConfig.DefaultRequestTimeout().
+	Timeout time.Duration `json:"timeout"`
+
+	common.InternalRequestData
+}
+
+func (r *EndTransactionRequest) validate() (err error) {
+	if r.Transaction == nil {
+		return nosqlerr.NewIllegalArgument("EndTransactionRequest: must specify Transaction")
+	}
+
+	if err = validateTimeout(r.Timeout); err != nil {
+		return
+	}
+
+	return
+}
+
+// setDefaults sets default timeout and consistency values specified in
+// RequestConfig if they are not specified for the request.
+func (r *EndTransactionRequest) setDefaults(cfg *RequestConfig) {
+	if r.Timeout == 0 {
+		r.Timeout = cfg.DefaultRequestTimeout()
+	}
+}
+
+func (r *EndTransactionRequest) shouldRetry() bool {
+	return true
+}
+
+func (r *EndTransactionRequest) timeout() time.Duration {
+	return r.Timeout
+}
+
+func (r *EndTransactionRequest) getTableName() string {
+	return ""
+}
+
+func (r *EndTransactionRequest) getNamespace() string {
+	return ""
+}
+
+func (r *EndTransactionRequest) doesReads() bool {
+	return false
+}
+
+func (r *EndTransactionRequest) doesWrites() bool {
+	return false
+}
+
+type TransactionBinding struct {
+	bindingOp bool
+}
+
+func (r *TransactionBinding) isBindingOp() bool {
+	return r.bindingOp
+}
+
+func (r *TransactionBinding) tryBindWithTransaction(txn *Transaction) bool {
+	if txn == nil || r.bindingOp {
+		return true
+	}
+	r.bindingOp = txn.bindOperationIfUnbound()
+	return r.bindingOp
+}
+
+func (r *TransactionBinding) unbindFromTransaction(txn *Transaction) bool {
+	if txn == nil || !r.bindingOp {
+		return false
+	}
+	ret := txn.unbindOperationIfBound()
+	r.bindingOp = !ret
+	return ret
+}
+
+// Represents a transaction that can be used to perform multiple operations
+// on a top-level table and its hierarchy of child tables, with all operations
+// sharing the same shard key.
+//
+// A transaction is active once it has started and remains active until it
+// is either committed or aborted. Attempting to use an inactive transaction
+// in an operation results in an IllegalArgument error.
+//
+// Transaction object is thread-safe and can be used for concurrent operations.
+//
+// The statistical information of the transaction such as `numWrites`,
+// `numReads`, and `elapsedTimeMs` becomes available after the transaction is
+// committed or aborted.
+type Transaction struct {
+
+	// The name of the top-level table in the hierarchy associated with this
+	// transaction. The transaction can operate only within this table and its
+	// hierarchy of child tables.
+	TableName string `json:"tableName"`
+
+	//  Indicates whether the transaction is active, it is true once the
+	//  transaction begins, and becomes false after the transaction has been
+	//  committed or aborted.
+	Active bool `json:"active"`
+
+	// The serialized representation of the KV transaction.
+	kvTxnBytes []byte
+
+	// Indicates whether an operation has been bound to the transaction, the
+	// binding operation determines the transaction's shard key, and only one
+	// operation can be bound to a transaction
+	boundToOperation int32
+
+	// Indicates whether the binding operation has completed successfully.
+	//
+	// All other operations using the same transaction will be blocked until the
+	// binding operation is finished.
+	//
+	// If the binding operation fails, it is unbound from the transaction,
+	// and the next eligible operation will become the binding operation.
+	bindingOpDone bool
+
+	// The following statistic information are available after the transaction
+	// is committed or aborted.
+
+	// The number of writes performed in the transaction
+	NumWrites int64 `json:"numWrites"`
+
+	// The number of reads performed in the transaction
+	NumReads int64 `json:"numReads"`
+
+	// The duration of the transaction in milliseconds.
+	ElapsedTimeMs int64 `json:"elapsedTimeMs"`
+}
+
+func (t *Transaction) isBindToOperation() bool {
+	return t.boundToOperation == 1
+}
+
+func (t *Transaction) isBindingOpDone() bool {
+	return t.bindingOpDone
+}
+
+func (t *Transaction) bindOperationIfUnbound() bool {
+	return atomic.CompareAndSwapInt32(&t.boundToOperation, 0, 1)
+}
+
+func (t *Transaction) unbindOperationIfBound() bool {
+	return atomic.CompareAndSwapInt32(&t.boundToOperation, 1, 0)
 }
 
 // validateTimeout validates the specified timeout is greater than or equal to 1 millisecond.
@@ -2512,6 +2883,29 @@ func validateTableLimits(limits *TableLimits) error {
 	}
 
 	return limits.validate()
+}
+
+// return the top table name based on dot (".") separators
+func getTopTableName(tableName string) string {
+	if tableName == "" {
+		return tableName
+	}
+	return strings.Split(tableName, ".")[0]
+}
+
+// validateTransactionTableName validates if target table of request is in
+// table hierachy of the transaction
+func validateTransactionTable(txn *Transaction, tableName string) error {
+	// If the request is within a transaction, the operation’s target table
+	// must be within the hierarchy of the transaction's top level table.
+	if txn != nil && tableName != "" &&
+		!strings.EqualFold(txn.TableName, getTopTableName(tableName)) {
+		return nosqlerr.NewIllegalArgument(
+			"The request table '" + tableName + "' is not in the " +
+				"hierarchy of the transaction's target table '" +
+				txn.TableName + "'")
+	}
+	return nil
 }
 
 func ordinal(i int) string {

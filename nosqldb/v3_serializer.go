@@ -561,6 +561,42 @@ func (req *ReplicaStatsRequest) deserializeV3(r proto.Reader, serialVersion int1
 		"Replica operations are not available with V3 server")
 }
 
+// serializeV3 is invalid for Transaction operations, as it is only implemented for the V4 protocol.
+func (req *BeginTransactionRequest) serializeV3(w proto.Writer, serialVersion int16) error {
+	return nosqlerr.New(nosqlerr.IllegalArgument,
+		"Transaction operations are not available with V3 server")
+}
+
+// deserializeV3 is invalid for Transaction operations, as it is only implemented for the V4 protocol.
+func (req *BeginTransactionRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, nosqlerr.New(nosqlerr.IllegalArgument,
+		"Transaction operations are not available with V3 server")
+}
+
+// serializeV3 is invalid for Transaction operations, as it is only implemented for the V4 protocol.
+func (req *CommitTransactionRequest) serializeV3(w proto.Writer, serialVersion int16) error {
+	return nosqlerr.New(nosqlerr.IllegalArgument,
+		"Transaction operations are not available with V3 server")
+}
+
+// deserializeV3 is invalid for Transaction operations, as it is only implemented for the V4 protocol.
+func (req *CommitTransactionRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, nosqlerr.New(nosqlerr.IllegalArgument,
+		"Transaction operations are not available with V3 server")
+}
+
+// serializeV3 is invalid for Transaction operations, as it is only implemented for the V4 protocol.
+func (req *AbortTransactionRequest) serializeV3(w proto.Writer, serialVersion int16) error {
+	return nosqlerr.New(nosqlerr.IllegalArgument,
+		"Transaction operations are not available with V3 server")
+}
+
+// deserializeV3 is invalid for Transaction operations, as it is only implemented for the V4 protocol.
+func (req *AbortTransactionRequest) deserializeV3(r proto.Reader, serialVersion int16) (Result, error) {
+	return nil, nosqlerr.New(nosqlerr.IllegalArgument,
+		"Transaction operations are not available with V3 server")
+}
+
 // serializeV3 writes the TableUsageRequest to data stream using the specified protocol writer.
 //
 // The fields of TableUsageRequest are written in the following order:

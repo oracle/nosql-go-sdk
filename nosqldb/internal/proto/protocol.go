@@ -155,6 +155,21 @@ const (
 	// GetReplicaStats is used in the cloud Global Active Tables
 	// it gets the stats for a replicated table
 	GetReplicaStats // 35
+
+	// 36 ~ 37 INTERNAL_DDL/INTERNAL_STATUS
+	Unused36 // 36
+	Unused37 // 37
+
+	// 38 ~ 42 Configuration API - REST
+	Unused38 // 38
+	Unused39 // 39
+	Unused40 // 40
+	Unused41 // 41
+	Unused42 // 42
+
+	// Transaction ops
+	BeginTransaction // 43
+	EndTransaction   // 44
 )
 
 // Reader is a protocol reader used to read and decode byte sequences.

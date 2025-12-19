@@ -872,18 +872,115 @@ func (c *Client) Query(req *QueryRequest) (*QueryResult, error) {
 	return nil, errUnexpectedResult
 }
 
+// Begins a transaction.
+func (c *Client) BeginTransaction(req *BeginTransactionRequest) (*TransactionResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TransactionResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
+// Commits a transaction.
+func (c *Client) CommitTransaction(req *CommitTransactionRequest) (*TransactionResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TransactionResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
+// Aborts a transaction.
+func (c *Client) AbortTransaction(req *AbortTransactionRequest) (*TransactionResult, error) {
+	if req == nil {
+		return nil, errNilRequest
+	}
+
+	res, err := c.execute(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if res, ok := res.(*TransactionResult); ok {
+		return res, nil
+	}
+
+	return nil, errUnexpectedResult
+}
+
 // nextRequestID returns the next client-scoped request id. It should be used
 // with the client id to obtain a globally unique scope.
 func (c *Client) nextRequestID() int32 {
 	return atomic.AddInt32(&c.requestID, 1)
 }
 
+// txnBindState represents the binding state between a transaction and an
+// operation.
+type txnBindState int
+
+const (
+	// 0: bindStateNone is the zero value and indicates that the request
+	// is not associated with any transaction or binding state.
+	bindStateNone txnBindState = iota
+
+	// 1: unbound indicates that the transaction exists but has not yet
+	// been bound to any operation.
+	unbound
+
+	// 2: bindingByThisOp indicates that the current operation is the
+	// transaction binding operation and the operation is still in progress.
+	bindingByThisOp
+
+	// 3: bindingByOtherOp indicates that the transaction is currently being
+	// bound by another operation.
+	bindingByOtherOp
+
+	// 4: bound indicates that the transaction has been successfully bound to
+	// an operation and the binding operation has completed.
+	bound
+)
+
+func (st txnBindState) String() string {
+	switch st {
+	case bindStateNone:
+		return "NONE"
+	case unbound:
+		return "UNBOUND"
+	case bindingByThisOp:
+		return "BINDING_BY_THIS_OP"
+	case bindingByOtherOp:
+		return "BINDING_BY_OTHER_OP"
+	case bound:
+		return "BOUND"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // processRequest processes the specified request before it is sent to server.
 // This method applies default configurations such as timeout and consistency
 // values for the request if they are not specified for the request.
-func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
+func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, reqTxnBindState txnBindState, err error) {
 	if req == nil {
-		return nil, 0, 0, errNilRequest
+		return nil, 0, 0, bindStateNone, errNilRequest
 	}
 
 	// Set default values for the request with the global request configurations
@@ -893,8 +990,12 @@ func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, 
 
 	// Validates the request, returns immediately if validation fails.
 	if err = req.validate(); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, bindStateNone, err
 	}
+
+	// Gets the current transaction–operation binding state. The request may
+	// need to be reserialized if the state was changed before execution.
+	reqTxnBindState = c.getTxnBindState(req, false)
 
 	data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
 	if err != nil || !c.isCloud {
@@ -903,7 +1004,7 @@ func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, 
 
 	// check request size for cloud
 	if err = checkRequestSizeLimit(req, len(data)); err != nil {
-		return nil, 0, 0, err
+		return nil, 0, 0, bindStateNone, err
 	}
 
 	return
@@ -918,15 +1019,19 @@ func (c *Client) execute(req Request) (Result, error) {
 }
 
 func (c *Client) executeWithContext(ctx context.Context, req Request) (Result, error) {
-	data, serialVerUsed, queryVerUsed, err := c.processRequest(req)
+	data, serialVerUsed, queryVerUsed, txnBindState, err := c.processRequest(req)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed)
+	res, err := c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed, txnBindState)
+	if err != nil {
+		c.unbindFromTransaction(req)
+	}
+	return res, err
 }
 
-func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16) (result Result, err error) {
+func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16, reqTxnBindState txnBindState) (result Result, err error) {
 	if req == nil {
 		return nil, errNilRequest
 	}
@@ -1142,6 +1247,30 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		authStr, err = c.getAuthString(req)
 		if err != nil {
 			continue
+		}
+
+		// Checks whether need to wait for the transaction binding operation to
+		// complete before proceeding the current request.
+		state := c.getTxnBindState(req, true)
+		if state == bindingByOtherOp {
+			c.logger.Fine("The transaction binding operation is still in progress, the request [%s] will be retried",
+				reflect.TypeOf(req).String())
+			// Transaction has been bound with other operation, that operation
+			// is not finished yet, wait and retry
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if (state == bindingByThisOp || state == bound) && state != reqTxnBindState {
+			// Need reserialize the request because the request.isBindOp state
+			// has been changed
+			c.logger.Fine("Reserialize the request [%s] because txnBindState has been changed: %s -> %s",
+				reflect.TypeOf(req).String(), reqTxnBindState.String(), state.String())
+
+			data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
+			if err != nil {
+				return nil, err
+			}
+			reqTxnBindState = state
 		}
 
 		httpReq, err = httputil.NewPostRequest(c.requestURL, data)
@@ -1408,6 +1537,74 @@ func (c *Client) updateTableLimiters(tableName string) {
 	// update/add rate limiters for table
 	if c.updateRateLimiters(tableName, res.Limits) {
 		c.logger.Info("background goroutine added limiters for table '%s'", tableName)
+	}
+}
+
+// Checks whether need to wait for the transaction binding operation to
+// complete before proceeding the current request.
+//
+// Return TxnBindingOpInprogress error if the transaction's binding
+// operation has not completed
+func (c *Client) getTxnBindState(req Request, bindIfUnbound bool) txnBindState {
+	treq, ok := req.(TransactionalRequest)
+	if !ok {
+		return bindStateNone
+	}
+
+	txn := treq.getTransaction()
+	if txn == nil {
+		return bindStateNone
+	}
+
+	// Binding already completed
+	if txn.isBindingOpDone() {
+		return bound
+	}
+
+	// Binding in progress
+	if txn.isBindToOperation() {
+		if treq.isBindingOp() {
+			return bindingByThisOp
+		}
+		return bindingByOtherOp
+	}
+
+	// Not yet bound
+
+	// If the transaction is not yet bound, attempt to bind it:
+	//   - PrepareRequest cannot be the binding operation because it is
+	//     handled on the client side and no KV transaction is initiated,
+	//     so no waiting is required.
+	//   - For other requests, attempt to bind the request with the
+	//     transaction, no waiting is required if the bind succeeds.
+	if !bindIfUnbound || (c.isPreparedRequest(req)) {
+		return unbound
+	}
+
+	// Attempt to bind this operation
+	if treq.tryBindWithTransaction() {
+		c.logger.Fine("Bound this operation to the transaction [%s]", reflect.TypeOf(req).String())
+		return bindingByThisOp
+	}
+
+	return bindingByOtherOp
+}
+
+func (c *Client) isPreparedRequest(req Request) bool {
+	_, ok := req.(*PrepareRequest)
+	return ok
+}
+
+// Unbinds the operation from the transaction if the current operation is the
+// binding operation of txn, so that subsequent request can try to bind with
+// the transaction.
+func (c *Client) unbindFromTransaction(req Request) {
+	if treq, ok := req.(TransactionalRequest); ok {
+		if treq.isBindingOp() {
+			treq.unbindFromTransaction()
+			c.logger.Fine("Unbind the operation from the transcation: %s ",
+				reflect.TypeOf(req).String())
+		}
 	}
 }
 
