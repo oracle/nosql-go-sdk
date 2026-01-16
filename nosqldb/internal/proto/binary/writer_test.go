@@ -14,7 +14,8 @@ import (
 )
 
 func BenchmarkWrite(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	p := []byte{1, 2, 3, 4}
 	b.SetBytes(int64(len(p)))
 	b.ResetTimer()
@@ -25,7 +26,8 @@ func BenchmarkWrite(b *testing.B) {
 }
 
 func BenchmarkWriteByte(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	b.SetBytes(1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -35,7 +37,8 @@ func BenchmarkWriteByte(b *testing.B) {
 }
 
 func BenchmarkWriteInt16(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	b.SetBytes(2)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -45,7 +48,8 @@ func BenchmarkWriteInt16(b *testing.B) {
 }
 
 func BenchmarkWriteInt(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	b.SetBytes(4)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -55,7 +59,8 @@ func BenchmarkWriteInt(b *testing.B) {
 }
 
 func BenchmarkWritePackedInt(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	// The maxinum number of bytes required for a packed int.
 	b.SetBytes(maxPackedInt32Length)
 	b.ResetTimer()
@@ -66,7 +71,8 @@ func BenchmarkWritePackedInt(b *testing.B) {
 }
 
 func BenchmarkWritePackedLong(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	// The maxinum number of bytes required for a packed long.
 	b.SetBytes(maxPackedInt64Length)
 	b.ResetTimer()
@@ -77,7 +83,8 @@ func BenchmarkWritePackedLong(b *testing.B) {
 }
 
 func BenchmarkWriteDouble(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	d := float64(3.1415926)
 	b.SetBytes(8)
 	b.ResetTimer()
@@ -88,7 +95,8 @@ func BenchmarkWriteDouble(b *testing.B) {
 }
 
 func BenchmarkWriteString(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	str := "Oracle NoSQL Database"
 	b.SetBytes(int64(len(str)))
 	b.ResetTimer()
@@ -99,7 +107,8 @@ func BenchmarkWriteString(b *testing.B) {
 }
 
 func BenchmarkWriteByteArray(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	p := []byte{1, 2, 3, 4}
 	b.SetBytes(int64(len(p)))
 	b.ResetTimer()
@@ -110,7 +119,8 @@ func BenchmarkWriteByteArray(b *testing.B) {
 }
 
 func BenchmarkWriteByteArrayWithInt(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	p := []byte{1, 2, 3, 4}
 	b.SetBytes(int64(len(p)))
 	b.ResetTimer()
@@ -121,7 +131,8 @@ func BenchmarkWriteByteArrayWithInt(b *testing.B) {
 }
 
 func BenchmarkWriteMap(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	mv := &types.MapValue{}
 	mv.Put("int", 1).Put("long", int64(1))
 	mv.Put("float32", float32(3.14)).Put("float64", float64(3.14))
@@ -139,7 +150,8 @@ func BenchmarkWriteMap(b *testing.B) {
 }
 
 func BenchmarkWriteArray(b *testing.B) {
-	w := NewWriter()
+	w := GetWriter()
+	defer PutWriter(w)
 	arr := []types.FieldValue{
 		1, int64(1), float32(3.14), float64(3.14),
 		"Oracle NoSQL Database",

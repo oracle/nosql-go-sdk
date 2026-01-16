@@ -2798,7 +2798,8 @@ func readDriverPlanInfo(arr []byte) (dpi *driverPlanInfo, err error) {
 	}
 
 	// create a new io.Reader from buffer
-	r := binary.NewReader(bytes.NewBuffer(arr))
+	r := binary.GetReader(bytes.NewBuffer(arr))
+    defer binary.PutReader(r)
 
 	dpi = &driverPlanInfo{}
 
@@ -2927,7 +2928,8 @@ func readNsonPhase1Results(arr []byte, res *QueryResult) (err error) {
 		return nil
 	}
 	// create a new io.Reader from buffer
-	r := binary.NewReader(bytes.NewBuffer(arr))
+	r := binary.GetReader(bytes.NewBuffer(arr))
+    defer binary.PutReader(r)
 
 	if res.isInPhase1, err = r.ReadBoolean(); err != nil {
 		return
