@@ -15,6 +15,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   different schema, or (b) one or more of the referenced tables has been altered
   (via the alter table statement).
 - Added new cloud region codes: hsg, abl, dfw, pbv, nbq, ibg, pcz, mez, den, kal
+- Added last write metadata support for data write operations, including put,
+  delete, multiDelete, writeMultiple, and insert/update/delete queries.
 
 ## Changed
 - Cloud only: Internal OCI `Region` definitions have been updated to be consistent. Some previous

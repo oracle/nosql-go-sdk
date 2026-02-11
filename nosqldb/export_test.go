@@ -31,3 +31,7 @@ func (c *Client) DoExecute(ctx context.Context, req Request, data []byte, serial
 func (p *PreparedStatement) GetStatement() []byte {
 	return p.statement
 }
+
+func ValidateRowMetadataForTest(input string) error {
+	return validateRowMetadata(input)
+}

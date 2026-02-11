@@ -403,7 +403,7 @@ func (suite *MultiDeleteTestSuite) runMultiDelete(key *types.MapValue, fieldRang
 	for {
 
 		res, err = suite.Client.MultiDelete(req)
-		if !suite.NoErrorf(err, "MultiDelete(req=%#v) failed, got error %v.", err) {
+		if !suite.NoErrorf(err, "MultiDelete(req=%#v) failed, got error %v.", req, err) {
 			break
 		}
 
