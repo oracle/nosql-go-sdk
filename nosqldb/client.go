@@ -105,6 +105,12 @@ type Client struct {
 
 	// Internal: used by tests. This is _not_ the wire protocol version.
 	serverSerialVersion int
+
+	// features stores the feature flags supported by the connected proxy.
+	features int64
+
+	// isOKResponseProcessed indicates whether a successful response has been processed (0=false, 1=true).
+	isOKResponseProcessed int32
 }
 
 var (
@@ -896,6 +902,12 @@ func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, 
 		return nil, 0, 0, err
 	}
 
+	// Validates the features required by the request are enabled, returns
+	// immediately if validation fails.
+	if err = c.validateRequestFeatures(req); err != nil {
+		return nil, 0, 0, err
+	}
+
 	data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
 	if err != nil || !c.isCloud {
 		return
@@ -906,6 +918,18 @@ func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, 
 		return nil, 0, 0, err
 	}
 
+	return
+}
+
+// Validates that all features required by the given request are enabled.
+// It returns an error if the request uses any feature that is not currently
+// enabled.
+func (c *Client) validateRequestFeatures(req Request) (err error) {
+	if r, ok := req.(HasLastWriteMetadata); ok {
+		if r.hasLastWriteMetadata() && !c.isFeatureEnabled(proto.FeatureFlagLastWriteMetadta) {
+			return nosqlerr.New(nosqlerr.OperationNotSupported, "Last Write Metadata is not supported on this server")
+		}
+	}
 	return
 }
 
@@ -1528,6 +1552,11 @@ func (c *Client) processResponse(httpResp *http.Response, req Request, serialVer
 	if httpResp.StatusCode == http.StatusOK {
 		c.setSessionCookie(httpResp.Header)
 		c.setServerSerialVersion(httpResp.Header)
+
+		c.setEnabledFeatures(httpResp.Header)
+		if atomic.LoadInt32(&c.isOKResponseProcessed) == 0 {
+			atomic.StoreInt32(&c.isOKResponseProcessed, 1)
+		}
 		return c.processOKResponse(data, req, serialVerUsed, queryVerUsed)
 	}
 
@@ -1629,6 +1658,85 @@ func (c *Client) setServerSerialVersion(header http.Header) {
 			return fmt.Sprintf("Set server serial version failed: %v", err)
 		})
 	}
+}
+
+// setEnabledFeatures updates the client's cached feature bitmask based on
+// the feature flags encoded in the response headers returned by the proxy.
+func (c *Client) setEnabledFeatures(header http.Header) {
+	if header == nil {
+		return
+	}
+
+	// Format of the server version header string:
+	//     proxy=X.Y.Z kv=X.Y.Z[ features=XX]
+	// If "features" exists, its value is in hex (base 16).
+	value := header.Get("x-nosql-version")
+	if value == "" {
+		return
+	}
+
+	const featuresKey = "features="
+	start := strings.Index(value, featuresKey)
+	if start == -1 {
+		return
+	}
+	start += len(featuresKey)
+	end := start
+	for end < len(value) && value[end] != ' ' {
+		end++
+	}
+	featuresStr := value[start:end]
+	// Parse the features string to int64
+	features, err := strconv.ParseInt(featuresStr, 16, 64)
+	atomic.StoreInt64(&c.features, features)
+	if err != nil {
+		c.logger.LogWithFn(logger.Fine, func() string {
+			return fmt.Sprintf("Invalid features string to \"%s\"", featuresStr)
+		})
+	}
+}
+
+// isFeatureEnabled returns whether the specified feature is enabled.
+// If no requests have been processed, it sends an empty request to the proxy
+// to get the enabled features.
+func (c *Client) isFeatureEnabled(featureFlag int64) bool {
+	if atomic.LoadInt32(&c.isOKResponseProcessed) == 0 {
+		c.logger.Fine("isFeatureEnabled: executing empty request to get feature flags")
+		err := c.executeEmptyRequest()
+		if err != nil {
+			c.logger.LogWithFn(logger.Fine, func() string {
+				return fmt.Sprintf("isFeatureEnabled: Got exception trying empty request: %v", err)
+			})
+			return false
+		}
+	}
+	features := atomic.LoadInt64(&c.features)
+	return ((features & featureFlag) != 0)
+}
+
+// executeEmptyRequest sends a no-op request to the proxy to retrieve the
+// supported feature flags and stores it in c.features.
+func (c *Client) executeEmptyRequest() error {
+	req, err := http.NewRequest("HEAD", c.requestURL, nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("host", c.serverHost)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	resp, err := c.executor.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	atomic.StoreInt32(&c.isOKResponseProcessed, 1)
+	c.setEnabledFeatures(resp.Header)
+	return nil
 }
 
 // GetServerSerialVersion is used by tests to determine feature capabilities.

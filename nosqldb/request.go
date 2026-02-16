@@ -21,6 +21,11 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+// HasLastWriteMetadata is implemented by requests that can carry last write
+// metadata and report whether the request currently includes the metadata.
+type HasLastWriteMetadata interface {
+	hasLastWriteMetadata() bool
+}
 
 // GetRequest represents a request for retrieving a row from a table.
 //
@@ -1192,6 +1197,10 @@ func (r *DeleteRequest) doesWrites() bool {
 	return true
 }
 
+func (r *DeleteRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
+}
+
 // PutRequest represents a request used to put a row into a table.
 //
 // This request can be used to perform unconditional and conditional puts:
@@ -1410,6 +1419,10 @@ func (r *PutRequest) doesWrites() bool {
 // It returns true if the operation specifies the UseTableTTL option or sets a TTL value.
 func (r *PutRequest) updateTTL() bool {
 	return r.UseTableTTL || r.TTL != nil
+}
+
+func (r *PutRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
 }
 
 // TableUsageRequest represents the input of a Client.GetTableUsage() operation
@@ -1884,6 +1897,10 @@ func (r *QueryRequest) doesWrites() bool {
 	return true
 }
 
+func (r *QueryRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
+}
+
 func (r *QueryRequest) getVirtualScan() *virtualScan {
 	return r.virtualScan
 }
@@ -2329,6 +2346,18 @@ func (r *WriteMultipleRequest) AddDeleteRequest(d *DeleteRequest, abortOnFail bo
 	return r.validateTables()
 }
 
+func (r *WriteMultipleRequest) hasLastWriteMetadata() bool {
+	for _, op := range r.Operations {
+		if op.PutRequest != nil && op.PutRequest.LastWriteMetadata != "" {
+			return true
+		}
+		if op.DeleteRequest != nil && op.DeleteRequest.LastWriteMetadata != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // MultiDeleteRequest represents the input to a Client.MultiDelete operation
 // which can be used to delete a range of values that match the primary key and
 // range provided.
@@ -2471,6 +2500,10 @@ func (r *MultiDeleteRequest) doesReads() bool {
 
 func (r *MultiDeleteRequest) doesWrites() bool {
 	return true
+}
+
+func (r *MultiDeleteRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
 }
 
 // WriteOperation represents a put or delete operation that can be added into
