@@ -8,7 +8,10 @@
 package nosqldb
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"reflect"
 	"strings"
@@ -18,6 +21,11 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+// HasLastWriteMetadata is implemented by requests that can carry last write
+// metadata and report whether the request currently includes the metadata.
+type HasLastWriteMetadata interface {
+	hasLastWriteMetadata() bool
+}
 
 // GetRequest represents a request for retrieving a row from a table.
 //
@@ -1054,6 +1062,22 @@ type DeleteRequest struct {
 	// It is required and must be non-nil.
 	Key *types.MapValue `json:"key"`
 
+	// LastWriteMetadata specifies the write metadata to use for this delete
+	// operation.
+	//
+	// Last write metadata is associated to a certain version of a row. Any
+	// subsequent write operation will use its own write metadata value. If
+	// not specified nil will be used by default.
+	//
+	// The write metadata must be nil or a valid JSON construct: object, array,
+	// string, number, true, false
+	//
+	// NOTE that if you have previously written a record with metadata and a
+	// subsequent write does not supply metadata, the metadata associated with
+	// the row will be nil. Therefore, if you wish to have metadata associated
+	// with every write operation, you must supply a valid JSON construct.
+	LastWriteMetadata string `json:"lastWriteMetadata,omitempty"`
+
 	// ReturnRow specifies whether information about the existing row should be
 	// returned. The existing row information, including the value, version, and
 	// modification time, will only be returned if ReturnRow is true and one of
@@ -1124,6 +1148,12 @@ func (r *DeleteRequest) validate() (err error) {
 		return
 	}
 
+	if r.LastWriteMetadata != "" {
+		if err = validateRowMetadata(r.LastWriteMetadata); err != nil {
+			return
+		}
+	}
+
 	if !r.isSubRequest {
 		if err = validateTimeout(r.Timeout); err != nil {
 			return
@@ -1167,18 +1197,22 @@ func (r *DeleteRequest) doesWrites() bool {
 	return true
 }
 
+func (r *DeleteRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
+}
+
 // PutRequest represents a request used to put a row into a table.
 //
 // This request can be used to perform unconditional and conditional puts:
 //
-//   1. Overwrite any existing row. This is the default.
-//   2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
-//      PutOption parameter for this case.
-//   3. Succeed only if the row exists. Specify types.PutIfPresent for the
-//      PutOption parameter for this case.
-//   4. Succeed only if the row exists and its version matches a specific version.
-//      Specify types.PutIfVersion for the PutOption parameter and a desired version
-//      for the MatchVersion parameter for this case.
+//  1. Overwrite any existing row. This is the default.
+//  2. Succeed only if the row does not exist. Specify types.PutIfAbsent for the
+//     PutOption parameter for this case.
+//  3. Succeed only if the row exists. Specify types.PutIfPresent for the
+//     PutOption parameter for this case.
+//  4. Succeed only if the row exists and its version matches a specific version.
+//     Specify types.PutIfVersion for the PutOption parameter and a desired version
+//     for the MatchVersion parameter for this case.
 //
 // Information about the existing row can be returned on failure of a put
 // operation by using the ReturnRow option. Use of the ReturnRow option incurs
@@ -1203,6 +1237,22 @@ type PutRequest struct {
 	// Only exported (capitalized) fields in the struct will be used, similar
 	// to json encoding.
 	StructValue any
+
+	// LastWriteMetadata specifies the write metadata to use for this put
+	// operation.
+	//
+	// Last write metadata is associated to a certain version of a row. Any
+	// subsequent write operation will use its own write metadata value. If
+	// not specified nil will be used by default.
+	//
+	// The write metadata must be nil or a valid JSON construct: object, array,
+	// string, number, true, false
+	//
+	// NOTE that if you have previously written a record with metadata and a
+	// subsequent write does not supply metadata, the metadata associated with
+	// the row will be nil. Therefore, if you wish to have metadata associated
+	// with every write operation, you must supply a valid JSON construct.
+	LastWriteMetadata string `json:"lastWriteMetadata,omitempty"`
 
 	// PutOption specifies the put option for the operation.
 	//
@@ -1322,6 +1372,12 @@ func (r *PutRequest) validate() (err error) {
 		return nosqlerr.NewIllegalArgument("PutRequest: UseTableTTL and TTL are mutual exclusive, cannot specify both of them")
 	}
 
+	if r.LastWriteMetadata != "" {
+		if err = validateRowMetadata(r.LastWriteMetadata); err != nil {
+			return
+		}
+	}
+
 	return nil
 }
 
@@ -1363,6 +1419,10 @@ func (r *PutRequest) doesWrites() bool {
 // It returns true if the operation specifies the UseTableTTL option or sets a TTL value.
 func (r *PutRequest) updateTTL() bool {
 	return r.UseTableTTL || r.TTL != nil
+}
+
+func (r *PutRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
 }
 
 // TableUsageRequest represents the input of a Client.GetTableUsage() operation
@@ -1630,6 +1690,24 @@ type QueryRequest struct {
 	// PreparedStatement specifies the prepared query statement.
 	PreparedStatement *PreparedStatement `json:"preparedStatement,omitempty"`
 
+	// LastWriteMetadata specifies the write metadata to use for the operation.
+	// This setting is optional and only applies if the query modifies or
+	// deletes any rows using an INSERT, UPDATE, UPSERT or DELETE statement.
+	// If the query is read-only this setting is ignored.
+	//
+	// Write metadata is associated to a certain version of a row. Any subsequent
+	// write operation will use its own write metadata value. If not specified
+	// nil will be used by default.
+	//
+	// The write metadata must be nil or a valid JSON construct: object, array,
+	// string, number, true, false
+	//
+	// NOTE that if you have previously written a record with metadata and a
+	// subsequent write does not supply metadata, the metadata associated with
+	// the row will be nil. Therefore, if you wish to have metadata associated
+	// with every write operation, you must supply a valid JSON construct.
+	LastWriteMetadata string `json:"lastWriteMetadata,omitempty"`
+
 	// Limit specifies the limit on number of items returned by the operation.
 	// This allows an operation to return less than the default amount of data.
 	Limit uint `json:"limit,omitempty"`
@@ -1772,6 +1850,12 @@ func (r *QueryRequest) validate() (err error) {
 		return nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set")
 	}
 
+	if r.LastWriteMetadata != "" {
+		if err = validateRowMetadata(r.LastWriteMetadata); err != nil {
+			return
+		}
+	}
+
 	return
 }
 
@@ -1813,6 +1897,10 @@ func (r *QueryRequest) doesWrites() bool {
 	return true
 }
 
+func (r *QueryRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
+}
+
 func (r *QueryRequest) getVirtualScan() *virtualScan {
 	return r.virtualScan
 }
@@ -1832,6 +1920,7 @@ func (r *QueryRequest) copyInternal() *QueryRequest {
 		traceLevel:           r.traceLevel,
 		TableName:            r.TableName,
 		InternalRequestData:  r.InternalRequestData,
+		LastWriteMetadata:    r.LastWriteMetadata,
 		isInternal:           true,
 	}
 }
@@ -2257,6 +2346,18 @@ func (r *WriteMultipleRequest) AddDeleteRequest(d *DeleteRequest, abortOnFail bo
 	return r.validateTables()
 }
 
+func (r *WriteMultipleRequest) hasLastWriteMetadata() bool {
+	for _, op := range r.Operations {
+		if op.PutRequest != nil && op.PutRequest.LastWriteMetadata != "" {
+			return true
+		}
+		if op.DeleteRequest != nil && op.DeleteRequest.LastWriteMetadata != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // MultiDeleteRequest represents the input to a Client.MultiDelete operation
 // which can be used to delete a range of values that match the primary key and
 // range provided.
@@ -2281,6 +2382,22 @@ type MultiDeleteRequest struct {
 	// Key specifies the partial key used for the request.
 	// It is required and must be non-nil.
 	Key *types.MapValue `json:"key"`
+
+	// LastWriteMetadata specifies the write metadata to use for this delete
+	// operation.
+	//
+	// Last write metadata is associated to a certain version of a row. Any
+	// subsequent write operation will use its own write metadata value. If
+	// not specified nil will be used by default.
+	//
+	// The write metadata must be nil or a valid JSON construct: object, array,
+	// string, number, true, false
+	//
+	// NOTE that if you have previously written a record with metadata and a
+	// subsequent write does not supply metadata, the metadata associated with
+	// the row will be nil. Therefore, if you wish to have metadata associated
+	// with every write operation, you must supply a valid JSON construct.
+	LastWriteMetadata string `json:"lastWriteMetadata,omitempty"`
 
 	// ContinuationKey specifies the continuation key to use to continue the operation.
 	ContinuationKey []byte `json:"continuationKey,omitempty"`
@@ -2338,6 +2455,12 @@ func (r *MultiDeleteRequest) validate() (err error) {
 		return
 	}
 
+	if r.LastWriteMetadata != "" {
+		if err = validateRowMetadata(r.LastWriteMetadata); err != nil {
+			return
+		}
+	}
+
 	if r.FieldRange == nil {
 		return
 	}
@@ -2377,6 +2500,10 @@ func (r *MultiDeleteRequest) doesReads() bool {
 
 func (r *MultiDeleteRequest) doesWrites() bool {
 	return true
+}
+
+func (r *MultiDeleteRequest) hasLastWriteMetadata() bool {
+	return r.LastWriteMetadata != ""
 }
 
 // WriteOperation represents a put or delete operation that can be added into
@@ -2538,4 +2665,72 @@ func ordinal(i int) string {
 	}
 
 	return fmt.Sprintf("%d%s", n, sfx)
+}
+
+// validateRowMetadata validates that metadata is exactly one JSON value
+// (object, array, string, number, true, false, or null).
+//
+// It rejects multiple JSON values and any trailing non-whitespace content.
+// Go's encoding/json is strict JSON(double quotes only; no comments; no
+// trailing commas).
+func validateRowMetadata(metadata string) error {
+	if strings.TrimSpace(metadata) == "" {
+		return nosqlerr.NewIllegalArgument("Invalid Row Metadata, empty JSON input")
+	}
+
+	dec := json.NewDecoder(strings.NewReader(metadata))
+
+	// Read the first JSON token to ensure a JSON value starts properly.
+	// Token() skips leading whitespace.
+	tok, err := dec.Token()
+	if err != nil {
+		return nosqlerr.NewIllegalArgument("Invalid Row Metadata, %s", jsonSyntaxError(err))
+	}
+
+	// We consumed one token. Now validate the rest of that single value.
+	// For objects/arrays, consume until their matching closing delimiter.
+	switch d := tok.(type) {
+	case json.Delim:
+		// d is '{' or '[' or '}' or ']' (should be '{' or '[' here)
+		if d != '{' && d != '[' {
+			return nosqlerr.NewIllegalArgument("Invalid Row Metadata, invalid JSON start token: %q", d)
+		}
+		// Consume tokens until the matching closing delimiter for the top-level container.
+		depth := 1
+		for depth > 0 {
+			t, err := dec.Token()
+			if err != nil {
+				return nosqlerr.NewIllegalArgument("Invalid Row Metadata, %s", jsonSyntaxError(err))
+			}
+			if del, ok := t.(json.Delim); ok {
+				switch del {
+				case '{', '[':
+					depth++
+				case '}', ']':
+					depth--
+				}
+			}
+		}
+	default:
+		// Scalar value already validated by Token(): string/number/bool/null
+	}
+
+	// After one full JSON value, there must be nothing else except whitespace.
+	// Token() will return io.EOF when done (after skipping whitespace).
+	if _, err := dec.Token(); err != io.EOF {
+		return nosqlerr.NewIllegalArgument("Invalid Row Metadata, multiple JSON values are not allowed")
+	}
+
+	return nil
+}
+
+func jsonSyntaxError(err error) string {
+	if err != nil {
+		var syntaxErr *json.SyntaxError
+		if errors.As(err, &syntaxErr) {
+			return fmt.Sprintf("invalid JSON at offset %d", syntaxErr.Offset)
+		}
+		return fmt.Sprint(err)
+	}
+	return ""
 }

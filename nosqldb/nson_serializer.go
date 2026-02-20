@@ -27,146 +27,148 @@ import (
 // NSON versions of all serializers
 
 const (
-	ABORT_ON_FAIL              = "a"
-	BIND_VARIABLES             = "bv"
-	COMPARTMENT_OCID           = "cc"
-	CONSISTENCY                = "co"
-	CONSUMED                   = "c"
-	CONTINUATION_KEY           = "ck"
-	DATA                       = "d"
-	DEFINED_TAGS               = "dt"
-	DRIVER_QUERY_PLAN          = "dq"
-	DURABILITY                 = "du"
-	END                        = "en"
-	ERROR_CODE                 = "e"
-	ETAG                       = "et"
-	EXACT_MATCH                = "ec"
-	EXCEPTION                  = "x"
-	EXISTING_MOD_TIME          = "em"
-	EXISTING_VALUE             = "el"
-	EXISTING_VERSION           = "ev"
-	EXPIRATION                 = "xp"
-	FIELDS                     = "f"
-	FREE_FORM_TAGS             = "ff"
-	GENERATED                  = "gn"
-	GET_QUERY_PLAN             = "gq"
-	GET_QUERY_SCHEMA           = "gs"
-	HEADER                     = "h"
-	IDEMPOTENT                 = "ip"
-	IDENTITY_CACHE_SIZE        = "ic"
-	INCLUSIVE                  = "in"
-	INDEX                      = "i"
-	INDEXES                    = "ix"
-	INITIALIZED                = "it"
-	IS_JSON                    = "j"
-	IS_PREPARED                = "is"
-	IS_SIMPLE_QUERY            = "iq"
-	KEY                        = "k"
-	KV_VERSION                 = "kv"
-	LAST_INDEX                 = "li"
-	LIMITS                     = "lm"
-	LIMITS_MODE                = "mo"
-	LIST_MAX_TO_READ           = "lx"
-	LIST_START_INDEX           = "ls"
-	MATCH_VERSION              = "mv"
-	MATH_CONTEXT_CODE          = "mc"
-	MATH_CONTEXT_PRECISION     = "cp"
-	MATH_CONTEXT_ROUNDING_MODE = "rm"
-	MAX_READ_KB                = "mr"
-	MAX_WRITE_KB               = "mw"
-	MAX_SHARD_USAGE_PERCENT    = "ms"
-	MODIFIED                   = "md"
-	NAME                       = "m"
-	NAMESPACE                  = "ns"
-	NEXT_START_TIME            = "ni"
-	NOT_TARGET_TABLES          = "nt"
-	NUMBER_LIMIT               = "nl"
-	NUM_DELETIONS              = "nd"
-	NUM_OPERATIONS             = "no"
-	NUM_RESULTS                = "nr"
-	OP_CODE                    = "o"
-	OPERATIONS                 = "os"
-	OPERATION_ID               = "od"
-	PATH                       = "pt"
-	PAYLOAD                    = "p"
-	PREPARE                    = "pp"
-	PREPARED_QUERY             = "pq"
-	PREPARED_STATEMENT         = "ps"
-	PROXY_TOPO_SEQNUM          = "pn"
-	QUERY                      = "q"
-	QUERY_NAME                 = "qn"
-	QUERY_OPERATION            = "qo"
-	QUERY_PLAN_STRING          = "qs"
-	QUERY_RESULTS              = "qr"
-	QUERY_RESULT_SCHEMA        = "qc"
-	QUERY_VERSION              = "qv"
-	RANGE                      = "rg"
-	RANGE_PATH                 = "rp"
-	REACHED_LIMIT              = "re"
-	READ_KB                    = "rk"
-	READ_THROTTLE_COUNT        = "rt"
-	READ_UNITS                 = "ru"
-	REGION                     = "rn"
-	REPLICAS                   = "rc"
-	REPLICA_LAG                = "rl"
-	REPLICA_STATS              = "ra"
-	RETRY_HINT                 = "rh"
-	RETURN_INFO                = "ri"
-	RETURN_ROW                 = "rr"
-	ROW                        = "r"
-	ROW_VERSION                = "rv"
-	SCHEMA_FROZEN              = "sf"
-	SERVER_MEMORY_CONSUMPTION  = "sm"
-	SHARD_ID                   = "si"
-	SHARD_IDS                  = "sa"
-	SORT_PHASE1_RESULTS        = "p1"
-	START                      = "sr"
-	STATEMENT                  = "st"
-	STORAGE_GB                 = "sg"
-	STORAGE_THROTTLE_COUNT     = "sl"
-	SUCCESS                    = "ss"
-	SYSOP_RESULT               = "rs"
-	SYSOP_STATE                = "ta"
-	TABLES                     = "tb"
-	TABLE_ACCESS_INFO          = "ai"
-	TABLE_DDL                  = "td"
-	TABLE_NAME                 = "n"
-	TABLE_OCID                 = "to"
-	TABLE_SCHEMA               = "ac"
-	TABLE_STATE                = "as"
-	TABLE_USAGE                = "u"
-	TABLE_USAGE_PERIOD         = "pd"
-	TIME                       = "tm"
-	TIMEOUT                    = "t"
-	TOPOLOGY_INFO              = "tp"
-	TOPO_SEQ_NUM               = "ts"
-	TRACE_LEVEL                = "tl"
-	TRACE_AT_LOG_FILES         = "tf"
-	TTL                        = "tt"
-	TYPE                       = "y"
-	UPDATE_TTL                 = "ut"
-	VALUE                      = "l"
-	VERSION                    = "v"
-	VSCAN                      = "vs"
-	VSCANS                     = "vssa"
-	VSCAN_JOIN_DESC_RESUME_KEY = "vsjdrk"
-	VSCAN_JOIN_PATH_TABLES     = "vsjpt"
-	VSCAN_JOIN_PATH_KEY        = "vsjpk"
-	VSCAN_JOIN_PATH_SEC_KEY    = "vsjpsk"
-	VSCAN_JOIN_PATH_MATCHED    = "vsjpm"
-	VSCAN_MOVE_AFTER           = "vsma"
-	VSCAN_PID                  = "vspid"
-	VSCAN_PRIM_KEY             = "vspk"
-	VSCAN_SEC_KEY              = "vssk"
-	VSCAN_SID                  = "vssid"
-	WM_FAILURE                 = "wf"
-	WM_FAIL_INDEX              = "wi"
-	WM_FAIL_RESULT             = "wr"
-	WM_SUCCESS                 = "ws"
-	WRITE_KB                   = "wk"
-	WRITE_MULTIPLE             = "wm"
-	WRITE_THROTTLE_COUNT       = "wt"
-	WRITE_UNITS                = "wu"
+	ABORT_ON_FAIL                = "a"
+	BIND_VARIABLES               = "bv"
+	COMPARTMENT_OCID             = "cc"
+	CONSISTENCY                  = "co"
+	CONSUMED                     = "c"
+	CONTINUATION_KEY             = "ck"
+	DATA                         = "d"
+	DEFINED_TAGS                 = "dt"
+	DRIVER_QUERY_PLAN            = "dq"
+	DURABILITY                   = "du"
+	END                          = "en"
+	ERROR_CODE                   = "e"
+	ETAG                         = "et"
+	EXACT_MATCH                  = "ec"
+	EXCEPTION                    = "x"
+	EXISTING_LAST_WRITE_METADATA = "ed"
+	EXISTING_MOD_TIME            = "em"
+	EXISTING_VALUE               = "el"
+	EXISTING_VERSION             = "ev"
+	EXPIRATION                   = "xp"
+	FIELDS                       = "f"
+	FREE_FORM_TAGS               = "ff"
+	GENERATED                    = "gn"
+	GET_QUERY_PLAN               = "gq"
+	GET_QUERY_SCHEMA             = "gs"
+	HEADER                       = "h"
+	IDEMPOTENT                   = "ip"
+	IDENTITY_CACHE_SIZE          = "ic"
+	INCLUSIVE                    = "in"
+	INDEX                        = "i"
+	INDEXES                      = "ix"
+	INITIALIZED                  = "it"
+	IS_JSON                      = "j"
+	IS_PREPARED                  = "is"
+	IS_SIMPLE_QUERY              = "iq"
+	KEY                          = "k"
+	KV_VERSION                   = "kv"
+	LAST_INDEX                   = "li"
+	LAST_WRITE_METADATA          = "mt"
+	LIMITS                       = "lm"
+	LIMITS_MODE                  = "mo"
+	LIST_MAX_TO_READ             = "lx"
+	LIST_START_INDEX             = "ls"
+	MATCH_VERSION                = "mv"
+	MATH_CONTEXT_CODE            = "mc"
+	MATH_CONTEXT_PRECISION       = "cp"
+	MATH_CONTEXT_ROUNDING_MODE   = "rm"
+	MAX_READ_KB                  = "mr"
+	MAX_WRITE_KB                 = "mw"
+	MAX_SHARD_USAGE_PERCENT      = "ms"
+	MODIFIED                     = "md"
+	NAME                         = "m"
+	NAMESPACE                    = "ns"
+	NEXT_START_TIME              = "ni"
+	NOT_TARGET_TABLES            = "nt"
+	NUMBER_LIMIT                 = "nl"
+	NUM_DELETIONS                = "nd"
+	NUM_OPERATIONS               = "no"
+	NUM_RESULTS                  = "nr"
+	OP_CODE                      = "o"
+	OPERATIONS                   = "os"
+	OPERATION_ID                 = "od"
+	PATH                         = "pt"
+	PAYLOAD                      = "p"
+	PREPARE                      = "pp"
+	PREPARED_QUERY               = "pq"
+	PREPARED_STATEMENT           = "ps"
+	PROXY_TOPO_SEQNUM            = "pn"
+	QUERY                        = "q"
+	QUERY_NAME                   = "qn"
+	QUERY_OPERATION              = "qo"
+	QUERY_PLAN_STRING            = "qs"
+	QUERY_RESULTS                = "qr"
+	QUERY_RESULT_SCHEMA          = "qc"
+	QUERY_VERSION                = "qv"
+	RANGE                        = "rg"
+	RANGE_PATH                   = "rp"
+	REACHED_LIMIT                = "re"
+	READ_KB                      = "rk"
+	READ_THROTTLE_COUNT          = "rt"
+	READ_UNITS                   = "ru"
+	REGION                       = "rn"
+	REPLICAS                     = "rc"
+	REPLICA_LAG                  = "rl"
+	REPLICA_STATS                = "ra"
+	RETRY_HINT                   = "rh"
+	RETURN_INFO                  = "ri"
+	RETURN_ROW                   = "rr"
+	ROW                          = "r"
+	ROW_VERSION                  = "rv"
+	SCHEMA_FROZEN                = "sf"
+	SERVER_MEMORY_CONSUMPTION    = "sm"
+	SHARD_ID                     = "si"
+	SHARD_IDS                    = "sa"
+	SORT_PHASE1_RESULTS          = "p1"
+	START                        = "sr"
+	STATEMENT                    = "st"
+	STORAGE_GB                   = "sg"
+	STORAGE_THROTTLE_COUNT       = "sl"
+	SUCCESS                      = "ss"
+	SYSOP_RESULT                 = "rs"
+	SYSOP_STATE                  = "ta"
+	TABLES                       = "tb"
+	TABLE_ACCESS_INFO            = "ai"
+	TABLE_DDL                    = "td"
+	TABLE_NAME                   = "n"
+	TABLE_OCID                   = "to"
+	TABLE_SCHEMA                 = "ac"
+	TABLE_STATE                  = "as"
+	TABLE_USAGE                  = "u"
+	TABLE_USAGE_PERIOD           = "pd"
+	TIME                         = "tm"
+	TIMEOUT                      = "t"
+	TOPOLOGY_INFO                = "tp"
+	TOPO_SEQ_NUM                 = "ts"
+	TRACE_LEVEL                  = "tl"
+	TRACE_AT_LOG_FILES           = "tf"
+	TTL                          = "tt"
+	TYPE                         = "y"
+	UPDATE_TTL                   = "ut"
+	VALUE                        = "l"
+	VERSION                      = "v"
+	VSCAN                        = "vs"
+	VSCANS                       = "vssa"
+	VSCAN_JOIN_DESC_RESUME_KEY   = "vsjdrk"
+	VSCAN_JOIN_PATH_TABLES       = "vsjpt"
+	VSCAN_JOIN_PATH_KEY          = "vsjpk"
+	VSCAN_JOIN_PATH_SEC_KEY      = "vsjpsk"
+	VSCAN_JOIN_PATH_MATCHED      = "vsjpm"
+	VSCAN_MOVE_AFTER             = "vsma"
+	VSCAN_PID                    = "vspid"
+	VSCAN_PRIM_KEY               = "vspk"
+	VSCAN_SEC_KEY                = "vssk"
+	VSCAN_SID                    = "vssid"
+	WM_FAILURE                   = "wf"
+	WM_FAIL_INDEX                = "wi"
+	WM_FAIL_RESULT               = "wr"
+	WM_SUCCESS                   = "ws"
+	WRITE_KB                     = "wk"
+	WRITE_MULTIPLE               = "wm"
+	WRITE_THROTTLE_COUNT         = "wt"
+	WRITE_UNITS                  = "wu"
 )
 
 // Constants to make code cleaner
@@ -871,6 +873,12 @@ func (req *DeleteRequest) serializeInternal(w proto.Writer, _ int16, addTableNam
 		return
 	}
 
+	if req.LastWriteMetadata != "" {
+		if err = ns.writeField(LAST_WRITE_METADATA, req.LastWriteMetadata); err != nil {
+			return
+		}
+	}
+
 	// Write match version if it is not nil.
 	if req.MatchVersion != nil {
 		ns.startField(ROW_VERSION)
@@ -1013,6 +1021,12 @@ func (req *PutRequest) serializeInternal(w proto.Writer, _ int16, addTableName b
 		}
 	} else {
 		return fmt.Errorf("missing Value in PutRequest")
+	}
+
+	if req.LastWriteMetadata != "" {
+		if err = ns.writeField(LAST_WRITE_METADATA, req.LastWriteMetadata); err != nil {
+			return
+		}
 	}
 
 	if req.updateTTL() {
@@ -1196,6 +1210,11 @@ func (req *MultiDeleteRequest) serialize(w proto.Writer, serialVersion int16, _ 
 	}
 	if err = ns.writeField(KEY, req.Key); err != nil {
 		return
+	}
+	if req.LastWriteMetadata != "" {
+		if err = ns.writeField(LAST_WRITE_METADATA, req.LastWriteMetadata); err != nil {
+			return
+		}
 	}
 	if req.ContinuationKey != nil {
 		if err = ns.writeField(CONTINUATION_KEY, req.ContinuationKey); err != nil {
@@ -1512,6 +1531,12 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16, queryVer
 		}
 	} else {
 		if err = ns.writeField(STATEMENT, req.Statement); err != nil {
+			return
+		}
+	}
+
+	if req.LastWriteMetadata != "" {
+		if err = ns.writeField(LAST_WRITE_METADATA, req.LastWriteMetadata); err != nil {
 			return
 		}
 	}
@@ -2432,6 +2457,8 @@ func readNsonWriteResult(r proto.Reader) (WriteResult, error) {
 			}
 		//case EXISTING_EXPIRATION:
 		// TODO
+		case EXISTING_LAST_WRITE_METADATA:
+			res.ExistingLastWriteMetadata, err = readNsonString(r)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -2465,6 +2492,8 @@ func readNsonRow(r proto.Reader, res *GetResult) error {
 			} else {
 				res.Value, err = readNsonRowValue(r)
 			}
+		case LAST_WRITE_METADATA:
+			res.LastWriteMetadata, err = readNsonString(r)
 		default:
 			err = skipNsonField(r, name)
 		}

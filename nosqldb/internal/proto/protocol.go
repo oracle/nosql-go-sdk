@@ -27,6 +27,11 @@ const (
 
 	// QueryV3 is the query version that is used by v3 and previous protocols.
 	QueryV3 int16 = 3
+
+	/*
+	 * Features: added in KV 26.X
+	 */
+	FeatureFlagLastWriteMetadta int64 = 1 << 0
 )
 
 const (

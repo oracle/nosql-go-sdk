@@ -126,6 +126,10 @@ type GetResult struct {
 	// Added in SDK Version 1.3.0
 	ModificationTime int64 `json:"modificationTime"`
 
+	// LastWriteMetadata represents the metadata used of the returned row, or
+	// nil if metadata was not set.
+	LastWriteMetadata string `json:"lastWriteMetadata"`
+
 	DelayInfo
 	common.InternalResultData
 }
@@ -593,6 +597,10 @@ type WriteResult struct {
 	// Its value is in milliseconds since January 1 1970.
 	// Added in SDK Version 1.3.0
 	ExistingModificationTime int64 `json:"existingModificationTime"`
+
+	// ExistingLastWriteMetadata represents the metadata of an existing row, or
+	// nil if the metadata was not set.
+	ExistingLastWriteMetadata string `json:"existingLastWriteMetadata"`
 }
 
 // String returns a JSON string representation of the WriteResult.
