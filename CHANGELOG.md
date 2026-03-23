@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   after (a) the index used by the query has been dropped and then re-created with a
   different schema, or (b) one or more of the referenced tables has been altered
   (via the alter table statement).
-- Added new cloud region codes: hsg, abl, dfw, pbv, nbq, ibg, pcz, mez, den, kal
+- Added new cloud region codes
 - Added last write metadata support for data write operations, including put,
   delete, multiDelete, writeMultiple, and insert/update/delete queries.
 
@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   external usage, as the `Region` definitions are intended for internal logic only. Interaction
   with the NoSQL APIs should always use region identifier strings, such as `us-phoenix-1`, or
   full endpoint strings, such as `nosql.us-phoenix-1.oci.oraclecloud.com`.
-- Updated copyrights to 2025
+- Updated copyrights to 2026
 
 ## 1.4.7 - 2024-08-13
 
