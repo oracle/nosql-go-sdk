@@ -63,6 +63,8 @@ type Capacity struct {
 	ReadKB int `json:"readKB"`
 
 	// WriteKB represents the number of kilo bytes consumed for writes.
+	// Note that in all cases, WriteUnits would be this same value, so there
+	// is no separate WriteUnits struct element.
 	WriteKB int `json:"writeKB"`
 
 	// ReadUnits represents the number of read units consumed for reads.
