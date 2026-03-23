@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019, 2025 Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2019, 2026 Oracle and/or its affiliates. All rights reserved.
 //
 // Licensed under the Universal Permissive License v 1.0 as shown at
 //  https://oss.oracle.com/licenses/upl/
@@ -13,8 +13,10 @@ package common
 const (
 	RegionAfJohannesburg1 Region = "af-johannesburg-1"
 	RegionApBatam1 Region = "ap-batam-1"
+	RegionApChennai1 Region = "ap-chennai-1"
 	RegionApChuncheon1 Region = "ap-chuncheon-1"
 	RegionApHyderabad1 Region = "ap-hyderabad-1"
+	RegionApKulai1 Region = "ap-kulai-1"
 	RegionApMelbourne1 Region = "ap-melbourne-1"
 	RegionApMumbai1 Region = "ap-mumbai-1"
 	RegionApOsaka1 Region = "ap-osaka-1"
@@ -26,12 +28,15 @@ const (
 	RegionCaMontreal1 Region = "ca-montreal-1"
 	RegionCaToronto1 Region = "ca-toronto-1"
 	RegionEuAmsterdam1 Region = "eu-amsterdam-1"
+	RegionEuDublin3 Region = "eu-dublin-3"
 	RegionEuFrankfurt1 Region = "eu-frankfurt-1"
 	RegionEuMadrid1 Region = "eu-madrid-1"
+	RegionEuMadrid3 Region = "eu-madrid-3"
 	RegionEuMarseille1 Region = "eu-marseille-1"
 	RegionEuMilan1 Region = "eu-milan-1"
 	RegionEuParis1 Region = "eu-paris-1"
 	RegionEuStockholm1 Region = "eu-stockholm-1"
+	RegionEuTurin1 Region = "eu-turin-1"
 	RegionEuZurich1 Region = "eu-zurich-1"
 	RegionIlJerusalem1 Region = "il-jerusalem-1"
 	RegionMeAbudhabi1 Region = "me-abudhabi-1"
@@ -48,17 +53,25 @@ const (
 	RegionUkLondon1 Region = "uk-london-1"
 	RegionUkCardiff1 Region = "uk-cardiff-1"
 	RegionUsAbilene1 Region = "us-abilene-1"
+	RegionUsColumbus1 Region = "us-columbus-1"
+	RegionUsQuincy1 Region = "us-quincy-1"
+	RegionUsBoardman1 Region = "us-boardman-1"
 	RegionUsDallas1 Region = "us-dallas-1"
+	RegionUsDesmoines1 Region = "us-desmoines-1"
 	RegionUsPhoenix1 Region = "us-phoenix-1"
 	RegionUsAshburn1 Region = "us-ashburn-1"
 	RegionUsSaltlake2 Region = "us-saltlake-2"
 	RegionUsSanjose1 Region = "us-sanjose-1"
+	RegionUsShawnee1 Region = "us-shawnee-1"
 	RegionUsChicago1 Region = "us-chicago-1"
+	RegionApKulai2 Region = "ap-kulai-2"
+	RegionApDelhi1 Region = "ap-delhi-1"
 	RegionUsLangley1 Region = "us-langley-1"
 	RegionUsLuke1 Region = "us-luke-1"
 	RegionUsTacoma1 Region = "us-tacoma-1"
 	RegionApChiyoda1 Region = "ap-chiyoda-1"
 	RegionApIbaraki1 Region = "ap-ibaraki-1"
+	RegionMeIbri1 Region = "me-ibri-1"
 	RegionUsWestjordan1 Region = "us-westjordan-1"
 	RegionEuFrankfurt2 Region = "eu-frankfurt-2"
 	RegionEuMadrid2 Region = "eu-madrid-2"
@@ -76,12 +89,22 @@ const (
 	RegionApSuwon1 Region = "ap-suwon-1"
 	RegionApSeoul2 Region = "ap-seoul-2"
 	RegionApChuncheon2 Region = "ap-chuncheon-2"
+	RegionMeRiyadh2 Region = "me-riyadh-2"
 	RegionUsTukwila3 Region = "us-tukwila-3"
 	RegionApOsaka2 Region = "ap-osaka-2"
+	RegionApTatebayashi1 Region = "ap-tatebayashi-1"
 	RegionMeDubai3 Region = "me-dubai-3"
+	RegionUsNewark1 Region = "us-newark-1"
 	RegionApPathumthani1 Region = "ap-pathumthani-1"
+	RegionApSamutprakan1 Region = "ap-samutprakan-1"
 	RegionUkLondon2 Region = "uk-london-2"
 	RegionUkLondon3 Region = "uk-london-3"
+	RegionUkLondon4 Region = "uk-london-4"
+	RegionEuBudapest1 Region = "eu-budapest-1"
+	RegionSaRiodejaneiro1 Region = "sa-riodejaneiro-1"
+	RegionApWesttokyo1 Region = "ap-westtokyo-1"
+	RegionMeAbudhabi5 Region = "me-abudhabi-5"
+	RegionMeDubai4 Region = "me-dubai-4"
 	RegionUsGovAshburn1 Region = "us-gov-ashburn-1"
 	RegionUsGovChicago1 Region = "us-gov-chicago-1"
 	RegionUsGovPhoenix1 Region = "us-gov-phoenix-1"
@@ -130,14 +153,20 @@ var realm = map[string]string{
 	"oc3": "oraclegovcloud.com",
 	"oc31": "sovereigncloud.nz",
 	"oc35": "oraclecloud35.com",
+	"oc36": "stccloud.com",
 	"oc39": "oraclecloud39.com",
 	"oc4": "oraclegovcloud.uk",
 	"oc40": "jpsovereigncloud.jp",
 	"oc41": "dutechcloud.ae",
+	"oc42": "oraclecloud42.com",
 	"oc43": "thaiaiscloud.com",
 	"oc46": "oraclecloud46.com",
 	"oc47": "oraclecloud47.com",
 	"oc5": "oraclecloud5.com",
+	"oc51": "oraclecloud51.com",
+	"oc52": "oraclecloud52.com",
+	"oc55": "svcl.jp",
+	"oc57": "eonecloud.com",
 	"oc8": "oraclecloud8.com",
 	"oc9": "oraclecloud9.com",
 }
@@ -145,8 +174,10 @@ var realm = map[string]string{
 var regionRealm = map[Region]string{
 	RegionAfJohannesburg1: "oc1",
 	RegionApBatam1: "oc1",
+	RegionApChennai1: "oc1",
 	RegionApChuncheon1: "oc1",
 	RegionApHyderabad1: "oc1",
+	RegionApKulai1: "oc1",
 	RegionApMelbourne1: "oc1",
 	RegionApMumbai1: "oc1",
 	RegionApOsaka1: "oc1",
@@ -158,12 +189,15 @@ var regionRealm = map[Region]string{
 	RegionCaMontreal1: "oc1",
 	RegionCaToronto1: "oc1",
 	RegionEuAmsterdam1: "oc1",
+	RegionEuDublin3: "oc1",
 	RegionEuFrankfurt1: "oc1",
 	RegionEuMadrid1: "oc1",
+	RegionEuMadrid3: "oc1",
 	RegionEuMarseille1: "oc1",
 	RegionEuMilan1: "oc1",
 	RegionEuParis1: "oc1",
 	RegionEuStockholm1: "oc1",
+	RegionEuTurin1: "oc1",
 	RegionEuZurich1: "oc1",
 	RegionIlJerusalem1: "oc1",
 	RegionMeAbudhabi1: "oc1",
@@ -180,12 +214,19 @@ var regionRealm = map[Region]string{
 	RegionUkLondon1: "oc1",
 	RegionUkCardiff1: "oc1",
 	RegionUsAbilene1: "oc1",
+	RegionUsColumbus1: "oc1",
+	RegionUsQuincy1: "oc1",
+	RegionUsBoardman1: "oc1",
 	RegionUsDallas1: "oc1",
+	RegionUsDesmoines1: "oc1",
 	RegionUsPhoenix1: "oc1",
 	RegionUsAshburn1: "oc1",
 	RegionUsSaltlake2: "oc1",
 	RegionUsSanjose1: "oc1",
+	RegionUsShawnee1: "oc1",
 	RegionUsChicago1: "oc1",
+	RegionApKulai2: "oc1",
+	RegionApDelhi1: "oc1",
 	RegionUsLangley1: "oc2",
 	RegionUsLuke1: "oc2",
 	RegionUsGovAshburn1: "oc3",
@@ -197,6 +238,7 @@ var regionRealm = map[Region]string{
 	RegionApChiyoda1: "oc8",
 	RegionApIbaraki1: "oc8",
 	RegionMeDccMuscat1: "oc9",
+	RegionMeIbri1: "oc9",
 	RegionApDccCanberra1: "oc10",
 	RegionEuDccDublin1: "oc14",
 	RegionEuDccDublin2: "oc14",
@@ -232,19 +274,31 @@ var regionRealm = map[Region]string{
 	RegionApSuwon1: "oc35",
 	RegionApSeoul2: "oc35",
 	RegionApChuncheon2: "oc35",
+	RegionMeRiyadh2: "oc36",
 	RegionUsTukwila3: "oc39",
 	RegionApOsaka2: "oc40",
+	RegionApTatebayashi1: "oc40",
 	RegionMeDubai3: "oc41",
+	RegionUsNewark1: "oc42",
 	RegionApPathumthani1: "oc43",
+	RegionApSamutprakan1: "oc43",
 	RegionUkLondon2: "oc46",
 	RegionUkLondon3: "oc47",
+	RegionUkLondon4: "oc47",
+	RegionEuBudapest1: "oc51",
+	RegionSaRiodejaneiro1: "oc52",
+	RegionApWesttokyo1: "oc55",
+	RegionMeAbudhabi5: "oc57",
+	RegionMeDubai4: "oc57",
 }
 
 var shortNameRegion = map[string]Region{
 	"jnb": RegionAfJohannesburg1,
 	"hsg": RegionApBatam1,
+	"des": RegionApChennai1,
 	"yny": RegionApChuncheon1,
 	"hyd": RegionApHyderabad1,
+	"fyv": RegionApKulai1,
 	"mel": RegionApMelbourne1,
 	"bom": RegionApMumbai1,
 	"kix": RegionApOsaka1,
@@ -256,12 +310,15 @@ var shortNameRegion = map[string]Region{
 	"yul": RegionCaMontreal1,
 	"yyz": RegionCaToronto1,
 	"ams": RegionEuAmsterdam1,
+	"zqo": RegionEuDublin3,
 	"fra": RegionEuFrankfurt1,
 	"mad": RegionEuMadrid1,
+	"orf": RegionEuMadrid3,
 	"mrs": RegionEuMarseille1,
 	"lin": RegionEuMilan1,
 	"cdg": RegionEuParis1,
 	"arn": RegionEuStockholm1,
+	"nrq": RegionEuTurin1,
 	"zrh": RegionEuZurich1,
 	"mtz": RegionIlJerusalem1,
 	"auh": RegionMeAbudhabi1,
@@ -278,12 +335,19 @@ var shortNameRegion = map[string]Region{
 	"lhr": RegionUkLondon1,
 	"cwl": RegionUkCardiff1,
 	"abl": RegionUsAbilene1,
+	"vkz": RegionUsColumbus1,
+	"eem": RegionUsQuincy1,
+	"nhj": RegionUsBoardman1,
 	"dfw": RegionUsDallas1,
+	"kqq": RegionUsDesmoines1,
 	"phx": RegionUsPhoenix1,
 	"iad": RegionUsAshburn1,
 	"aga": RegionUsSaltlake2,
 	"sjc": RegionUsSanjose1,
+	"drz": RegionUsShawnee1,
 	"ord": RegionUsChicago1,
+	"jbp": RegionApKulai2,
+	"onm": RegionApDelhi1,
 	"lfi": RegionUsLangley1,
 	"luf": RegionUsLuke1,
 	"ric": RegionUsGovAshburn1,
@@ -295,6 +359,7 @@ var shortNameRegion = map[string]Region{
 	"nja": RegionApChiyoda1,
 	"ukb": RegionApIbaraki1,
 	"mct": RegionMeDccMuscat1,
+	"ibr": RegionMeIbri1,
 	"wga": RegionApDccCanberra1,
 	"ork": RegionEuDccDublin1,
 	"snn": RegionEuDccDublin2,
@@ -330,10 +395,20 @@ var shortNameRegion = map[string]Region{
 	"dln": RegionApSuwon1,
 	"dtz": RegionApSeoul2,
 	"bno": RegionApChuncheon2,
+	"kzq": RegionMeRiyadh2,
 	"nbq": RegionUsTukwila3,
 	"ibg": RegionApOsaka2,
+	"jbb": RegionApTatebayashi1,
 	"pcz": RegionMeDubai3,
+	"pgc": RegionUsNewark1,
 	"mez": RegionApPathumthani1,
+	"yik": RegionApSamutprakan1,
 	"den": RegionUkLondon2,
 	"kal": RegionUkLondon3,
+	"pyz": RegionUkLondon4,
+	"jsk": RegionEuBudapest1,
+	"hnw": RegionSaRiodejaneiro1,
+	"zwe": RegionApWesttokyo1,
+	"jhz": RegionMeAbudhabi5,
+	"zqa": RegionMeDubai4,
 }
