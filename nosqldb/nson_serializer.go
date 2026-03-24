@@ -33,6 +33,7 @@ const (
 	CONSISTENCY                  = "co"
 	CONSUMED                     = "c"
 	CONTINUATION_KEY             = "ck"
+	CREATION_TIME                = "ct"
 	DATA                         = "d"
 	DEFINED_TAGS                 = "dt"
 	DRIVER_QUERY_PLAN            = "dq"
@@ -2459,6 +2460,8 @@ func readNsonWriteResult(r proto.Reader) (WriteResult, error) {
 		// TODO
 		case EXISTING_LAST_WRITE_METADATA:
 			res.ExistingLastWriteMetadata, err = readNsonString(r)
+		case CREATION_TIME:
+			res.ExistingCreationTime, err = readNsonLong(r)
 		default:
 			err = skipNsonField(r, name)
 		}
@@ -2494,6 +2497,8 @@ func readNsonRow(r proto.Reader, res *GetResult) error {
 			}
 		case LAST_WRITE_METADATA:
 			res.LastWriteMetadata, err = readNsonString(r)
+		case CREATION_TIME:
+			res.CreationTime, err = readNsonLong(r)
 		default:
 			err = skipNsonField(r, name)
 		}

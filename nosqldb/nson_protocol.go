@@ -16,6 +16,7 @@ var NsonFieldsMap = map[string]string{
 	CONSISTENCY:                  "CONSISTENCY",
 	CONSUMED:                     "CONSUMED",
 	CONTINUATION_KEY:             "CONTINUATION_KEY",
+	CREATION_TIME:                "CREATION_TIME",
 	DATA:                         "DATA",
 	DEFINED_TAGS:                 "DEFINED_TAGS",
 	DRIVER_QUERY_PLAN:            "DRIVER_QUERY_PLAN",

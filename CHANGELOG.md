@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 - Added new cloud region codes
 - Added last write metadata support for data write operations, including put,
   delete, multiDelete, writeMultiple, and insert/update/delete queries.
+- Added support for returning creation time in the results of get, put, delete,
+  and writeMultiple operations.
 
 ## Changed
 - Cloud only: Internal OCI `Region` definitions have been updated to be consistent. Some previous
