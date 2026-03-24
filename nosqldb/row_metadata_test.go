@@ -690,5 +690,10 @@ func TestRowMetadata(t *testing.T) {
 	test := &RowMetadataTestSuite{
 		NoSQLTestSuite: test.NewNoSQLTestSuite(),
 	}
+	// Row Metadata is supported since 26.1
+	if test.Config.Version < "26.1" {
+		fmt.Printf("TestRowMetadata suite: skipped. Row Metadata is supported since 26.1, Config.Version=%s\n", test.Config.Version)
+		return
+	}
 	suite.Run(t, test)
 }
