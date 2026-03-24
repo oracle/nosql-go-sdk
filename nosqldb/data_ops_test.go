@@ -96,8 +96,8 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			true, // shouldSucceed
 			true, // rowPresent
 			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
-			value,  // expPrevValue
-			curVersion,  // expPrevVersion
+			value,      // expPrevValue
+			curVersion, // expPrevVersion
 			recordKB)
 		oldVersion = putRes.Version
 	}
@@ -126,7 +126,7 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 		suite.checkPutResult(putReq, putRes,
 			false,      // shouldSucceed
 			true,       // rowPresent
-			true, // returnPrevRow
+			true,       // returnPrevRow
 			value,      // expPrevValue
 			oldVersion, // expPrevVersion
 			recordKB)
@@ -141,11 +141,11 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
+			true,  // shouldSucceed
+			true,  // rowPresent
 			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
 			recordKB)
 		oldVersion = putRes.Version
 	}
@@ -160,8 +160,8 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			true, // shouldSucceed
 			true, // rowPresent
 			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
-			value,  // expPrevValue
-			oldVersion,  // expPrevVersion
+			value,      // expPrevValue
+			oldVersion, // expPrevVersion
 			recordKB)
 		ifVersion = putRes.Version
 	}
@@ -254,11 +254,11 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
+			true,  // shouldSucceed
+			true,  // rowPresent
 			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
 			recordKB)
 		ifVersion = putRes.Version
 	}
@@ -269,11 +269,11 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	putRes, err = suite.Client.Put(putReq)
 	if suite.NoError(err) {
 		suite.checkPutResult(putReq, putRes,
-			true, // shouldSucceed
-			true, // rowPresent
+			true,  // shouldSucceed
+			true,  // rowPresent
 			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
 			recordKB)
 		newVersion = putRes.Version
 	}
@@ -402,11 +402,11 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	delRes, err = suite.Client.Delete(delReq)
 	if suite.NoError(err) {
 		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
+			true,  // shouldSucceed
+			true,  // rowPresent
 			false, // shouldReturnPrev
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
 			recordKB)
 	}
 
@@ -426,8 +426,8 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 			true, // shouldSucceed
 			true, // rowPresent
 			suite.Client.GetServerSerialVersion() > 4, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil, // expPrevValue
+			nil, // expPrevVersion
 			recordKB)
 	}
 
@@ -492,11 +492,11 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	delRes, err = suite.Client.Delete(delReq)
 	if suite.NoError(err) {
 		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
+			true,  // shouldSucceed
+			true,  // rowPresent
 			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
 			recordKB)
 	}
 
@@ -521,11 +521,11 @@ func (suite *DataOpsTestSuite) TestPutGetDelete() {
 	delRes, err = suite.Client.Delete(delReq)
 	if suite.NoError(err) {
 		suite.checkDeleteResult(delReq, delRes,
-			true, // shouldSucceed
-			true, // rowPresent
+			true,  // shouldSucceed
+			true,  // rowPresent
 			false, // returnPrevRow
-			nil,  // expPrevValue
-			nil,  // expPrevVersion
+			nil,   // expPrevValue
+			nil,   // expPrevVersion
 			recordKB)
 	}
 
@@ -1503,6 +1503,171 @@ func (suite *DataOpsTestSuite) TestNullJsonNull() {
 		if suite.NoErrorf(err, "Query($name=NullValue) got error %v", err) {
 			suite.Equalf(0, len(results), "unexpected number of rows returned.")
 		}
+	}
+}
+
+func (suite *DataOpsTestSuite) TestCreationTime() {
+	// Creation time is supported since 25.3
+	if suite.Config.Version < "25.3" {
+		fmt.Printf("TestCreationTime: skipped. Creation_time is supported since 25.3, Config.Version=%s\n", suite.Config.Version)
+		return
+	}
+
+	var stmt string
+	var err error
+	table := suite.GetTableName("TestCreationTime")
+	// Drop and re-create test tables.
+	stmt = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s ("+
+		"sid INTEGER, "+
+		"id INTEGER, "+
+		"i INTEGER, "+
+		"PRIMARY KEY(shard(sid), id))", table)
+	limits := &nosqldb.TableLimits{
+		ReadUnits:  10,
+		WriteUnits: 10,
+		StorageGB:  1,
+	}
+	suite.ReCreateTable(table, stmt, limits)
+
+	var putReq *nosqldb.PutRequest
+	var putRes *nosqldb.PutResult
+	var getReq *nosqldb.GetRequest
+	var getRes *nosqldb.GetResult
+
+	var creationTime0, creationTime int64
+	value := &types.MapValue{}
+	value.Put("sid", 1).Put("id", 1).Put("i", 1)
+	key := &types.MapValue{}
+	key.Put("sid", 1).Put("id", 1)
+	newValue := &types.MapValue{}
+	newValue.Put("sid", 1).Put("id", 1).Put("i", 2)
+
+	startTime := time.Now().UnixMilli()
+
+	// Put a row.
+	putReq = &nosqldb.PutRequest{
+		TableName: table,
+		Value:     value,
+		ReturnRow: true,
+	}
+	putRes, err = suite.Client.Put(putReq)
+	suite.NoErrorf(err, "put fail, row=%v", value)
+	creationTime = putRes.WriteResult.ExistingCreationTime
+	suite.Equalf(int64(0), creationTime, "ExistingCreationTime should be 0 but actual %d", creationTime)
+	// Get the creation time of the row
+	getReq = &nosqldb.GetRequest{
+		TableName: table,
+		Key:       key,
+	}
+	getRes, err = suite.Client.Get(getReq)
+	suite.NoErrorf(err, "get fail, key=%v", key)
+	if getRes.CreationTime > 0 {
+		suite.GreaterOrEqualf(getRes.CreationTime, startTime, "Unexpected creation time, exp>%d, act=%d", startTime, getRes.CreationTime)
+	}
+	creationTime0 = getRes.CreationTime
+
+	// PutIfPresent: update the row, its creation time should not be changed
+	putReq = &nosqldb.PutRequest{
+		TableName: table,
+		Value:     newValue,
+		ReturnRow: true,
+		PutOption: types.PutIfPresent,
+	}
+	putRes, err = suite.Client.Put(putReq)
+	suite.NoErrorf(err, "PutIfPresent failed: row=%v", newValue)
+	creationTime = putRes.WriteResult.ExistingCreationTime
+	suite.Equalf(creationTime0, creationTime, "Unexpected creationTime: exp=%d, act=%d", creationTime0, creationTime)
+	// Get the creation time of the row
+	getReq = &nosqldb.GetRequest{
+		TableName: table,
+		Key:       key,
+	}
+	getRes, err = suite.Client.Get(getReq)
+	suite.NoErrorf(err, "get fail, key=%v", key)
+	creationTime = getRes.CreationTime
+	suite.Equalf(creationTime0, creationTime, "Unexpected creationTime: exp=%d, act=%d", creationTime0, creationTime)
+
+	// Delete the row, verify the creation time of the existing row
+	var delReq *nosqldb.DeleteRequest
+	var delRes *nosqldb.DeleteResult
+	delReq = &nosqldb.DeleteRequest{
+		TableName: table,
+		Key:       key,
+		ReturnRow: true,
+	}
+	delRes, err = suite.Client.Delete(delReq)
+	suite.NoErrorf(err, "Delete failed: key=%v", key)
+	suite.Truef(delRes.Success, "Key not found: key=%v", key)
+	creationTime = delRes.WriteResult.ExistingCreationTime
+	suite.Equalf(creationTime0, creationTime, "Unexpected creationTime: exp=%d, act=%d", creationTime0, creationTime)
+
+	// Verify the creation time of existing rows in write-multiple result
+	var wmReq *nosqldb.WriteMultipleRequest
+	var wmRes *nosqldb.WriteMultipleResult
+	wmReq = &nosqldb.WriteMultipleRequest{
+		TableName: table,
+	}
+
+	startTime = time.Now().UnixMilli()
+
+	// Put 3 rows
+	var i int
+	numOps := 3
+	for i = 0; i < numOps; i++ {
+		value = &types.MapValue{}
+		value.Put("sid", 1).Put("id", i).Put("i", 1)
+		putReq = &nosqldb.PutRequest{
+			TableName: table,
+			Value:     value,
+			ReturnRow: true,
+		}
+		wmReq.AddPutRequest(putReq, true)
+	}
+	wmRes, err = suite.Client.WriteMultiple(wmReq)
+	suite.NoErrorf(err, "WriteMultiple failed")
+	suite.Equalf(numOps, len(wmRes.ResultSet), "unexpected number of results")
+	for _, r := range wmRes.ResultSet {
+		suite.Equalf(int64(0), r.WriteResult.ExistingCreationTime, "ExistingCreationTime should be 0 but actual %d", creationTime)
+	}
+
+	// Get the creation time of rows
+	var creationTimes [3]int64
+	for i = 0; i < numOps; i++ {
+		key = &types.MapValue{}
+		key.Put("sid", 1).Put("id", i)
+		getReq = &nosqldb.GetRequest{
+			TableName: table,
+			Key:       key,
+		}
+		getRes, err = suite.Client.Get(getReq)
+		suite.NoErrorf(err, "get fail, key=%v", key)
+		if getRes.CreationTime > 0 {
+			suite.GreaterOrEqualf(getRes.CreationTime, startTime, "Unexpected creation time, exp>%d, act=%d", startTime, getRes.CreationTime)
+		}
+		creationTimes[i] = getRes.CreationTime
+	}
+
+	// Put those rows again, verify the creation time of the rows should not be changed.
+	wmRes, err = suite.Client.WriteMultiple(wmReq)
+	suite.NoErrorf(err, "WriteMultiple failed")
+	suite.Equalf(numOps, len(wmRes.ResultSet), "unexpected number of results")
+	i = 0
+	for _, r := range wmRes.ResultSet {
+		suite.Equalf(creationTimes[i], r.WriteResult.ExistingCreationTime, "Unexpected existingCreationTime, exp=%d, act=%d",
+			creationTimes[i], r.WriteResult.ExistingCreationTime)
+		i++
+	}
+
+	for i = 0; i < numOps; i++ {
+		key = &types.MapValue{}
+		key.Put("sid", 1).Put("id", i)
+		getReq = &nosqldb.GetRequest{
+			TableName: table,
+			Key:       key,
+		}
+		getRes, err = suite.Client.Get(getReq)
+		suite.NoErrorf(err, "get fail, key=%v", key)
+		suite.Equalf(creationTimes[i], getRes.CreationTime, "Unexpected creationTime: exp=%d, act=%d", creationTimes[i], getRes.CreationTime)
 	}
 }
 

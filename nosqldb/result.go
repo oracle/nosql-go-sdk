@@ -132,6 +132,14 @@ type GetResult struct {
 	// nil if metadata was not set.
 	LastWriteMetadata string `json:"lastWriteMetadata"`
 
+	// CreationTime represents the creation time of the row.
+	// Its value is in milliseconds since January 1 1970.
+	// This value is valid only if the operation successfully returned a row,
+	// which means the returned Value is non-nil.
+	// If the row was written by a version of the system older than 25.3, the creation time
+	// will not be available at all and will be zero.
+	CreationTime int64 `json:"creationTime"`
+
 	DelayInfo
 	common.InternalResultData
 }
@@ -603,6 +611,12 @@ type WriteResult struct {
 	// ExistingLastWriteMetadata represents the metadata of an existing row, or
 	// nil if the metadata was not set.
 	ExistingLastWriteMetadata string `json:"existingLastWriteMetadata"`
+
+	// ExistingCreationTime represents the creation time of an existing row.
+	// Its value is in milliseconds since January 1 1970.
+	// If the row was written by a version of the system older than 25.3, the creation time
+	// will not be available at all and will be zero.
+	ExistingCreationTime int64 `json:"existingCreationTime"`
 }
 
 // String returns a JSON string representation of the WriteResult.
