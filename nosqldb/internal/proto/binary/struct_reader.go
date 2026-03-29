@@ -22,6 +22,8 @@ import (
 // bytes to construct native structs according to the Binary Protocol
 // which defines the data exchange format between the Oracle NoSQL Database
 // proxy and drivers.
+// StructReader (and its underlying Reader) are not safe for concurrent use by multiple
+// goroutines. After Close() is called, the StructReader must not be used.
 type StructReader struct {
 	// The underlying binary.Reader.
 	reader *Reader
@@ -29,11 +31,28 @@ type StructReader struct {
 	// TODO: more?
 }
 
-// NewStructReader creates a reader for the binary protocol.
+// NewStructReader creates a reader for the binary protocol. The returned *StructReader
+// borrows an internal *Reader from the pool. Callers MUST call Close() when finished to
+// return the internal Reader back to the pool.
 func NewStructReader(b *bytes.Buffer) *StructReader {
 	return &StructReader{
-		reader: NewReader(b),
+		reader: GetReader(b),
 	}
+}
+
+// Close returns the underlying Reader to the internal pool for reuse.
+//
+// WARNING: After calling Close(), the StructReader must not be used again by the caller.
+// Doing so may result in data corruption or race conditions, since the underlying reader may be
+// given to another goroutine at any time.
+func (sr *StructReader) Close() {
+    if sr == nil {
+        return
+    }
+    if sr.reader != nil {
+        PutReader(sr.reader)
+        sr.reader = nil
+    }
 }
 
 // DisardMap reads and discards a map value. It is used when skipping over
