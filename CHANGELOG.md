@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
-## Unreleased
+## 1.4.8 - 2026-04-22
 
 ## Added
 - Cloud only: Added the capability to determine region metadata from OCI configuration.
