@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -158,6 +159,85 @@ func (suite *PropTestSuite) TestPut() {
 		suite.Greaterf(fileInfo.Size(), int64(0), "got unexpected file size for %s", name)
 	}
 
+}
+
+func (suite *PropTestSuite) TestSaveUsesPrivatePermissions() {
+	if runtime.GOOS == "windows" {
+		suite.T().Skip("Unix file permission bits are not enforced on Windows")
+	}
+
+	f, err := os.CreateTemp("", "go-driver-test-*.properties")
+	if !suite.NoErrorf(err, "failed to create a temporary file for testing") {
+		return
+	}
+	name := f.Name()
+	f.Close()
+	defer os.Remove(name)
+
+	p, err := NewProperties(name)
+	if !suite.NoErrorf(err, "NewProperties(%s) got error %v", name, err) {
+		return
+	}
+
+	p.Put("username", "user1")
+	p.Put("password", "secret")
+	if !suite.NoErrorf(p.Save(), "Save() got error") {
+		return
+	}
+
+	fileInfo, err := os.Stat(name)
+	if suite.NoErrorf(err, "os.Stat(%s) got error %v", name, err) {
+		suite.Equalf(os.FileMode(0600), fileInfo.Mode().Perm(), "saved properties file should be owner-only")
+	}
+}
+
+func (suite *PropTestSuite) TestSaveDoesNotReuseExistingPublicTempFile() {
+	if runtime.GOOS == "windows" {
+		suite.T().Skip("Unix file permission bits are not enforced on Windows")
+	}
+
+	f, err := os.CreateTemp("", "go-driver-test-*.properties")
+	if !suite.NoErrorf(err, "failed to create a temporary file for testing") {
+		return
+	}
+	name := f.Name()
+	f.Close()
+	defer os.Remove(name)
+	defer os.Remove(fmt.Sprintf("%s.tmp", name))
+
+	tmpName := fmt.Sprintf("%s.tmp", name)
+	if !suite.NoErrorf(os.WriteFile(tmpName, []byte("stale=true\n"), os.FileMode(0644)), "failed to create stale temp file") {
+		return
+	}
+	if !suite.NoErrorf(os.Chmod(tmpName, os.FileMode(0644)), "failed to chmod stale temp file") {
+		return
+	}
+
+	p, err := NewProperties(name)
+	if !suite.NoErrorf(err, "NewProperties(%s) got error %v", name, err) {
+		return
+	}
+
+	p.Put("username", "user1")
+	p.Put("password", "secret")
+	if !suite.NoErrorf(p.Save(), "Save() got error") {
+		return
+	}
+
+	fileInfo, err := os.Stat(name)
+	if suite.NoErrorf(err, "os.Stat(%s) got error %v", name, err) {
+		suite.Equalf(os.FileMode(0600), fileInfo.Mode().Perm(), "saved properties file should be owner-only")
+	}
+
+	staleTempInfo, err := os.Stat(tmpName)
+	if suite.NoErrorf(err, "os.Stat(%s) got error %v", tmpName, err) {
+		suite.Equalf(os.FileMode(0644), staleTempInfo.Mode().Perm(), "stale public temp file should not be reused")
+	}
+
+	staleTempData, err := os.ReadFile(tmpName)
+	if suite.NoErrorf(err, "os.ReadFile(%s) got error %v", tmpName, err) {
+		suite.Equalf("stale=true\n", string(staleTempData), "stale public temp file should not contain saved properties")
+	}
 }
 
 func (suite *PropTestSuite) TestConcurrency() {

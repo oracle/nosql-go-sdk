@@ -140,8 +140,8 @@ DoRetry:
 		}
 
 		// Retry if status code >= 500.
-		logger.Fine("Remote server temporarily unavailable, status code: %d, response: %s",
-			resp.Code, string(resp.Body))
+		logger.Fine("Remote server temporarily unavailable, status code: %d, response body omitted, body length: %d bytes",
+			resp.Code, len(resp.Body))
 		delay = (1 << (numAttempts - 1)) * retryInterval
 		logger.Fine("DoRequest(): number of attempts: %d, will retry in %v.", numAttempts, delay)
 

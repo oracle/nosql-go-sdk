@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -22,8 +23,7 @@ import (
 // Properties is used to read and write properties files.
 // The properties in the file must be written in the form:
 //
-//   name=value
-//
+//	name=value
 type Properties struct {
 	file  string
 	props map[string]string
@@ -117,12 +117,27 @@ func (p *Properties) Save() error {
 		buf.WriteString(fmt.Sprintf("%s=%s\n", k, v))
 	}
 
-	tmpFile := fmt.Sprintf("%s.tmp", p.file)
-	perm := os.FileMode(0644)
-	if err := os.WriteFile(tmpFile, buf.Bytes(), perm); err != nil {
+	// Properties files may contain credentials, so saved files should be owner-only.
+	perm := os.FileMode(0600)
+	tmpFile, err := os.CreateTemp(filepath.Dir(p.file), filepath.Base(p.file)+".tmp.")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmpFile, p.file)
+	tmpName := tmpFile.Name()
+	defer os.Remove(tmpName)
+
+	if err := tmpFile.Chmod(perm); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if _, err := tmpFile.Write(buf.Bytes()); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, p.file)
 }
 
 // Get reads the property associated with key.
