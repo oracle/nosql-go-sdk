@@ -1519,7 +1519,8 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
 	serialVerUsed = c.serialVersion
 	queryVerUsed = c.queryVersion
-	wr := binary.NewWriter()
+	wr := binary.GetWriter()
+	defer binary.PutWriter(wr)
 	if _, err = wr.WriteSerialVersion(serialVerUsed); err != nil {
 		return nil, 0, 0, err
 	}
@@ -1565,7 +1566,8 @@ func (c *Client) processResponse(httpResp *http.Response, req Request, serialVer
 
 func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16, queryVerUsed int16) (res Result, err error) {
 	buf := bytes.NewBuffer(data)
-	rd := binary.NewReader(buf)
+	rd := binary.GetReader(buf)
+    defer binary.PutReader(rd)
 
 	var code int
 	if serialVerUsed >= 4 {

@@ -356,7 +356,8 @@ func (m *mockExecutor) generateResponse(err error, httpReq *http.Request) *http.
 
 	if ne, ok := err.(*nosqlerr.Error); ok {
 		// Generate an HTTP OK response with nosqlerr.Error
-		wr := binary.NewWriter()
+		wr := binary.GetWriter()
+		defer binary.PutWriter(wr)
 		wr.Write([]byte{byte(ne.Code)})
 		wr.WriteString(&ne.Message)
 

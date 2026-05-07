@@ -16,11 +16,26 @@ import (
 	"math/big"
 	"strconv"
 	"time"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+
+const (
+	writerBufStartLength   = 0
+	writerBufStartCap      = 64
+	maxPooledWriterBufCap  = 64 * 1024
+)
+
+var writerPool = sync.Pool{
+	New: func() interface{} {
+		return &Writer{
+			buf: make([]byte, writerBufStartLength, writerBufStartCap),
+		}
+	},
+}
 
 // Writer encodes data into the wire format for the Binary Protocol and writes
 // to a buffer. The Binary Protocol defines the data exchange format between
@@ -32,13 +47,32 @@ type Writer struct {
 	buf []byte
 }
 
-// Initial capacity for the buffer.
-const initCap int = 64
+// GetWriter retrieves a *Writer instance from the pool.
+//
+// The returned Writer is *borrowed* and must be returned via PutWriter.
+func GetWriter() *Writer {
+	w := writerPool.Get().(*Writer)
 
-// NewWriter creates a writer for the binary protocol.
-func NewWriter() *Writer {
-	return &Writer{
-		buf: make([]byte, 0, initCap),
+	if w.buf == nil || cap(w.buf) < writerBufStartCap {
+		w.buf = make([]byte, writerBufStartLength, writerBufStartCap)
+	} else {
+		// reset length but keep capacity
+		w.buf = w.buf[:writerBufStartLength]
+	}
+	return w
+}
+
+// PutWriter returns a Writer to the internal pool for reuse.
+//
+// WARNING: After calling PutWriter(w), the Writer must not be used again.
+func PutWriter(w *Writer) {
+	if w == nil {
+		return
+	}
+
+	// Drop overly large buffers to avoid memory retention.
+	if cap(w.buf) <= maxPooledWriterBufCap {
+		writerPool.Put(w)
 	}
 }
 

@@ -471,7 +471,8 @@ func (iter *receiveIter) checkDuplicate(rcb *runtimeControlBlock, state *receive
 // createBinaryPrimKey serializes the primary key values as byte sequences.
 // This is used for duplicate elimination.
 func (iter *receiveIter) createBinaryPrimKey(res *types.MapValue) ([]byte, error) {
-	w := binary.NewWriter()
+	w := binary.GetWriter()
+	defer binary.PutWriter(w)
 	var err error
 
 	for i, fieldName := range iter.primKeyFields {

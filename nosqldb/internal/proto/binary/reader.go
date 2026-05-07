@@ -15,10 +15,28 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+
+const (
+    readerBufStartLength = 64
+    readerBufCap = 256          
+    maxPooledReaderBufCap = 64 * 1024 
+)
+
+// Create a pool of *Reader (a sync.Pool) so that we avoid allocating a new Reader
+// and its buf slice on each call.
+var readerPool = sync.Pool{
+    New: func() interface{} {
+        return &Reader{
+            rd:  new(bytes.Buffer),
+            buf: make([]byte, readerBufStartLength, readerBufCap),
+        }
+    },
+}
 
 // Reader reads byte sequences from the underlying io.Reader and decodes the
 // bytes to construct in-memory representations according to the Binary Protocol
@@ -34,13 +52,50 @@ type Reader struct {
 	buf []byte
 }
 
-// NewReader creates a reader for the binary protocol.
-func NewReader(r *bytes.Buffer) *Reader {
-	return &Reader{
-		rd:  r,
-		buf: make([]byte, 64, 256),
-	}
+// GetReader retrieves a *Reader instance that reads from the given *bytes.Buffer.
+// It reuses a Reader from the internal pool when available, minimizing allocations.
+//
+// The returned Reader must be treated as *borrowed* — its ownership belongs to the pool.
+// After the caller finishes using it, it **must** call PutReader(r) to return it.
+//
+// Note: Readers obtained from the pool are **not safe for concurrent use** by multiple
+// goroutines. Once PutReader has been called, the Reader must not be accessed again.
+func GetReader(b *bytes.Buffer) *Reader {
+    r := readerPool.Get().(*Reader)
+    r.rd = b
+
+    // ensure r.buf has at least the starting length
+    if r.buf == nil || cap(r.buf) < readerBufStartLength {
+        r.buf = make([]byte, readerBufStartLength, readerBufCap)
+    } else {
+        // set length to the minimum needed
+        r.buf = r.buf[:readerBufStartLength]
+    }
+    return r
 }
+
+// PutReader returns a Reader to the internal pool for reuse.
+//
+// WARNING: After calling PutReader(r), the Reader must not be used again by the caller.
+// Doing so may result in data corruption or race conditions, since the Reader may be
+// given to another goroutine at any time.
+func PutReader(r *Reader) {
+	if r == nil {
+		 return 
+	}
+    // drop reference to underlying buffer to avoid keeping user data alive.
+    r.rd = nil
+
+    // if internal buffer is huge, discard it to prevent memory accumulation.
+    if cap(r.buf) <= maxPooledReaderBufCap {
+        readerPool.Put(r)
+    }
+}
+
+// NewReader creates a reader for the binary protocol.
+// func NewReader(b *bytes.Buffer) *Reader {
+// 	return GetReader(b)
+// }
 
 // GetBuffer returns the underlying bytes Buffer.
 func (r *Reader) GetBuffer() *bytes.Buffer {

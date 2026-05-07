@@ -37,7 +37,8 @@ func newGroupTuple(numGBColumns int) *groupTuple {
 // The values in the group tuple are serialized as bytes into a buffer,
 // in which the data are then used to calculate the MD5 checksum.
 func (t *groupTuple) checksum() (chksumValue chksum, err error) {
-	w := binary.NewWriter()
+	w := binary.GetWriter()
+	defer binary.PutWriter(w)
 	for _, v := range t.values {
 		switch v := v.(type) {
 		case *types.NullValue:
