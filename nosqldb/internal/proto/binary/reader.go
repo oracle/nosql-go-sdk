@@ -20,6 +20,8 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
+const maxCollectionElements int = 1 << 20
+
 // Reader reads byte sequences from the underlying io.Reader and decodes the
 // bytes to construct in-memory representations according to the Binary Protocol
 // which defines the data exchange format between the Oracle NoSQL Database
@@ -164,6 +166,9 @@ func (r *Reader) ReadString() (*string, error) {
 		s := ""
 		return &s, nil
 	}
+	if err = r.validateRemainingLength(byteLen, "string"); err != nil {
+		return nil, err
+	}
 
 	buf, err := r.readFull(byteLen)
 	if err != nil {
@@ -201,14 +206,20 @@ func (r *Reader) ReadVersion() (types.Version, error) {
 func (r *Reader) ReadMap() (*types.MapValue, error) {
 	// The integer value that represents the number of bytes consumed by the map.
 	// This is discarded as it is not used.
-	_, err := r.ReadInt()
+	byteLen, err := r.ReadInt()
 	if err != nil {
+		return nil, err
+	}
+	if err = r.validateRemainingLength(byteLen, "map"); err != nil {
 		return nil, err
 	}
 
 	// The number of entries in the map.
 	size, err := r.ReadInt()
 	if err != nil {
+		return nil, err
+	}
+	if err = validateCollectionCount(size, "map elements"); err != nil {
 		return nil, err
 	}
 
@@ -237,14 +248,20 @@ func (r *Reader) ReadMap() (*types.MapValue, error) {
 func (r *Reader) ReadArray() ([]types.FieldValue, error) {
 	// The integer value that represents the number of bytes consumed by the array.
 	// This is discarded as it is not used.
-	_, err := r.ReadInt()
+	byteLen, err := r.ReadInt()
 	if err != nil {
+		return nil, err
+	}
+	if err = r.validateRemainingLength(byteLen, "array"); err != nil {
 		return nil, err
 	}
 
 	// The number of elements in the array.
 	size, err := r.ReadInt()
 	if err != nil {
+		return nil, err
+	}
+	if err = validateCollectionCount(size, "array elements"); err != nil {
 		return nil, err
 	}
 
@@ -364,6 +381,9 @@ func (r *Reader) ReadByteArray() ([]byte, error) {
 	case byteLen == 0:
 		return []byte{}, nil
 	default:
+		if err = r.validateRemainingLength(byteLen, "byte array"); err != nil {
+			return nil, err
+		}
 		buf := make([]byte, byteLen)
 		_, err := io.ReadFull(r, buf)
 		return buf, err
@@ -381,10 +401,30 @@ func (r *Reader) ReadByteArrayWithInt() ([]byte, error) {
 	if byteLen <= 0 {
 		return nil, fmt.Errorf("binary.Reader: invalid length of byte array: %d", byteLen)
 	}
+	if err = r.validateRemainingLength(byteLen, "byte array"); err != nil {
+		return nil, err
+	}
 
 	buf := make([]byte, byteLen)
 	_, err = io.ReadFull(r, buf)
 	return buf, err
+}
+
+func validateCollectionCount(n int, what string) error {
+	if n < 0 || n > maxCollectionElements {
+		return fmt.Errorf("binary.Reader: invalid number of %s: %d", what, n)
+	}
+	return nil
+}
+
+func (r *Reader) validateRemainingLength(n int, what string) error {
+	if n < 0 {
+		return fmt.Errorf("binary.Reader: invalid length of %s: %d", what, n)
+	}
+	if remaining := r.rd.Len(); n > remaining {
+		return fmt.Errorf("binary.Reader: invalid length of %s: %d exceeds remaining bytes %d", what, n, remaining)
+	}
+	return nil
 }
 
 // ensure checks if there are space available in the buffer to hold n more bytes.
