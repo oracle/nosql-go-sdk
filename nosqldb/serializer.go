@@ -8,6 +8,7 @@
 package nosqldb
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
@@ -15,6 +16,8 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+
+const maxStructuralCount int = 1 << 20
 
 type serializer interface {
 	// NSON serialization: default
@@ -87,6 +90,13 @@ func toOperationState(st byte) types.OperationState {
 	return types.OperationState(st + 1)
 }
 
+func validateStructuralCount(n int, what string) error {
+	if n < 0 || n > maxStructuralCount {
+		return fmt.Errorf("invalid number of %s: %d", what, n)
+	}
+	return nil
+}
+
 func readPackedIntArray(r proto.Reader) ([]int, error) {
 	n, err := r.ReadPackedInt()
 	if err != nil {
@@ -99,6 +109,9 @@ func readPackedIntArray(r proto.Reader) ([]int, error) {
 
 	if n == -1 {
 		return nil, nil
+	}
+	if err = validateStructuralCount(n, "int array elements"); err != nil {
+		return nil, err
 	}
 
 	array := make([]int, n)

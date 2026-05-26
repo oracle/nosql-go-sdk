@@ -136,7 +136,14 @@ type runtimeControlBlock struct {
 }
 
 func newRCB(driver *queryDriver, rootIter planIter, numIterators, numRegisters int,
-	externalVars []types.FieldValue) *runtimeControlBlock {
+	externalVars []types.FieldValue) (*runtimeControlBlock, error) {
+
+	if err := validateStructuralCount(numIterators, "iterators"); err != nil {
+		return nil, err
+	}
+	if err := validateStructuralCount(numRegisters, "registers"); err != nil {
+		return nil, err
+	}
 
 	return &runtimeControlBlock{
 		queryDriver:  driver,
@@ -145,7 +152,7 @@ func newRCB(driver *queryDriver, rootIter planIter, numIterators, numRegisters i
 		registers:    make([]types.FieldValue, numRegisters),
 		externalVars: externalVars,
 		baseTopology: driver.getClient().getTopologyInfo(),
-	}
+	}, nil
 }
 
 // setState saves the specified state for the plan iterator at the specified
@@ -444,7 +451,10 @@ func (d *queryDriver) compute(res *QueryResult) (err error) {
 
 	iter := prepStmt.driverQueryPlan
 	if d.rcb == nil {
-		d.rcb = newRCB(d, iter, prepStmt.numIterators, prepStmt.numRegisters, prepStmt.getBoundVarValues())
+		d.rcb, err = newRCB(d, iter, prepStmt.numIterators, prepStmt.numRegisters, prepStmt.getBoundVarValues())
+		if err != nil {
+			return err
+		}
 		// Adds the compilation cost consumed for preparing the query statement.
 		d.rcb.ReadKB += d.prepareCost
 		d.rcb.ReadUnits += d.prepareCost

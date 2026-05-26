@@ -602,11 +602,7 @@ func (res *ReplicaStatsResult) readReplicaStats(r proto.Reader) error {
 		if err = readNsonType(r, types.Array); err != nil {
 			return err
 		}
-		// length in bytes: ignored
-		if _, err = r.ReadInt(); err != nil {
-			return err
-		}
-		numElements, err := r.ReadInt()
+		numElements, err := readNsonCollectionCount(r, "array")
 		if err != nil {
 			return err
 		}
@@ -701,11 +697,7 @@ func (req *ListTablesRequest) deserialize(r proto.Reader, serialVersion int16, _
 			if err = readNsonType(r, types.Array); err != nil {
 				return nil, BadProtocol, err
 			}
-			// length in bytes: ignored
-			if _, err = r.ReadInt(); err != nil {
-				return nil, BadProtocol, err
-			}
-			numElements, err := r.ReadInt()
+			numElements, err := readNsonCollectionCount(r, "array")
 			if err != nil {
 				return nil, BadProtocol, err
 			}
@@ -779,11 +771,7 @@ func (req *GetIndexesRequest) deserialize(r proto.Reader, serialVersion int16, _
 			if err = readNsonType(r, types.Array); err != nil {
 				return nil, BadProtocol, err
 			}
-			// length in bytes: ignored
-			if _, err = r.ReadInt(); err != nil {
-				return nil, BadProtocol, err
-			}
-			numElements, err := r.ReadInt()
+			numElements, err := readNsonCollectionCount(r, "array")
 			if err != nil {
 				return nil, BadProtocol, err
 			}
@@ -1151,11 +1139,7 @@ func (req *TableUsageRequest) deserialize(r proto.Reader, serialVersion int16, _
 			if err = readNsonType(r, types.Array); err != nil {
 				return nil, BadProtocol, err
 			}
-			// length in bytes: ignored
-			if _, err = r.ReadInt(); err != nil {
-				return nil, BadProtocol, err
-			}
-			numElements, err := r.ReadInt()
+			numElements, err := readNsonCollectionCount(r, "array")
 			if err != nil {
 				return nil, BadProtocol, err
 			}
@@ -1378,11 +1362,7 @@ func (req *WriteMultipleRequest) deserialize(r proto.Reader, serialVersion int16
 			if err = readNsonType(r, types.Array); err != nil {
 				return nil, BadProtocol, err
 			}
-			// length in bytes: ignored
-			if _, err = r.ReadInt(); err != nil {
-				return nil, BadProtocol, err
-			}
-			numElements, err := r.ReadInt()
+			numElements, err := readNsonCollectionCount(r, "array")
 			if err != nil {
 				return nil, BadProtocol, err
 			}
@@ -1787,12 +1767,7 @@ func readNsonReplicas(r proto.Reader) (replicas []*Replica, err error) {
 	if err = readNsonType(r, types.Array); err != nil {
 		return nil, err
 	}
-	// length in bytes: ignored
-	if _, err = r.ReadInt(); err != nil {
-		return nil, err
-	}
-	// number of array elements
-	numElements, err := r.ReadInt()
+	numElements, err := readNsonCollectionCount(r, "array")
 	if err != nil {
 		return nil, err
 	}
@@ -2132,8 +2107,8 @@ func endRequest(ns *NsonSerializer) {
 	ns.endMap("")
 }
 
-// to prevent an infinite loop for bad serialization
-const maxNumElements int = 1000000000
+// to prevent unbounded allocations or loops for bad serialization
+const maxNumElements int = maxStructuralCount
 
 // mapWalker is the base struct used for walking all NSON results
 type mapWalker struct {
@@ -2167,16 +2142,9 @@ func newMapWalker(r proto.Reader) (*mapWalker, int, error) {
 		}
 		return nil, BadProtocol, fmt.Errorf("stream must point to a MAP, it points to %v of type %[1]T", t)
 	}
-	_, err = r.ReadInt() // total length of map in bytes
+	numElements, err := readNsonCollectionCount(r, "map")
 	if err != nil {
 		return nil, BadProtocol, err
-	}
-	numElements, err := r.ReadInt()
-	if err != nil {
-		return nil, BadProtocol, err
-	}
-	if numElements < 0 || numElements > maxNumElements {
-		return nil, BadProtocol, fmt.Errorf("invalid number of map elements: %d", numElements)
 	}
 	return &mapWalker{r, numElements, "", 0}, 0, nil
 }
@@ -2253,6 +2221,13 @@ func skipNsonField(r proto.Reader, name string) (err error) {
 		if err != nil {
 			return err
 		}
+		kind := "map"
+		if types.DbType(t) == types.Array {
+			kind = "array"
+		}
+		if err = validateNsonLength(r, length, kind); err != nil {
+			return err
+		}
 		r.GetBuffer().Next(length)
 		return nil
 	case types.Binary:
@@ -2297,6 +2272,34 @@ func readNsonString(r proto.Reader) (string, error) {
 		return "", err
 	}
 	return r.ReadNonNilString()
+}
+
+func validateNsonLength(r proto.Reader, length int, what string) error {
+	if length < 0 {
+		return fmt.Errorf("invalid length of %s: %d", what, length)
+	}
+	if remaining := r.GetBuffer().Len(); length > remaining {
+		return fmt.Errorf("invalid length of %s: %d exceeds remaining bytes %d", what, length, remaining)
+	}
+	return nil
+}
+
+func readNsonCollectionCount(r proto.Reader, what string) (int, error) {
+	length, err := r.ReadInt()
+	if err != nil {
+		return 0, err
+	}
+	if err = validateNsonLength(r, length, what); err != nil {
+		return 0, err
+	}
+	numElements, err := r.ReadInt()
+	if err != nil {
+		return 0, err
+	}
+	if numElements < 0 || numElements > maxNumElements {
+		return 0, fmt.Errorf("invalid number of %s elements: %d", what, numElements)
+	}
+	return numElements, nil
 }
 
 func readNsonBoolean(r proto.Reader) (bool, error) {
@@ -2601,11 +2604,7 @@ func readNsonIndexInfo(r proto.Reader) (res *IndexInfo, err error) {
 			if err = readNsonType(r, types.Array); err != nil {
 				return nil, err
 			}
-			// length in bytes: ignored
-			if _, err = r.ReadInt(); err != nil {
-				return nil, err
-			}
-			numElements, err := r.ReadInt()
+			numElements, err := readNsonCollectionCount(r, "array")
 			if err != nil {
 				return nil, err
 			}
@@ -2845,15 +2844,24 @@ func readDriverPlanInfo(arr []byte) (dpi *driverPlanInfo, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = validateStructuralCount(dpi.numIterators, "iterators"); err != nil {
+		return nil, err
+	}
 
 	dpi.numRegisters, err = r.ReadInt()
 	if err != nil {
+		return nil, err
+	}
+	if err = validateStructuralCount(dpi.numRegisters, "registers"); err != nil {
 		return nil, err
 	}
 
 	var numVars int
 	numVars, err = r.ReadInt()
 	if err != nil {
+		return nil, err
+	}
+	if err = validateStructuralCount(numVars, "external variables"); err != nil {
 		return nil, err
 	}
 
@@ -2886,11 +2894,7 @@ func readNsonIntArray(r proto.Reader) (arr []int, err error) {
 	if err = readNsonType(r, types.Array); err != nil {
 		return nil, err
 	}
-	// length in bytes: ignored
-	if _, err = r.ReadInt(); err != nil {
-		return nil, err
-	}
-	numElements, err := r.ReadInt()
+	numElements, err := readNsonCollectionCount(r, "array")
 	if err != nil {
 		return nil, err
 	}
@@ -2910,11 +2914,7 @@ func readNsonVirtualScans(r proto.Reader) (scans []*virtualScan, err error) {
 	if err = readNsonType(r, types.Array); err != nil {
 		return nil, err
 	}
-	// length in bytes: ignored
-	if _, err = r.ReadInt(); err != nil {
-		return nil, err
-	}
-	numElements, err := r.ReadInt()
+	numElements, err := readNsonCollectionCount(r, "array")
 	if err != nil {
 		return nil, err
 	}
@@ -2934,12 +2934,8 @@ func readNsonQueryResults(r proto.Reader, qres *QueryResult) (err error) {
 	if err = readNsonType(r, types.Array); err != nil {
 		return
 	}
-	// length in bytes: ignored
-	if _, err = r.ReadInt(); err != nil {
-		return
-	}
 	var numElements int
-	numElements, err = r.ReadInt()
+	numElements, err = readNsonCollectionCount(r, "array")
 	if err != nil {
 		return
 	}

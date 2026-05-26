@@ -252,6 +252,20 @@ func (suite *ReadWriteTestSuite) TestReadWriteString() {
 	suite.Equalf(io.EOF, err, "ReadString() got unexpected error")
 }
 
+func (suite *ReadWriteTestSuite) TestReadStringRejectsLengthPastRemaining() {
+	w := NewWriter()
+	_, err := w.WritePackedInt(8)
+	suite.Require().NoError(err)
+	_, err = w.Write([]byte("abc"))
+	suite.Require().NoError(err)
+
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
+	_, err = r.ReadString()
+	if suite.Error(err, "ReadString() should have failed") {
+		suite.Contains(err.Error(), "exceeds remaining bytes")
+	}
+}
+
 func (suite *ReadWriteTestSuite) TestReadWriteBoolean() {
 	w := NewWriter()
 	tests := []bool{true, false}
@@ -323,6 +337,34 @@ func (suite *ReadWriteTestSuite) TestReadWriteByteArrayWithInt() {
 
 	_, err := r.ReadByteArrayWithInt()
 	suite.Equalf(io.EOF, err, "ReadByteArrayWithInt() got unexpected error")
+}
+
+func (suite *ReadWriteTestSuite) TestReadByteArrayWithIntRejectsLengthPastRemaining() {
+	w := NewWriter()
+	_, err := w.WriteInt(8)
+	suite.Require().NoError(err)
+	_, err = w.Write([]byte{1, 2, 3})
+	suite.Require().NoError(err)
+
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
+	_, err = r.ReadByteArrayWithInt()
+	if suite.Error(err, "ReadByteArrayWithInt() should have failed") {
+		suite.Contains(err.Error(), "exceeds remaining bytes")
+	}
+}
+
+func (suite *ReadWriteTestSuite) TestReadArrayRejectsLargeCount() {
+	w := NewWriter()
+	_, err := w.WriteInt(4)
+	suite.Require().NoError(err)
+	_, err = w.WriteInt(maxCollectionElements + 1)
+	suite.Require().NoError(err)
+
+	r := NewReader(bytes.NewBuffer(w.Bytes()))
+	_, err = r.ReadArray()
+	if suite.Error(err, "ReadArray() should have failed") {
+		suite.Contains(err.Error(), "invalid number of array elements")
+	}
 }
 
 func (suite *ReadWriteTestSuite) TestReadWriteVersion() {
