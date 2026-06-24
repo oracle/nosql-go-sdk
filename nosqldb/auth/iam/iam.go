@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
-	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/sdkutil"
+	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 )
 
 const (
@@ -376,20 +376,28 @@ func (p *SignatureProvider) AuthorizationScheme() string {
 // SetDelegationToken is used to set a delegation token for the signature provider.
 // Passing an empty string will configure the provider to not use delegation.
 func (p *SignatureProvider) SetDelegationToken(delegationToken string) (*SignatureProvider, error) {
+	var signer HTTPRequestSigner
 	if delegationToken == "" {
-		p.delegationToken = delegationToken
 		// we currently don't sign the -body- of the requests
-		p.signer = RequestSignerExcludeBody(p.configProvider)
-		return p, nil
+		signer = RequestSignerExcludeBody(p.configProvider)
+	} else {
+		// check token format
+		parts := strings.Split(delegationToken, ".")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("given delegation token \"%s\" is not in valid JWT format", delegationToken)
+		}
+		// we currently don't sign the -body- of the requests
+		signer = DelegationRequestSignerExcludeBody(p.configProvider)
 	}
-	// check token format
-	parts := strings.Split(delegationToken, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("given delegation token \"%s\" is not in valid JWT format", delegationToken)
-	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
 	p.delegationToken = delegationToken
-	// we currently don't sign the -body- of the requests
-	p.signer = DelegationRequestSignerExcludeBody(p.configProvider)
+	p.signer = signer
+	p.signature = ""
+	p.signatureFormattedDate = ""
+	p.signatureExpiresAt = time.Time{}
 	return p, nil
 }
 
@@ -430,33 +438,63 @@ func (p *SignatureProvider) SignHTTPRequest(req *http.Request) error {
 	// no matter what, we set the compartmentID in the header
 	req.Header.Set(requestHeaderXNoSQLCompartmentID, p.compartmentID)
 
-	// if used, set the delegation token
-	if p.delegationToken != "" {
-		req.Header.Set(requestHeaderDelegationToken, p.delegationToken)
-	}
-
 	now := time.Now()
 
 	mustHashBody := req.Header.Get("X-Nosql-Hash-Body") == "true"
 	if mustHashBody {
 		// If hashing body, skip all caching below
+		p.mutex.RLock()
+		delegationToken := p.delegationToken
+		signer := p.signer
+		p.mutex.RUnlock()
+
+		if delegationToken != "" {
+			req.Header.Set(requestHeaderDelegationToken, delegationToken)
+		} else {
+			req.Header.Del(requestHeaderDelegationToken)
+		}
+
 		signatureFormattedDate := now.UTC().Format(http.TimeFormat)
 		req.Header.Set(requestHeaderDate, signatureFormattedDate)
-		return p.signer.Sign(req)
+		return signer.Sign(req)
 	}
 
 	// use cached signature and date, if not expired and not including body hash
+	p.mutex.RLock()
 	if p.signature != "" && p.signatureExpiresAt.After(now) {
-		p.mutex.RLock()
 		defer p.mutex.RUnlock()
+		if p.delegationToken != "" {
+			req.Header.Set(requestHeaderDelegationToken, p.delegationToken)
+		} else {
+			req.Header.Del(requestHeaderDelegationToken)
+		}
+		req.Header.Set(requestHeaderDate, p.signatureFormattedDate)
+		req.Header.Set(requestHeaderAuthorization, p.signature)
+		return nil
+	}
+	p.mutex.RUnlock()
+
+	// calculate new signature
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	now = time.Now()
+	if p.signature != "" && p.signatureExpiresAt.After(now) {
+		if p.delegationToken != "" {
+			req.Header.Set(requestHeaderDelegationToken, p.delegationToken)
+		} else {
+			req.Header.Del(requestHeaderDelegationToken)
+		}
 		req.Header.Set(requestHeaderDate, p.signatureFormattedDate)
 		req.Header.Set(requestHeaderAuthorization, p.signature)
 		return nil
 	}
 
-	// calculate new signature
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	if p.delegationToken != "" {
+		req.Header.Set(requestHeaderDelegationToken, p.delegationToken)
+	} else {
+		req.Header.Del(requestHeaderDelegationToken)
+	}
+
 	signatureFormattedDate := now.UTC().Format(http.TimeFormat)
 	req.Header.Set(requestHeaderDate, signatureFormattedDate)
 	err := p.signer.Sign(req)

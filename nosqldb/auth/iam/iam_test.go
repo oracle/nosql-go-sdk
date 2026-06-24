@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -318,6 +320,153 @@ func (suite *iamTestSuite) TestNewSignatureProvider() {
 	}
 }
 
+func (suite *iamTestSuite) TestConcurrentSignatureProviderSigning() {
+	p := suite.newRawSignatureProvider()
+
+	const numGoroutines = 32
+	const numSignsPerGoroutine = 32
+
+	start := make(chan struct{})
+	errCh := make(chan error, numGoroutines*numSignsPerGoroutine)
+	var wg sync.WaitGroup
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for j := 0; j < numSignsPerGoroutine; j++ {
+				req := newIAMSignRequest()
+				if err := p.SignHTTPRequest(req); err != nil {
+					errCh <- err
+					return
+				}
+				if req.Header.Get(requestHeaderAuthorization) == "" {
+					errCh <- fmt.Errorf("missing authorization header")
+					return
+				}
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		suite.NoError(err)
+	}
+}
+
+func (suite *iamTestSuite) TestConcurrentSignatureProviderSigningWithDelegationTokenChanges() {
+	p := suite.newRawSignatureProvider()
+
+	const numSigners = 16
+	const numIterations = 64
+
+	start := make(chan struct{})
+	errCh := make(chan error, numSigners*numIterations+numIterations)
+	var wg sync.WaitGroup
+
+	for i := 0; i < numSigners; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			for j := 0; j < numIterations; j++ {
+				req := newIAMSignRequest()
+				if err := p.SignHTTPRequest(req); err != nil {
+					errCh <- err
+					return
+				}
+				if req.Header.Get(requestHeaderAuthorization) == "" {
+					errCh <- fmt.Errorf("missing authorization header")
+					return
+				}
+			}
+		}()
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-start
+		for i := 0; i < numIterations; i++ {
+			token := fmt.Sprintf("header.payload%d.signature", i)
+			if _, err := p.SetDelegationToken(token); err != nil {
+				errCh <- err
+				return
+			}
+			if i%2 == 0 {
+				if _, err := p.SetDelegationToken(""); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}
+	}()
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		suite.NoError(err)
+	}
+}
+
+func (suite *iamTestSuite) TestDelegationTokenChangeInvalidatesCachedSignature() {
+	p := suite.newRawSignatureProvider()
+
+	req := newIAMSignRequest()
+	suite.NoError(p.SignHTTPRequest(req))
+	originalAuth := req.Header.Get(requestHeaderAuthorization)
+	suite.NotEmpty(originalAuth)
+	suite.NotEmpty(p.signature)
+
+	const tokenB = "header.payloadB.signature"
+	_, err := p.SetDelegationToken(tokenB)
+	suite.NoError(err)
+	suite.Empty(p.signature)
+	suite.Empty(p.signatureFormattedDate)
+	suite.True(p.signatureExpiresAt.IsZero())
+
+	req = newIAMSignRequest()
+	suite.NoError(p.SignHTTPRequest(req))
+	newAuth := req.Header.Get(requestHeaderAuthorization)
+	suite.Equal(tokenB, req.Header.Get(requestHeaderDelegationToken))
+	suite.NotEqual(originalAuth, newAuth)
+	suite.Contains(newAuth, requestHeaderDelegationToken)
+}
+
+func (suite *iamTestSuite) TestClearDelegationTokenInvalidatesCachedSignature() {
+	p := suite.newRawSignatureProvider()
+
+	const tokenA = "header.payloadA.signature"
+	_, err := p.SetDelegationToken(tokenA)
+	suite.NoError(err)
+
+	req := newIAMSignRequest()
+	suite.NoError(p.SignHTTPRequest(req))
+	oboAuth := req.Header.Get(requestHeaderAuthorization)
+	suite.Equal(tokenA, req.Header.Get(requestHeaderDelegationToken))
+	suite.Contains(oboAuth, requestHeaderDelegationToken)
+
+	_, err = p.SetDelegationToken("")
+	suite.NoError(err)
+	suite.Empty(p.signature)
+	suite.Empty(p.signatureFormattedDate)
+	suite.True(p.signatureExpiresAt.IsZero())
+
+	req = newIAMSignRequest()
+	req.Header.Set(requestHeaderDelegationToken, "stale.token.value")
+	suite.NoError(p.SignHTTPRequest(req))
+	nonOBOAuth := req.Header.Get(requestHeaderAuthorization)
+	suite.Empty(req.Header.Get(requestHeaderDelegationToken))
+	suite.NotEqual(oboAuth, nonOBOAuth)
+	suite.False(strings.Contains(nonOBOAuth, requestHeaderDelegationToken))
+}
+
 func getOrDefault(p *string, defaultValue string) string {
 	if p == nil {
 		return defaultValue
@@ -328,6 +477,29 @@ func getOrDefault(p *string, defaultValue string) string {
 
 func SP(s string) *string {
 	return &s
+}
+
+func (suite *iamTestSuite) newRawSignatureProvider() *SignatureProvider {
+	passphrase := ""
+	p, err := NewRawSignatureProvider(testTenancyOCID, testUserOCID, testRegion,
+		testFingerprint, testCompartmentID, testPrivateKeyConf, &passphrase)
+	suite.Require().NoError(err)
+	return p
+}
+
+func newIAMSignRequest() *http.Request {
+	body := bytes.NewBufferString("CREATE TABLE IF NOT EXISTS testData (id LONG, PRIMARY KEY(id))")
+	req, err := http.NewRequest("POST", "http://localhost:8088/V0/nosql/data", body)
+	if err != nil {
+		panic(err)
+	}
+
+	req.Header.Set("Accept", "application/octet-stream")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("User-Agent", "NoSQL-GoSDK/5.0.0 (go1.12.7; linux/amd64)")
+	req.Header.Set("X-Nosql-Request-Id", "1292")
+	return req
 }
 
 func createPropFile(props testProviderInfo) (string, error) {
