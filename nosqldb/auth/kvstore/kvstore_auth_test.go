@@ -381,6 +381,59 @@ func (suite *AuthTestSuite) TestAuthorizationString() {
 	wg.Wait()
 }
 
+func (suite *AuthTestSuite) TestInvalidateCachedToken() {
+	p, err := NewAccessTokenProvider("TestUser01", []byte("NoSql00__123456"))
+	suite.Require().NoError(err)
+
+	p.cachedToken = auth.NewToken("rejected-token", "", time.Hour)
+	p.InvalidateCachedToken()
+	suite.Nil(p.cachedToken)
+}
+
+func (suite *AuthTestSuite) TestConcurrentAuthorizationStringAndClose() {
+	p, err := NewAccessTokenProvider("TestUser01", []byte("NoSql00__123456"), auth.ProviderOptions{
+		HTTPClient: httputil.DefaultHTTPClient,
+		Logger:     testLogger,
+		Timeout:    time.Millisecond,
+	})
+	suite.Require().NoError(err)
+
+	const numAuthCalls = 32
+	start := make(chan struct{})
+	errCh := make(chan error, numAuthCalls+1)
+	var wg sync.WaitGroup
+
+	for i := 0; i < numAuthCalls; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, _ = p.AuthorizationString(nil)
+		}()
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-start
+		errCh <- p.Close()
+	}()
+
+	close(start)
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		suite.NoError(err)
+	}
+	suite.True(p.checkClosed())
+	suite.Nil(p.cachedToken)
+
+	authStr, err := p.AuthorizationString(nil)
+	suite.NoError(err)
+	suite.Empty(authStr)
+}
+
 func (suite *AuthTestSuite) getAuthStringTest(testName string,
 	server *mockAuthServer, p *AccessTokenProvider) {
 
