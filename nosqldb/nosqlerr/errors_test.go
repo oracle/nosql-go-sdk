@@ -56,6 +56,14 @@ func (suite *NoSQLErrorsTestSuite) TestNewErrors() {
 	suite.Falsef(e.Retryable(), "RequestTimeout error should not be retryable")
 }
 
+func (suite *NoSQLErrorsTestSuite) TestDocumentedRetryableErrors() {
+	e := New(SizeLimitExceeded, "table size limit exceeded")
+	suite.Falsef(e.Retryable(), "SizeLimitExceeded error should not be retryable")
+
+	e = New(ServiceUnavailable, "service is unavailable")
+	suite.Truef(e.Retryable(), "ServiceUnavailable error should be retryable")
+}
+
 func (suite *NoSQLErrorsTestSuite) TestIsErrors() {
 	e1 := NewIllegalArgument("illegal arguments: Arg1")
 	e2 := New(TableNotFound, "table T1 does not exist")
