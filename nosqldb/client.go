@@ -113,6 +113,10 @@ type Client struct {
 	isOKResponseProcessed int32
 }
 
+type cachedAuthTokenInvalidator interface {
+	InvalidateCachedToken()
+}
+
 var (
 	errNilRequest       = nosqlerr.NewIllegalArgument("request must be non-nil")
 	errNilContext       = nosqlerr.NewIllegalArgument("nil context")
@@ -1444,11 +1448,20 @@ func (c *Client) updateTableLimiters(tableName string) {
 func (c *Client) handleError(err error, req Request, numRetries int) (shouldRetry bool) {
 	if isRetryableError(err) {
 		c.logger.Fine("got retryable error: %v", err)
+		if nosqlerr.Is(err, nosqlerr.RetryAuthentication) {
+			c.invalidateCachedAuthToken()
+		}
 		return c.handleRetry(err, req, uint(numRetries))
 	}
 
 	c.logger.Fine("got non-retryable error: %v", err)
 	return false
+}
+
+func (c *Client) invalidateCachedAuthToken() {
+	if p, ok := c.AuthorizationProvider.(cachedAuthTokenInvalidator); ok {
+		p.InvalidateCachedToken()
+	}
 }
 
 // handleRetry checks if the specified request should continue to retry upon

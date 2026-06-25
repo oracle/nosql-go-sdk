@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -288,6 +289,27 @@ func TestExecuteErrorHandling(t *testing.T) {
 			assert.Equalf(t, expectErr, e, prefixMsg+"got unexpected error")
 		}
 	}
+}
+
+func TestHandleErrorInvalidatesCachedAuthTokenOnRetryAuthentication(t *testing.T) {
+	client, err := newMockClient()
+	require.NoErrorf(t, err, "failed to create client, got error %v.", err)
+
+	retryHandler, err := NewDefaultRetryHandler(1, time.Millisecond)
+	require.NoError(t, err)
+	client.RetryHandler = retryHandler
+
+	req := &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+	}
+	err = nosqlerr.New(nosqlerr.RetryAuthentication, "retry authentication")
+
+	shouldRetry := client.handleError(err, req, 0)
+	require.True(t, shouldRetry)
+
+	authProvider := client.AuthorizationProvider.(*DummyAccessTokenProvider)
+	assert.Equal(t, int32(1), atomic.LoadInt32(&authProvider.invalidations))
 }
 
 func newMockClient() (*Client, error) {
