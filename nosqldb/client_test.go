@@ -9,6 +9,8 @@ package nosqldb
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -67,7 +70,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 				mockErr{msg: "mock retryable error 3", isTemp: true},
 			},
 			req:              getReq,
-			timeout:          2 * time.Second,
+			timeout:          2200 * time.Millisecond,
 			expectTimeoutErr: true,
 			maxNumRetries:    3,
 			retryInterval:    time.Second,
@@ -172,7 +175,7 @@ func TestExecuteErrorHandling(t *testing.T) {
 				nosqlerr.New(nosqlerr.ReadLimitExceeded, "retryable ReadLimitExceeded error 3"),
 			},
 			req:              getReq,
-			timeout:          3 * time.Second,
+			timeout:          3200 * time.Millisecond,
 			expectTimeoutErr: true,
 			maxNumRetries:    5,
 			retryInterval:    time.Second,
@@ -305,11 +308,140 @@ func TestHandleErrorInvalidatesCachedAuthTokenOnRetryAuthentication(t *testing.T
 	}
 	err = nosqlerr.New(nosqlerr.RetryAuthentication, "retry authentication")
 
-	shouldRetry := client.handleError(err, req, 0)
+	shouldRetry, retryErr := client.handleError(context.Background(), err, req, 0)
+	require.NoError(t, retryErr)
 	require.True(t, shouldRetry)
 
 	authProvider := client.AuthorizationProvider.(*DummyAccessTokenProvider)
 	assert.Equal(t, int32(1), atomic.LoadInt32(&authProvider.invalidations))
+}
+
+func TestHTTPRetryAttemptsUseRemainingRequestTimeout(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	retryHandler, err := NewDefaultRetryHandler(1, time.Millisecond)
+	require.NoError(t, err)
+	client.RetryHandler = retryHandler
+
+	exec := &deadlineRecordingExecutor{
+		firstDelay: 30 * time.Millisecond,
+	}
+	client.executor = exec
+
+	req := &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+		Timeout:   150 * time.Millisecond,
+	}
+
+	_, err = client.DoExecute(context.Background(), req, []byte{0}, 3, 0)
+	require.Error(t, err)
+	require.Len(t, exec.deadlines, 2)
+
+	skew := exec.deadlines[1].Sub(exec.deadlines[0])
+	if skew < 0 {
+		skew = -skew
+	}
+	if skew >= 20*time.Millisecond {
+		t.Fatalf("retry attempt should keep the original request deadline instead of getting a fresh full timeout, skew=%v", skew)
+	}
+}
+
+func TestRetryDoesNotStartAttemptAfterRequestTimeout(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	retryHandler, err := NewDefaultRetryHandler(2, 200*time.Millisecond)
+	require.NoError(t, err)
+	client.RetryHandler = retryHandler
+
+	exec := &deadlineRecordingExecutor{
+		firstDelay: 40 * time.Millisecond,
+	}
+	client.executor = exec
+
+	req := &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+		Timeout:   80 * time.Millisecond,
+	}
+
+	start := time.Now()
+	_, err = client.DoExecute(context.Background(), req, []byte{0}, 3, 0)
+	elapsed := time.Since(start)
+
+	require.Truef(t, nosqlerr.Is(err, nosqlerr.RequestTimeout), "got %v", err)
+	assert.Equal(t, 1, exec.calls, "client should not start another attempt after the total deadline expires")
+	if elapsed >= 250*time.Millisecond {
+		t.Fatalf("expected request timeout near configured deadline, elapsed=%v", elapsed)
+	}
+}
+
+func TestRetrySleepStopsWhenContextCanceled(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	retryHandler, err := NewDefaultRetryHandler(2, time.Second)
+	require.NoError(t, err)
+	client.RetryHandler = retryHandler
+
+	exec := &deadlineRecordingExecutor{}
+	client.executor = exec
+
+	req := &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+		Timeout:   5 * time.Second,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err = client.DoExecute(ctx, req, []byte{0}, 3, 0)
+	elapsed := time.Since(start)
+
+	require.Truef(t, errors.Is(err, context.Canceled), "got %v", err)
+	assert.Equal(t, 1, exec.calls)
+	if elapsed >= 300*time.Millisecond {
+		t.Fatalf("expected retry delay to stop on context cancellation, elapsed=%v", elapsed)
+	}
+}
+
+func TestRateLimiterWaitStopsWhenContextCanceled(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	limiter := common.NewSimpleRateLimiterWithDuration(1, 1)
+	limiter.SetCurrentRate(200)
+
+	req := &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+		Timeout:   5 * time.Second,
+	}
+	req.SetReadRateLimiter(limiter)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err = client.DoExecute(ctx, req, []byte{0}, 3, 0)
+	elapsed := time.Since(start)
+
+	require.Truef(t, errors.Is(err, context.Canceled), "got %v", err)
+	if elapsed >= 300*time.Millisecond {
+		t.Fatalf("expected rate limiter wait to stop on context cancellation, elapsed=%v", elapsed)
+	}
 }
 
 func newMockClient() (*Client, error) {
@@ -420,4 +552,34 @@ func (e mockErr) Error() string {
 
 func (e mockErr) Temporary() bool {
 	return e.isTemp
+}
+
+type deadlineRecordingExecutor struct {
+	firstDelay time.Duration
+	calls      int
+	deadlines  []time.Time
+}
+
+func (e *deadlineRecordingExecutor) Do(req *http.Request) (*http.Response, error) {
+	e.calls++
+	if deadline, ok := req.Context().Deadline(); ok {
+		e.deadlines = append(e.deadlines, deadline)
+	}
+
+	if e.calls == 1 {
+		if e.firstDelay > 0 {
+			time.Sleep(e.firstDelay)
+		}
+		return nil, &url.Error{
+			Op:  req.Method,
+			URL: req.URL.String(),
+			Err: mockErr{msg: "retryable error", isTemp: true},
+		}
+	}
+
+	return nil, &url.Error{
+		Op:  req.Method,
+		URL: req.URL.String(),
+		Err: mockErr{msg: "non-retryable error"},
+	}
 }
