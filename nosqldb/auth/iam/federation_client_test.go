@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -123,6 +124,82 @@ func TestX509FederationClient_RenewSecurityToken(t *testing.T) {
 	mockSessionKeySupplier.AssertExpectations(t)
 	mockLeafCertificateRetriever.AssertExpectations(t)
 	mockIntermediateCertificateRetriever.AssertExpectations(t)
+}
+
+func TestX509FederationClient_GetBodyReturnsFreshReader(t *testing.T) {
+	federationClient := &x509FederationClient{}
+	federationClient.authClient, _ = newAuthClient(whateverRegion, federationClient)
+	federationClient.authClient.Host = "https://auth.example.com"
+	federationClient.authClient.BasePath = ""
+
+	request := &x509FederationRequest{
+		Certificate:              "cert",
+		IntermediateCertificates: []string{"intermediate"},
+		PublicKey:                "public-key",
+		FingerprintAlgorithm:     "SHA256",
+		Purpose:                  "DEFAULT",
+	}
+
+	httpRequest, err := federationClient.makeHTTPRequest(request)
+	assert.NoError(t, err)
+
+	body1, err := io.ReadAll(httpRequest.Body)
+	assert.NoError(t, err)
+
+	bodyReader2, err := httpRequest.GetBody()
+	assert.NoError(t, err)
+	body2, err := io.ReadAll(bodyReader2)
+	assert.NoError(t, err)
+
+	bodyReader3, err := httpRequest.GetBody()
+	assert.NoError(t, err)
+	body3, err := io.ReadAll(bodyReader3)
+	assert.NoError(t, err)
+
+	expectedBody := `{"certificate":"cert","intermediateCertificates":["intermediate"],"publicKey":"public-key","fingerprintAlgorithm":"SHA256","purpose":"DEFAULT"}`
+	assert.Equal(t, expectedBody, string(body1))
+	assert.Equal(t, expectedBody, string(body2))
+	assert.Equal(t, expectedBody, string(body3))
+	assert.Equal(t, int64(len(expectedBody)), httpRequest.ContentLength)
+}
+
+func TestX509FederationClient_RetryUsesOriginalRequestBody(t *testing.T) {
+	expectedBody := expectedX509FederationRequestBody()
+	transport := &retryBodyTransport{
+		t:            t,
+		expectedBody: expectedBody,
+	}
+
+	mockSessionKeySupplier := new(mockSessionKeySupplier)
+	mockSessionKeySupplier.On("PublicKeyPemRaw").Return([]byte(sessionPublicKeyPem))
+
+	mockLeafCertificateRetriever := new(mockCertificateRetriever)
+	mockLeafCertificateRetriever.On("CertificatePemRaw").Return([]byte(leafCertPem))
+	mockLeafCertificateRetriever.On("Certificate").Return(parseCertificate(leafCertPem))
+	mockLeafCertificateRetriever.On("PrivateKey").Return(parsePrivateKey(leafCertPrivateKeyPem))
+
+	mockIntermediateCertificateRetriever := new(mockCertificateRetriever)
+	mockIntermediateCertificateRetriever.On("CertificatePemRaw").Return([]byte(intermediateCertPem))
+
+	federationClient := &x509FederationClient{
+		tenancyID:                         tenancyID,
+		sessionKeySupplier:                mockSessionKeySupplier,
+		leafCertificateRetriever:          mockLeafCertificateRetriever,
+		intermediateCertificateRetrievers: []x509CertificateRetriever{mockIntermediateCertificateRetriever},
+	}
+	federationClient.authClient, _ = newAuthClient(whateverRegion, federationClient)
+	federationClient.authClient.Host = "https://auth.example.com"
+	federationClient.authClient.BasePath = ""
+	federationClient.authClient.HTTPClient = &http.Client{
+		Transport: transport,
+	}
+
+	token, err := federationClient.getSecurityToken()
+	if assert.NoError(t, err) {
+		assert.Equal(t, expectedSecurityToken, token.String())
+	}
+	assert.Equal(t, []string{expectedBody, expectedBody}, transport.bodies)
+	assert.Equal(t, 2, transport.attempts)
 }
 
 func TestX509FederationClient_GetCachedSecurityToken(t *testing.T) {
@@ -343,6 +420,37 @@ func parsePrivateKey(privateKeyPem string) *rsa.PrivateKey {
 	block, _ := pem.Decode([]byte(privateKeyPem))
 	key, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
 	return key
+}
+
+func expectedX509FederationRequestBody() string {
+	return fmt.Sprintf(`{"certificate":"%s","intermediateCertificates":["%s"],"publicKey":"%s","fingerprintAlgorithm":"SHA256","purpose":"DEFAULT"}`,
+		leafCertBodyNoNewLine, intermediateCertBodyNoNewLine, sessionPublicKeyBodyNoNewLine)
+}
+
+type retryBodyTransport struct {
+	t            *testing.T
+	expectedBody string
+	attempts     int
+	bodies       []string
+}
+
+func (rt *retryBodyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	rt.attempts++
+	body, err := io.ReadAll(req.Body)
+	assert.NoError(rt.t, err)
+	rt.bodies = append(rt.bodies, string(body))
+	assert.Equal(rt.t, rt.expectedBody, string(body))
+
+	if rt.attempts == 1 {
+		return nil, fmt.Errorf("transient auth service error")
+	}
+
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(fmt.Sprintf(`{"token":"%s"}`, expectedSecurityToken))),
+		Header:     make(http.Header),
+		Request:    req,
+	}, nil
 }
 
 const (
