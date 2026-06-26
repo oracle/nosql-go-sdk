@@ -363,12 +363,15 @@ func (c *x509FederationClient) makeHTTPRequest(request *x509FederationRequest) (
 		return nil, err
 	}
 
-	bodyBytes := bytes.NewReader(rawJSON)
+	newBody := func() io.ReadCloser {
+		return io.NopCloser(bytes.NewReader(rawJSON))
+	}
 	httpRequest.Header.Set("Content-Length", strconv.Itoa(len(rawJSON)))
 	httpRequest.Header.Set("Content-Type", "application/json")
-	httpRequest.Body = io.NopCloser(bodyBytes)
+	httpRequest.ContentLength = int64(len(rawJSON))
+	httpRequest.Body = newBody()
 	httpRequest.GetBody = func() (io.ReadCloser, error) {
-		return io.NopCloser(bodyBytes), nil
+		return newBody(), nil
 	}
 
 	return &httpRequest, nil
@@ -376,14 +379,15 @@ func (c *x509FederationClient) makeHTTPRequest(request *x509FederationRequest) (
 
 func (c *x509FederationClient) getSecurityToken() (securityToken, error) {
 	request := c.makeX509FederationRequest()
-	httpRequest, err := c.makeHTTPRequest(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make http request: %s", err.Error())
-	}
-
 	var httpResponse *http.Response
+	var err error
 
 	for retry := 0; retry < 5; retry++ {
+		httpRequest, err := c.makeHTTPRequest(request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to make http request: %s", err.Error())
+		}
+
 		if httpResponse, err = c.authClient.Call(httpRequest); err == nil {
 			break
 		}
