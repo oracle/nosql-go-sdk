@@ -8,6 +8,7 @@
 package nosqldb
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"time"
@@ -52,6 +53,17 @@ type RetryHandler interface {
 	Delay(req Request, numRetries uint, err error)
 }
 
+// ContextRetryHandler can be implemented by RetryHandler implementations that
+// can stop delaying when the request context is canceled.
+type ContextRetryHandler interface {
+	RetryHandler
+
+	// DelayWithContext is called when a retryable error is reported and the
+	// request will be retried. It should wait for the desired retry delay or
+	// return early if ctx is canceled.
+	DelayWithContext(ctx context.Context, req Request, numRetries uint, err error) error
+}
+
 const securityErrorRetryInterval = 100 * time.Millisecond
 
 // DefaultRetryHandler represents the default implementation of RetryHandler interface.
@@ -93,6 +105,12 @@ func (r DefaultRetryHandler) MaxNumRetries() uint {
 // less than or equal to 10. Otherwise, it uses the exponential backoff algorithm
 // to compute the time of delay.
 func (r DefaultRetryHandler) Delay(req Request, numRetries uint, err error) {
+	_ = r.DelayWithContext(context.Background(), req, numRetries, err)
+}
+
+// DelayWithContext causes the current goroutine to pause for a period of time,
+// or returns early if the context is canceled.
+func (r DefaultRetryHandler) DelayWithContext(ctx context.Context, req Request, numRetries uint, err error) error {
 	d := r.retryInterval
 	if nosqlerr.IsSecurityInfoUnavailable(err) {
 		d = securityInfoNotReadyDelay(numRetries, req)
@@ -104,12 +122,26 @@ func (r DefaultRetryHandler) Delay(req Request, numRetries uint, err error) {
 		if (d + req.GetRetryTime()) > req.timeout() {
 			d = req.timeout() - req.GetRetryTime()
 			if d < 0 {
-				return
+				return nil
 			}
 		}
 	}
+
+	if d <= 0 {
+		return ctx.Err()
+	}
+
 	req.SetRetryTime(req.GetRetryTime() + d)
-	time.Sleep(d)
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // ShouldRetry reports whether the request should continue to retry upon

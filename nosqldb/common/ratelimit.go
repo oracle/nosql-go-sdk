@@ -8,6 +8,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -59,37 +60,41 @@ func (rlp *RateLimiterPair) SetWriteRateLimiter(rl RateLimiter) {
 // RateLimiter interface provides default methods that all rate limiters
 // must implement.
 //
-// Thread safety
+// # Thread safety
 //
 // It is expected that all implementing classes of this
 // interface may be used by multiple goroutines concurrently. For example, many
 // goroutines may be using the same rate limiter instance to ensure that
 // all of them together do not exceed a given limit.
 //
-// Typical usage
+// # Typical usage
 //
 // The simplest use of the rate limiter is to consume a number of units,
 // blocking until they are successfully consumed:
+//
 //	delay := rateLimiter.ConsumeUnits(units)
 //	// delay indicates how long the consume delayed
 //
 // To poll a limiter to see if it is currently over the limit:
+//
 //	if rateLimiter.TryConsumeUnits(0) {
 //	  // limiter is below its limit
 //	}
 //
 // To attempt to consume units, only if they can be immediately consumed
 // without waiting:
+//
 //	if ratelimiter.TryConsumeUnits(units) {
 //	  // successful consume
 //	} else {
 //	  // could not consume units without waiting
 //	}
 //
-// Usages with timeouts
+// # Usages with timeouts
 //
 // In cases where the number of units an operation will consume is already
 // known before the operation, a simple one-shot method can be used:
+//
 //	var units int64 = (known units the operation will use)
 //	alwaysConsume := false // don't consume if we time out
 //	delay, err := rateLimiter.ConsumeUnitsWithTimeout(units, timeout, alwaysConsume)
@@ -105,6 +110,7 @@ func (rlp *RateLimiterPair) SetWriteRateLimiter(rl RateLimiter) {
 // known before the operation, typically two rate limiter calls would be
 // used: one to wait till the limiter is below its limit, and a second
 // to update the limiter with used units:
+//
 //	// wait until we're under the limit
 //	delay, err := rateLimiter.ConsumeUnitsWithTimeout(0, timeout, false)
 //	if err != nil {
@@ -119,6 +125,7 @@ func (rlp *RateLimiterPair) SetWriteRateLimiter(rl RateLimiter) {
 //
 // Alternately, the operation could be always performed, and then the
 // limiter could try to wait for the units to be consumed:
+//
 //	var units int64  = (...do operation, get number of units used...)
 //	alwaysConsume := true // consume, even if we time out
 //	delay, err := rateLimiter.ConsumeUnitsWithTimeout(units, timeout, alwaysConsume)
@@ -132,7 +139,7 @@ func (rlp *RateLimiterPair) SetWriteRateLimiter(rl RateLimiter) {
 //	  // consume was successful
 //	}
 //
-// Limiter duration
+// # Limiter duration
 //
 // Implementing rate limiters should support a configurable "duration".
 // This is sometimes referred to as a "burst mode", or a "window time",
@@ -216,6 +223,16 @@ type RateLimiter interface {
 	// the rate limit.
 	// rateToSet may be greater than 100.0 to set the limiter to "over its limit".
 	SetCurrentRate(rateToSet float64)
+}
+
+// ContextRateLimiter can be implemented by RateLimiter implementations that
+// can stop waiting when the request context is canceled.
+type ContextRateLimiter interface {
+	RateLimiter
+
+	// ConsumeUnitsWithContext attempts to consume a number of units, blocking
+	// until the units are available, the timeout expires, or ctx is canceled.
+	ConsumeUnitsWithContext(ctx context.Context, units int64, timeout time.Duration, alwaysConsume bool) (time.Duration, error)
 }
 
 const nanosPerSecFloat = 1000000000.0
@@ -349,6 +366,12 @@ func (srl *SimpleRateLimiter) ConsumeUnits(units int64) time.Duration {
 // currently over its limit, use TryConsumeUnits() instead.
 // If alwaysConsume is true, consume units even on timeout.
 func (srl *SimpleRateLimiter) ConsumeUnitsWithTimeout(units int64, timeout time.Duration, alwaysConsume bool) (time.Duration, error) {
+	return srl.ConsumeUnitsWithContext(context.Background(), units, timeout, alwaysConsume)
+}
+
+// ConsumeUnitsWithContext attempts to consume a number of units, blocking until
+// the units are available, the specified timeout expires, or ctx is canceled.
+func (srl *SimpleRateLimiter) ConsumeUnitsWithContext(ctx context.Context, units int64, timeout time.Duration, alwaysConsume bool) (time.Duration, error) {
 
 	// call internal logic, get the time we need to sleep to
 	// complete the consume.
@@ -362,15 +385,37 @@ func (srl *SimpleRateLimiter) ConsumeUnitsWithTimeout(units int64, timeout time.
 	// Note the units may have already been consumed if alwaysConsume
 	// is true.
 	if timeout > 0 && sleepTime >= timeout {
-		time.Sleep(timeout)
+		if waited, err := sleepWithContext(ctx, timeout); err != nil {
+			return waited, err
+		}
 		return timeout, fmt.Errorf("timed out waiting %dms for %d units in rate limiter", (timeout / time.Millisecond), units)
 	}
 
 	// sleep for the requested time.
-	time.Sleep(sleepTime)
+	waited, err := sleepWithContext(ctx, sleepTime)
+	if err != nil {
+		return waited, err
+	}
 
 	// return the amount of time slept
 	return sleepTime, nil
+}
+
+func sleepWithContext(ctx context.Context, d time.Duration) (time.Duration, error) {
+	if d <= 0 {
+		return 0, nil
+	}
+
+	start := time.Now()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return d, nil
+	case <-ctx.Done():
+		return time.Since(start), ctx.Err()
+	}
 }
 
 // consumeInternal returns the time to sleep to consume units.
@@ -380,7 +425,6 @@ func (srl *SimpleRateLimiter) ConsumeUnitsWithTimeout(units int64, timeout time.
 //
 // This is the only method that actually "consumes units", i.e.
 // updates the lastNano value.
-//
 func (srl *SimpleRateLimiter) consumeInternal(units int64, timeout time.Duration,
 	alwaysConsume bool, nowNanos int64) time.Duration {
 

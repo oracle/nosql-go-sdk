@@ -1057,6 +1057,33 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	}
 
 	startTime := time.Now()
+	remainingTimeout := func(timeout time.Duration) time.Duration {
+		if timeout <= 0 {
+			return 0
+		}
+		return timeout - time.Since(startTime)
+	}
+	checkDeadline := func(timeout time.Duration, cause error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if timeout > 0 && remainingTimeout(timeout) <= 0 {
+			return nosqlerr.NewWithCause(nosqlerr.RequestTimeout, cause,
+				"request timed out after %d attempt(s). Timeout: %v", numRetries+1, timeout)
+		}
+		return nil
+	}
+	contextWithRemainingTimeout := func(timeout time.Duration, cause error) (context.Context, context.CancelFunc, error) {
+		if err := checkDeadline(timeout, cause); err != nil {
+			return nil, nil, err
+		}
+		if timeout <= 0 {
+			reqCtx, cancel := context.WithCancel(ctx)
+			return reqCtx, cancel, nil
+		}
+		reqCtx, cancel := context.WithTimeout(ctx, remainingTimeout(timeout))
+		return reqCtx, cancel, nil
+	}
 
 	for {
 
@@ -1068,9 +1095,8 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 				timeout = reqTimeout
 			}
 
-			if time.Since(startTime) > timeout {
-				return nil, nosqlerr.NewWithCause(nosqlerr.RequestTimeout, err,
-					"request timed out after %d attempt(s). Timeout: %v", numRetries+1, timeout)
+			if deadlineErr := checkDeadline(timeout, err); deadlineErr != nil {
+				return nil, deadlineErr
 			}
 
 			if readLimiter != nil && nosqlerr.Is(err, nosqlerr.ReadLimitExceeded) {
@@ -1109,8 +1135,22 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 				if err != nil {
 					return nil, err
 				}
-			} else if !c.handleError(err, req, numThrottleRetries) {
-				return nil, err
+			} else {
+				retryCtx, retryCancel, deadlineErr := contextWithRemainingTimeout(timeout, err)
+				if deadlineErr != nil {
+					return nil, deadlineErr
+				}
+				shouldRetry, retryErr := c.handleError(retryCtx, err, req, numThrottleRetries)
+				retryCancel()
+				if retryErr != nil {
+					if deadlineErr = checkDeadline(timeout, err); deadlineErr != nil {
+						return nil, deadlineErr
+					}
+					return nil, retryErr
+				}
+				if !shouldRetry {
+					return nil, err
+				}
 			}
 
 			if isSecErr {
@@ -1128,33 +1168,45 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		// Before executing request: wait for rate limiter(s) to go below limit
 		if readLimiter != nil && checkReadUnits {
+			if deadlineErr := checkDeadline(reqTimeout, err); deadlineErr != nil {
+				return nil, deadlineErr
+			}
 			// wait for read limiter to come below the limit
-			timeout = reqTimeout - time.Since(startTime)
+			timeout = remainingTimeout(reqTimeout)
 			if timeout <= 0 {
 				if !readLimiter.TryConsumeUnits(0) {
 					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
 				}
 			} else {
 				// note this may sleep for a while
-				ms, err := readLimiter.ConsumeUnitsWithTimeout(0, timeout, false)
-				if err != nil {
+				ms, limiterErr := c.consumeLimiterUnitsWithContext(ctx, readLimiter, 0, timeout, false)
+				if limiterErr != nil {
+					if deadlineErr := checkDeadline(reqTimeout, limiterErr); deadlineErr != nil {
+						return nil, deadlineErr
+					}
 					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
 				}
 				rateDelayedTime += ms
 			}
 		}
 		if writeLimiter != nil && checkWriteUnits {
+			if deadlineErr := checkDeadline(reqTimeout, err); deadlineErr != nil {
+				return nil, deadlineErr
+			}
 			// wait for write limiter to come below the limit
 			// note this may sleep for a while
-			timeout = reqTimeout - time.Since(startTime)
+			timeout = remainingTimeout(reqTimeout)
 			if timeout <= 0 {
 				if !writeLimiter.TryConsumeUnits(0) {
 					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
 				}
 			} else {
 				// note this may sleep for a while
-				ms, err := writeLimiter.ConsumeUnitsWithTimeout(0, timeout, false)
-				if err != nil {
+				ms, limiterErr := c.consumeLimiterUnitsWithContext(ctx, writeLimiter, 0, timeout, false)
+				if limiterErr != nil {
+					if deadlineErr := checkDeadline(reqTimeout, limiterErr); deadlineErr != nil {
+						return nil, deadlineErr
+					}
 					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
 				}
 				rateDelayedTime += ms
@@ -1238,7 +1290,10 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			}
 		}
 
-		reqCtx, reqCancel := context.WithTimeout(ctx, reqTimeout)
+		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, err)
+		if deadlineErr != nil {
+			return nil, deadlineErr
+		}
 		httpReq = httpReq.WithContext(reqCtx)
 		httpResp, err = c.executor.Do(httpReq)
 		if err != nil {
@@ -1268,12 +1323,12 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		// limiters, possibly delaying return
 		used, _ := result.ConsumedCapacity()
 		if used.ReadUnits > 0 && readLimiter != nil {
-			timeout = reqTimeout - time.Since(startTime)
-			rateDelayedTime += c.consumeLimiterUnits(readLimiter, int64(used.ReadUnits), timeout)
+			timeout = remainingTimeout(reqTimeout)
+			rateDelayedTime += c.consumeLimiterUnits(ctx, readLimiter, int64(used.ReadUnits), timeout)
 		}
 		if used.WriteKB > 0 && writeLimiter != nil {
-			timeout = reqTimeout - time.Since(startTime)
-			rateDelayedTime += c.consumeLimiterUnits(writeLimiter, int64(used.WriteKB), timeout)
+			timeout = remainingTimeout(reqTimeout)
+			rateDelayedTime += c.consumeLimiterUnits(ctx, writeLimiter, int64(used.WriteKB), timeout)
 		}
 		result.Delayed().setRateLimitTime(rateDelayedTime)
 		result.Delayed().setRetryTime(req.GetRetryTime())
@@ -1351,7 +1406,7 @@ func (c *Client) backgroundUpdateLimiters(tableName string) {
 
 // Comsume rate limiter units after successful operation.
 // return the duration delayed due to rate limiting
-func (c *Client) consumeLimiterUnits(rl common.RateLimiter, units int64, timeout time.Duration) time.Duration {
+func (c *Client) consumeLimiterUnits(ctx context.Context, rl common.RateLimiter, units int64, timeout time.Duration) time.Duration {
 
 	if rl == nil || units <= 0 {
 		return 0
@@ -1363,8 +1418,17 @@ func (c *Client) consumeLimiterUnits(rl common.RateLimiter, units int64, timeout
 	}
 
 	// "true" == "consume units, even on timeout"
-	ret, _ := rl.ConsumeUnitsWithTimeout(units, timeout, true)
+	ret, _ := c.consumeLimiterUnitsWithContext(ctx, rl, units, timeout, true)
 	return ret
+}
+
+func (c *Client) consumeLimiterUnitsWithContext(ctx context.Context, rl common.RateLimiter, units int64,
+	timeout time.Duration, alwaysConsume bool) (time.Duration, error) {
+
+	if ctxLimiter, ok := rl.(common.ContextRateLimiter); ok {
+		return ctxLimiter.ConsumeUnitsWithContext(ctx, units, timeout, alwaysConsume)
+	}
+	return rl.ConsumeUnitsWithTimeout(units, timeout, alwaysConsume)
 }
 
 func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
@@ -1445,17 +1509,17 @@ func (c *Client) updateTableLimiters(tableName string) {
 // If the error is retryable, this method calls the RetryHandler configured for
 // the client to proceed with retry handling. Otherwise, it returns false
 // indicating the request should not be retried.
-func (c *Client) handleError(err error, req Request, numRetries int) (shouldRetry bool) {
+func (c *Client) handleError(ctx context.Context, err error, req Request, numRetries int) (shouldRetry bool, delayErr error) {
 	if isRetryableError(err) {
 		c.logger.Fine("got retryable error: %v", err)
 		if nosqlerr.Is(err, nosqlerr.RetryAuthentication) {
 			c.invalidateCachedAuthToken()
 		}
-		return c.handleRetry(err, req, uint(numRetries))
+		return c.handleRetry(ctx, err, req, uint(numRetries))
 	}
 
 	c.logger.Fine("got non-retryable error: %v", err)
-	return false
+	return false, nil
 }
 
 func (c *Client) invalidateCachedAuthToken() {
@@ -1468,9 +1532,9 @@ func (c *Client) invalidateCachedAuthToken() {
 // receiving the specified error and having attempted the specified number
 // of retries. If the request should retry, handleRetry will pause the current
 // goroutine for a duration according to the RetryHandler configurations.
-func (c *Client) handleRetry(err error, req Request, numRetries uint) bool {
+func (c *Client) handleRetry(ctx context.Context, err error, req Request, numRetries uint) (bool, error) {
 	if c.RetryHandler == nil {
-		return false
+		return false, nil
 	}
 
 	c.logger.LogWithFn(logger.Fine, func() string {
@@ -1479,15 +1543,24 @@ func (c *Client) handleRetry(err error, req Request, numRetries uint) bool {
 	})
 
 	if c.RetryHandler.ShouldRetry(req, numRetries, err) {
-		c.RetryHandler.Delay(req, numRetries, err)
-		return true
+		if ctxRetryHandler, ok := c.RetryHandler.(ContextRetryHandler); ok {
+			if err := ctxRetryHandler.DelayWithContext(ctx, req, numRetries, err); err != nil {
+				return false, err
+			}
+		} else {
+			c.RetryHandler.Delay(req, numRetries, err)
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
+		return true, nil
 	}
 
 	if maxRetries := c.RetryHandler.MaxNumRetries(); numRetries >= maxRetries {
 		c.logger.Fine("number of retries has reached the maximum of %d", maxRetries)
 	}
 
-	return false
+	return false, nil
 }
 
 // getAuthString returns an authorization string for the specified request.
