@@ -21,6 +21,7 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+
 // HasLastWriteMetadata is implemented by requests that can carry last write
 // metadata and report whether the request currently includes the metadata.
 type HasLastWriteMetadata interface {
@@ -1908,21 +1909,53 @@ func (r *QueryRequest) getVirtualScan() *virtualScan {
 // copyInternal creates an internal QueryRequest out of the application provided QueryRequest.
 func (r *QueryRequest) copyInternal() *QueryRequest {
 	return &QueryRequest{
-		Timeout:              r.Timeout,
-		Limit:                r.Limit,
-		MaxReadKB:            r.MaxReadKB,
-		MaxWriteKB:           r.MaxWriteKB,
-		MaxMemoryConsumption: r.MaxMemoryConsumption,
-		Consistency:          r.Consistency,
-		Durability:           r.Durability,
-		PreparedStatement:    r.PreparedStatement,
-		driver:               r.driver,
-		traceLevel:           r.traceLevel,
-		TableName:            r.TableName,
-		InternalRequestData:  r.InternalRequestData,
-		LastWriteMetadata:    r.LastWriteMetadata,
-		isInternal:           true,
+		Timeout:                    r.Timeout,
+		Limit:                      r.Limit,
+		MaxReadKB:                  r.MaxReadKB,
+		MaxWriteKB:                 r.MaxWriteKB,
+		MaxMemoryConsumption:       r.MaxMemoryConsumption,
+		MaxServerMemoryConsumption: r.MaxServerMemoryConsumption,
+		FPArithSpec:                r.FPArithSpec,
+		Consistency:                r.Consistency,
+		Durability:                 r.Durability,
+		PreparedStatement:          r.PreparedStatement,
+		driver:                     r.driver,
+		traceLevel:                 r.traceLevel,
+		TableName:                  r.TableName,
+		Namespace:                  r.Namespace,
+		InternalRequestData:        r.InternalRequestData,
+		LastWriteMetadata:          r.LastWriteMetadata,
+		StructType:                 r.StructType,
+		isInternal:                 true,
 	}
+}
+
+func (r *QueryRequest) checkQueryVersionSupported(queryVersion int16) error {
+	if queryVersion < 4 && r.virtualScan != nil {
+		return nosqlerr.NewIllegalArgument("query virtual scan state requires query version 4 or later")
+	}
+	return nil
+}
+
+func (r *QueryRequest) checkSerialVersionSupported(serialVersion int16) error {
+	if serialVersion >= 4 {
+		return nil
+	}
+
+	switch {
+	case r.Namespace != "":
+		return nosqlerr.NewIllegalArgument("query namespace requires protocol version 4 or later")
+	case r.MaxServerMemoryConsumption != 0:
+		return nosqlerr.NewIllegalArgument("query server memory limit requires protocol version 4 or later")
+	case r.LastWriteMetadata != "":
+		return nosqlerr.NewIllegalArgument("query last write metadata requires protocol version 4 or later")
+	case r.virtualScan != nil:
+		return nosqlerr.NewIllegalArgument("query virtual scan state requires protocol version 4 or later")
+	case r.Durability.IsSet():
+		return nosqlerr.NewIllegalArgument("query durability requires protocol version 4 or later")
+	}
+
+	return nil
 }
 
 // hasDriver reports whether the QueryRequest is bound with a query driver.

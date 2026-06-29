@@ -976,6 +976,10 @@ func deserializeV3TopologyInfo(r proto.Reader) (topoInfo *common.TopologyInfo, e
 }
 
 func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
+	if err = req.checkSerialVersionSupported(serialVersion); err != nil {
+		return
+	}
+
 	if err = serializeV3Op(w, proto.Query, req.Timeout); err != nil {
 		return
 	}

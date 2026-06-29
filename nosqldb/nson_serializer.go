@@ -1456,6 +1456,10 @@ func (req *PrepareRequest) deserialize(r proto.Reader, serialVersion int16, quer
 }
 
 func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16, queryVersion int16) (err error) {
+	if err = req.checkQueryVersionSupported(queryVersion); err != nil {
+		return
+	}
+
 	ns := startRequest(w)
 
 	// header

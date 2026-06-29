@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/suite"
@@ -38,6 +40,129 @@ type RequestTestSuite struct {
 
 func TestOpRequests(t *testing.T) {
 	suite.Run(t, new(RequestTestSuite))
+}
+
+func TestQueryRequestCopyInternalPreservesQueryIntent(t *testing.T) {
+	fpSpec := Decimal64
+	structType := reflect.TypeOf(struct {
+		ID int
+	}{})
+	req := &QueryRequest{
+		Timeout:                    3 * time.Second,
+		Limit:                      17,
+		MaxReadKB:                  11,
+		MaxWriteKB:                 12,
+		MaxMemoryConsumption:       13,
+		MaxServerMemoryConsumption: 14,
+		FPArithSpec:                &fpSpec,
+		Consistency:                types.Absolute,
+		Durability: types.Durability{
+			MasterSync:  types.SyncPolicySync,
+			ReplicaSync: types.SyncPolicyNoSync,
+			ReplicaAck:  types.ReplicaAckPolicySimpleMajority,
+		},
+		PreparedStatement: &PreparedStatement{},
+		traceLevel:        4,
+		TableName:         "T1",
+		Namespace:         "ns1",
+		LastWriteMetadata: "created-by:tester",
+		StructType:        structType,
+	}
+
+	internal := req.copyInternal()
+
+	if !internal.isInternal {
+		t.Fatal("copyInternal() did not mark the copied request as internal")
+	}
+	if internal.Namespace != req.Namespace {
+		t.Fatalf("copyInternal() Namespace=%q, want %q", internal.Namespace, req.Namespace)
+	}
+	if internal.MaxServerMemoryConsumption != req.MaxServerMemoryConsumption {
+		t.Fatalf("copyInternal() MaxServerMemoryConsumption=%d, want %d",
+			internal.MaxServerMemoryConsumption, req.MaxServerMemoryConsumption)
+	}
+	if internal.FPArithSpec != req.FPArithSpec {
+		t.Fatal("copyInternal() did not preserve FPArithSpec")
+	}
+	if internal.StructType != req.StructType {
+		t.Fatal("copyInternal() did not preserve StructType")
+	}
+}
+
+func TestQueryRequestRejectsVirtualScanQueryVersionDowngrade(t *testing.T) {
+	req := &QueryRequest{
+		Statement:   "select * from T1",
+		virtualScan: &virtualScan{shardID: 1, partitionID: 2},
+	}
+
+	err := req.serialize(binary.NewWriter(), 4, proto.QueryV3)
+	if err == nil {
+		t.Fatal("expected virtual scan query version downgrade to fail")
+	}
+	if !nosqlerr.Is(err, nosqlerr.IllegalArgument) {
+		t.Fatalf("got error %v, want IllegalArgument", err)
+	}
+}
+
+func TestQueryRequestRejectsSerialV3UnsupportedIntent(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *QueryRequest
+	}{
+		{
+			name: "namespace",
+			req:  &QueryRequest{Statement: "select * from T1", Namespace: "ns1"},
+		},
+		{
+			name: "server memory",
+			req:  &QueryRequest{Statement: "select * from T1", MaxServerMemoryConsumption: 1},
+		},
+		{
+			name: "last write metadata",
+			req:  &QueryRequest{Statement: "delete from T1 where id = 1", LastWriteMetadata: "deleted-by:tester"},
+		},
+		{
+			name: "virtual scan",
+			req:  &QueryRequest{Statement: "select * from T1", virtualScan: &virtualScan{shardID: 1}},
+		},
+		{
+			name: "durability",
+			req: &QueryRequest{
+				Statement: "delete from T1 where id = 1",
+				Durability: types.Durability{
+					MasterSync:  types.SyncPolicySync,
+					ReplicaSync: types.SyncPolicyNoSync,
+					ReplicaAck:  types.ReplicaAckPolicySimpleMajority,
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.req.serializeV3(binary.NewWriter(), 3)
+			if err == nil {
+				t.Fatal("expected serial V3 serialization to reject unsupported query intent")
+			}
+			if !nosqlerr.Is(err, nosqlerr.IllegalArgument) {
+				t.Fatalf("got error %v, want IllegalArgument", err)
+			}
+		})
+	}
+}
+
+func TestQueryRequestSerialV3AllowsRepresentableIntent(t *testing.T) {
+	req := &QueryRequest{
+		Statement:   "select * from T1",
+		Limit:       10,
+		MaxReadKB:   20,
+		MaxWriteKB:  30,
+		Consistency: types.Eventual,
+	}
+
+	if err := req.serializeV3(binary.NewWriter(), 3); err != nil {
+		t.Fatalf("serializeV3() got unexpected error: %v", err)
+	}
 }
 
 func (suite *RequestTestSuite) TestValidateTimeout() {
