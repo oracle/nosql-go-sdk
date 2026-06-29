@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -442,6 +443,88 @@ func TestRateLimiterWaitStopsWhenContextCanceled(t *testing.T) {
 	if elapsed >= 300*time.Millisecond {
 		t.Fatalf("expected rate limiter wait to stop on context cancellation, elapsed=%v", elapsed)
 	}
+}
+
+func TestConcurrentLimiterMapAndTopologyAccess(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+	client.EnableRateLimiting(true, 100)
+
+	const tableName = "T1"
+	client.updateRateLimiters(tableName, TableLimits{ReadUnits: 100, WriteUnits: 100})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				rp, ok, enabled := client.getRateLimiterPair(tableName)
+				if enabled && ok {
+					rp.ReadLimiter.TryConsumeUnits(1)
+					rp.WriteLimiter.TryConsumeUnits(1)
+					_ = rp.ReadLimiter.GetCurrentRate()
+					_ = rp.WriteLimiter.GetCurrentRate()
+				}
+				client.ResetRateLimiters(tableName)
+			}
+		}()
+	}
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func(offset uint) {
+			defer wg.Done()
+			for j := uint(0); j < 1000; j++ {
+				if j%20 == 0 {
+					client.updateRateLimiters(tableName, TableLimits{})
+				} else {
+					client.updateRateLimiters(tableName, TableLimits{
+						ReadUnits:  50 + offset + j%10,
+						WriteUnits: 50 + offset + j%10,
+					})
+				}
+				client.setTableLimitRefreshTime(tableName, time.Now().UnixNano())
+			}
+		}(uint(i))
+	}
+
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func(offset int) {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				client.setTopologyInfo(&common.TopologyInfo{
+					SeqNum:   offset*1000 + j,
+					ShardIDs: []int{j, j + 1, j + 2},
+				})
+				ti := client.getTopologyInfo()
+				if ti != nil && len(ti.ShardIDs) > 0 {
+					ti.ShardIDs[0] = -1
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestTopologyInfoIsCloned(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	client.setTopologyInfo(&common.TopologyInfo{
+		SeqNum:   1,
+		ShardIDs: []int{1, 2, 3},
+	})
+
+	ti := client.getTopologyInfo()
+	require.NotNil(t, ti)
+	ti.ShardIDs[0] = 99
+
+	ti = client.getTopologyInfo()
+	require.NotNil(t, ti)
+	require.Equal(t, []int{1, 2, 3}, ti.ShardIDs)
 }
 
 func newMockClient() (*Client, error) {
