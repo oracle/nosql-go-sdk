@@ -1851,6 +1851,10 @@ func (r *QueryRequest) validate() (err error) {
 		return nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set")
 	}
 
+	if r.Statement != "" && r.PreparedStatement != nil {
+		return nosqlerr.NewIllegalArgument("QueryRequest: Statement and PreparedStatement cannot both be set")
+	}
+
 	if r.LastWriteMetadata != "" {
 		if err = validateRowMetadata(r.LastWriteMetadata); err != nil {
 			return

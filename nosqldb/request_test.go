@@ -220,6 +220,53 @@ func (suite *RequestTestSuite) TestValidateTableName() {
 	}
 }
 
+func (suite *RequestTestSuite) TestValidateQueryRequestSource() {
+	prepStmt := &PreparedStatement{}
+	tests := []struct {
+		name string
+		req  *QueryRequest
+		want error
+	}{
+		{
+			name: "neither statement nor prepared statement",
+			req:  &QueryRequest{Timeout: time.Millisecond, Consistency: types.Absolute},
+			want: nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set"),
+		},
+		{
+			name: "both statement and prepared statement",
+			req: &QueryRequest{
+				Statement:         "select * from users",
+				PreparedStatement: prepStmt,
+				Timeout:           time.Millisecond,
+				Consistency:       types.Absolute,
+			},
+			want: nosqlerr.NewIllegalArgument("QueryRequest: Statement and PreparedStatement cannot both be set"),
+		},
+		{
+			name: "only statement",
+			req: &QueryRequest{
+				Statement:   "select * from users",
+				Timeout:     time.Millisecond,
+				Consistency: types.Absolute,
+			},
+		},
+		{
+			name: "only prepared statement",
+			req: &QueryRequest{
+				PreparedStatement: prepStmt,
+				Timeout:           time.Millisecond,
+				Consistency:       types.Absolute,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			suite.Equal(tt.want, tt.req.validate())
+		})
+	}
+}
+
 func (suite *RequestTestSuite) TestValidateKey() {
 	tests := []struct {
 		key  *types.MapValue
