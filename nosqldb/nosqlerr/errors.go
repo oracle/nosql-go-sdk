@@ -68,12 +68,12 @@ var retryableErrors map[ErrorCode]bool = map[ErrorCode]bool{
 	SecurityInfoUnavailable: true,
 	RetryAuthentication:     true,
 	ServerError:             true,
+	ServiceUnavailable:      true,
 	TableBusy:               true,
 	TableNotReady:           true,
 	OperationLimitExceeded:  true,
 	ReadLimitExceeded:       true,
 	WriteLimitExceeded:      true,
-	SizeLimitExceeded:       true,
 }
 
 // NewIllegalArgument creates an IllegalArgument error with the specified message.

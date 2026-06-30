@@ -1882,6 +1882,14 @@ func (c *Client) processNotOKResponse(data []byte, statusCode int) error {
 		return fmt.Errorf("error response: %s", string(data))
 	}
 
+	if statusCode == http.StatusServiceUnavailable {
+		msg := fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode))
+		if len(data) > 0 {
+			msg = string(data)
+		}
+		return nosqlerr.New(nosqlerr.ServiceUnavailable, "error response: %s", msg)
+	}
+
 	return fmt.Errorf("error response: %d %s", statusCode, http.StatusText(statusCode))
 }
 

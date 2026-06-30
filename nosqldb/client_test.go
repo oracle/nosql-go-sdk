@@ -317,6 +317,60 @@ func TestHandleErrorInvalidatesCachedAuthTokenOnRetryAuthentication(t *testing.T
 	assert.Equal(t, int32(1), atomic.LoadInt32(&authProvider.invalidations))
 }
 
+func TestExecuteRetryableErrorAlignment(t *testing.T) {
+	client, err := newMockClient()
+	require.NoErrorf(t, err, "failed to create client, got error %v.", err)
+	client.SetSerialVersion(3)
+
+	retryHandler, err := NewDefaultRetryHandler(1, time.Millisecond)
+	require.NoError(t, err)
+	client.RetryHandler = retryHandler
+
+	getReq := &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+		Timeout:   time.Second,
+	}
+	exec := &sequenceExecutor{
+		injectErrors: []error{
+			mockErr{errCode: http.StatusServiceUnavailable, msg: "service unavailable"},
+			nosqlerr.New(nosqlerr.TableNotFound, "expected after retry"),
+		},
+	}
+	client.executor = exec
+
+	_, err = client.Get(getReq)
+	assert.Truef(t, nosqlerr.Is(err, nosqlerr.TableNotFound), "expected TableNotFound after ServiceUnavailable retry, got %v", err)
+	assert.Equal(t, 2, exec.calls)
+
+	getReq = &GetRequest{
+		TableName: "T1",
+		Key:       types.NewMapValue(map[string]interface{}{"id": 1}),
+		Timeout:   time.Second,
+	}
+	exec = &sequenceExecutor{
+		injectErrors: []error{
+			nosqlerr.New(nosqlerr.SizeLimitExceeded, "size limit exceeded"),
+			nosqlerr.New(nosqlerr.TableNotFound, "unexpected retry"),
+		},
+	}
+	client.executor = exec
+
+	_, err = client.Get(getReq)
+	assert.Truef(t, nosqlerr.Is(err, nosqlerr.SizeLimitExceeded), "expected SizeLimitExceeded without retry, got %v", err)
+	assert.Equal(t, 1, exec.calls)
+}
+
+func TestProcessNotOKResponseMapsServiceUnavailable(t *testing.T) {
+	client, err := newMockClient()
+	require.NoErrorf(t, err, "failed to create client, got error %v.", err)
+
+	err = client.processNotOKResponse([]byte("temporarily unavailable"), http.StatusServiceUnavailable)
+	if assert.Truef(t, nosqlerr.Is(err, nosqlerr.ServiceUnavailable), "expected ServiceUnavailable, got %v", err) {
+		assert.True(t, err.(*nosqlerr.Error).Retryable())
+	}
+}
+
 func TestHTTPRetryAttemptsUseRemainingRequestTimeout(t *testing.T) {
 	client, err := newMockClient()
 	require.NoError(t, err)
@@ -542,6 +596,38 @@ func newMockClient() (*Client, error) {
 	}
 
 	return client, nil
+}
+
+type sequenceExecutor struct {
+	injectErrors []error
+	calls        int
+}
+
+func (m *sequenceExecutor) Do(req *http.Request) (*http.Response, error) {
+	if m.calls >= len(m.injectErrors) {
+		m.calls++
+		return nil, fmt.Errorf("unexpected retry attempt %d", m.calls)
+	}
+
+	injectErr := m.injectErrors[m.calls]
+	m.calls++
+	switch e := injectErr.(type) {
+	case *nosqlerr.Error:
+		resp := (&mockExecutor{}).generateResponse(e, req)
+		return resp, nil
+	case mockErr:
+		if e.errCode != 0 {
+			resp := (&mockExecutor{}).generateResponse(e, req)
+			return resp, nil
+		}
+		return nil, &url.Error{
+			Op:  req.Method,
+			URL: req.URL.String(),
+			Err: e,
+		}
+	default:
+		return nil, injectErr
+	}
 }
 
 type mockExecutor struct {
