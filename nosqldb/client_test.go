@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,6 +28,96 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type closeTrackingPlanIter struct {
+	closeCalled bool
+}
+
+func (iter *closeTrackingPlanIter) open(rcb *runtimeControlBlock) error {
+	return nil
+}
+
+func (iter *closeTrackingPlanIter) next(rcb *runtimeControlBlock) (bool, error) {
+	return false, nil
+}
+
+func (iter *closeTrackingPlanIter) close(rcb *runtimeControlBlock) error {
+	if rcb == nil {
+		panic("plan iterator closed with nil runtime control block")
+	}
+	iter.closeCalled = true
+	return nil
+}
+
+func (iter *closeTrackingPlanIter) reset(rcb *runtimeControlBlock) error {
+	return nil
+}
+
+func (iter *closeTrackingPlanIter) getResult(rcb *runtimeControlBlock) types.FieldValue {
+	return nil
+}
+
+func (iter *closeTrackingPlanIter) setResult(rcb *runtimeControlBlock, val types.FieldValue) {
+}
+
+func (iter *closeTrackingPlanIter) getKind() planIterKind {
+	return constRef
+}
+
+func (iter *closeTrackingPlanIter) getState(rcb *runtimeControlBlock) planIterState {
+	return nil
+}
+
+func (iter *closeTrackingPlanIter) getPlan() string {
+	return ""
+}
+
+func (iter *closeTrackingPlanIter) displayContent(sb *strings.Builder, f *planFormatter) {
+}
+
+func TestLazyAdvancedQueryCloseBeforeRCBInitDoesNotPanic(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	iter := &closeTrackingPlanIter{}
+	req := &QueryRequest{
+		PreparedStatement: &PreparedStatement{
+			statement:       bytes.Repeat([]byte{1}, minSerializedStmtLen),
+			driverQueryPlan: iter,
+		},
+	}
+
+	res, err := client.Query(req)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	require.NotNil(t, req.driver)
+	require.Nil(t, req.driver.rcb)
+
+	require.NotPanics(t, func() {
+		req.Close()
+	})
+	require.False(t, iter.closeCalled, "plan close should not run before RCB initialization")
+	require.Nil(t, req.driver)
+}
+
+func TestAdvancedQueryCloseWithRCBCleansUpPlan(t *testing.T) {
+	iter := &closeTrackingPlanIter{}
+	req := &QueryRequest{
+		PreparedStatement: &PreparedStatement{
+			driverQueryPlan: iter,
+		},
+	}
+	req.driver = &queryDriver{
+		request: req,
+		rcb:     &runtimeControlBlock{},
+	}
+
+	require.NotPanics(t, func() {
+		req.Close()
+	})
+	require.True(t, iter.closeCalled, "plan close should run after RCB initialization")
+	require.Nil(t, req.driver)
+}
 
 func TestExecuteErrorHandling(t *testing.T) {
 	client, err := newMockClient()

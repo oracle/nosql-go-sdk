@@ -413,7 +413,7 @@ func (d *queryDriver) setQueryResult(res *QueryResult) {
 // close terminates query execution.
 func (d *queryDriver) close() {
 	prepStmt := d.request.PreparedStatement
-	if prepStmt != nil && prepStmt.driverQueryPlan != nil {
+	if prepStmt != nil && prepStmt.driverQueryPlan != nil && d.rcb != nil {
 		prepStmt.driverQueryPlan.close(d.rcb)
 	}
 
