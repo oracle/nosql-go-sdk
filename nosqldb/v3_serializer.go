@@ -905,15 +905,24 @@ func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (p
 		if err != nil {
 			return
 		}
+		if err = validateStructuralCount(numIterators, "iterators"); err != nil {
+			return
+		}
 
 		numRegisters, err = r.ReadInt()
 		if err != nil {
+			return
+		}
+		if err = validateStructuralCount(numRegisters, "registers"); err != nil {
 			return
 		}
 
 		var numVars int
 		numVars, err = r.ReadInt()
 		if err != nil {
+			return
+		}
+		if err = validateStructuralCount(numVars, "external variables"); err != nil {
 			return
 		}
 
@@ -932,9 +941,18 @@ func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (p
 					return
 				}
 
-				if name != nil {
-					extVariables[*name] = id
+				if name == nil {
+					err = nosqlerr.NewIllegalArgument("invalid external variable metadata: variable name cannot be nil")
+					return
 				}
+				if _, ok := extVariables[*name]; ok {
+					err = nosqlerr.NewIllegalArgument("duplicate external variable name %q", *name)
+					return
+				}
+				extVariables[*name] = id
+			}
+			if err = validateExternalVariables(extVariables, numVars); err != nil {
+				return
 			}
 		}
 
@@ -1048,7 +1066,8 @@ func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err e
 		return
 	}
 
-	n := len(pstmt.bindVariables)
+	bindVariables := req.getBindVariables()
+	n := len(bindVariables)
 	if n <= 0 {
 		// bind variables is nil
 		_, err = w.WritePackedInt(0)
@@ -1059,7 +1078,7 @@ func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err e
 		return
 	}
 
-	for k, v := range pstmt.bindVariables {
+	for k, v := range bindVariables {
 		if _, err = w.WriteString(&k); err != nil {
 			return
 		}

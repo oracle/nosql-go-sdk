@@ -183,8 +183,11 @@ func (rcb *runtimeControlBlock) getBaseTopology() *common.TopologyInfo {
 
 // getExternalVar retrieves the value of external variable associated with the
 // specified variable id from RCB.
-func (rcb *runtimeControlBlock) getExternalVar(varID int) types.FieldValue {
-	return rcb.externalVars[varID]
+func (rcb *runtimeControlBlock) getExternalVar(varID int) (types.FieldValue, error) {
+	if varID < 0 || varID >= len(rcb.externalVars) {
+		return nil, nosqlerr.NewIllegalState("invalid external variable id %d", varID)
+	}
+	return rcb.externalVars[varID], nil
 }
 
 // trace is used to trace the execution of query plans.
@@ -385,6 +388,7 @@ func newQueryDriver(req *QueryRequest) *queryDriver {
 		request:   req,
 		batchSize: batchSize,
 	}
+	req.bindVariables = cloneBindVariables(req.getBindVariables())
 
 	return req.driver
 }
@@ -451,7 +455,13 @@ func (d *queryDriver) compute(res *QueryResult) (err error) {
 
 	iter := prepStmt.driverQueryPlan
 	if d.rcb == nil {
-		d.rcb, err = newRCB(d, iter, prepStmt.numIterators, prepStmt.numRegisters, prepStmt.getBoundVarValues())
+		var externalVars []types.FieldValue
+		externalVars, err = prepStmt.getBoundVarValues(d.request.getBindVariables())
+		if err != nil {
+			return err
+		}
+
+		d.rcb, err = newRCB(d, iter, prepStmt.numIterators, prepStmt.numRegisters, externalVars)
 		if err != nil {
 			return err
 		}

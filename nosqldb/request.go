@@ -1691,6 +1691,11 @@ type QueryRequest struct {
 	// PreparedStatement specifies the prepared query statement.
 	PreparedStatement *PreparedStatement `json:"preparedStatement,omitempty"`
 
+	// bindVariables snapshots the prepared statement bind variables for an
+	// active advanced query. Internal continuation requests must use this
+	// snapshot rather than the mutable PreparedStatement bind variable map.
+	bindVariables map[string]interface{}
+
 	// LastWriteMetadata specifies the write metadata to use for the operation.
 	// This setting is optional and only applies if the query modifies or
 	// deletes any rows using an INSERT, UPDATE, UPSERT or DELETE statement.
@@ -1919,6 +1924,7 @@ func (r *QueryRequest) copyInternal() *QueryRequest {
 		Consistency:                r.Consistency,
 		Durability:                 r.Durability,
 		PreparedStatement:          r.PreparedStatement,
+		bindVariables:              cloneBindVariables(r.getBindVariables()),
 		driver:                     r.driver,
 		traceLevel:                 r.traceLevel,
 		TableName:                  r.TableName,
@@ -1956,6 +1962,16 @@ func (r *QueryRequest) checkSerialVersionSupported(serialVersion int16) error {
 	}
 
 	return nil
+}
+
+func (r *QueryRequest) getBindVariables() map[string]interface{} {
+	if r.bindVariables != nil {
+		return r.bindVariables
+	}
+	if r.PreparedStatement == nil {
+		return nil
+	}
+	return r.PreparedStatement.bindVariables
 }
 
 // hasDriver reports whether the QueryRequest is bound with a query driver.
@@ -2030,6 +2046,7 @@ func (r *QueryRequest) setContKey(contKey []byte) {
 	if r.driver != nil && !r.isInternal && contKey == nil {
 		r.driver.close()
 		r.driver = nil
+		r.bindVariables = nil
 	}
 }
 
@@ -2128,6 +2145,12 @@ func newPreparedStatement(sqlText, queryPlan string,
 		return nil, nosqlerr.NewIllegalArgument("invalid prepared query, cannot be nil")
 	}
 
+	if driverPlan != nil {
+		if err := validatePreparedStatementMetadata(numIterators, numRegisters, variableToIDs); err != nil {
+			return nil, err
+		}
+	}
+
 	return &PreparedStatement{
 		sqlText:         sqlText,
 		queryPlan:       queryPlan,
@@ -2161,21 +2184,76 @@ func (p *PreparedStatement) isSimpleQuery() bool {
 	return p.driverQueryPlan == nil
 }
 
-func (p *PreparedStatement) getBoundVarValues() []types.FieldValue {
-	n := len(p.bindVariables)
-	if n == 0 {
+func (p *PreparedStatement) getBoundVarValues(bindVariables map[string]interface{}) ([]types.FieldValue, error) {
+	if len(bindVariables) == 0 {
+		if len(p.variableToIDs) == 0 {
+			return nil, nil
+		}
+		return make([]types.FieldValue, len(p.variableToIDs)), nil
+	}
+
+	values := make([]types.FieldValue, len(p.variableToIDs))
+	for k, v := range bindVariables {
+		id, ok := p.variableToIDs[k]
+		if !ok {
+			return nil, nosqlerr.NewIllegalArgument("the query does not contain the variable %s", k)
+		}
+		if id < 0 || id >= len(values) {
+			return nil, nosqlerr.NewIllegalState("invalid external variable id %d for variable %q", id, k)
+		}
+		values[id] = v
+	}
+
+	return values, nil
+}
+
+func validatePreparedStatementMetadata(numIterators, numRegisters int, variableToIDs map[string]int) error {
+	if err := validateStructuralCount(numIterators, "iterators"); err != nil {
+		return err
+	}
+	if err := validateStructuralCount(numRegisters, "registers"); err != nil {
+		return err
+	}
+	return validateExternalVariables(variableToIDs, len(variableToIDs))
+}
+
+func validateExternalVariables(variableToIDs map[string]int, numVars int) error {
+	if err := validateStructuralCount(numVars, "external variables"); err != nil {
+		return err
+	}
+	if len(variableToIDs) != numVars {
+		return nosqlerr.NewIllegalArgument("invalid external variable metadata: got %d variables, expected %d",
+			len(variableToIDs), numVars)
+	}
+
+	seenIDs := make(map[int]string, len(variableToIDs))
+	for name, id := range variableToIDs {
+		if name == "" {
+			return nosqlerr.NewIllegalArgument("invalid external variable metadata: variable name cannot be empty")
+		}
+		if id < 0 || id >= numVars {
+			return nosqlerr.NewIllegalArgument("invalid external variable id %d for variable %q", id, name)
+		}
+		if other, ok := seenIDs[id]; ok {
+			return nosqlerr.NewIllegalArgument("duplicate external variable id %d for variables %q and %q",
+				id, other, name)
+		}
+		seenIDs[id] = name
+	}
+
+	return nil
+}
+
+func cloneBindVariables(bindVariables map[string]interface{}) map[string]interface{} {
+	if len(bindVariables) == 0 {
 		return nil
 	}
 
-	values := make([]types.FieldValue, n)
-	for k, v := range p.bindVariables {
-		id, ok := p.variableToIDs[k]
-		if ok && id < n {
-			values[id] = v
-		}
+	clone := make(map[string]interface{}, len(bindVariables))
+	for k, v := range bindVariables {
+		clone[k] = v
 	}
-
-	return values
+	return clone
 }
 
 // GetQueryPlan returns the string (JSON) representation of the
