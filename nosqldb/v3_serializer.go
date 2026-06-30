@@ -10,11 +10,13 @@ package nosqldb
 import (
 	"errors"
 	"math/big"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
+	protobinary "github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
@@ -39,8 +41,15 @@ func (req *GetRequest) serializeV3(w proto.Writer, serialVersion int16) (err err
 		return
 	}
 
-	if _, err = w.WriteFieldValue(req.Key); err != nil {
-		return
+	if req.Key != nil {
+		_, err = w.WriteFieldValue(req.Key)
+	} else if req.StructValue != nil {
+		_, err = w.WriteStructValue(req.StructValue)
+	} else {
+		err = errors.New("missing Key or StructValue in GetRequest")
+	}
+	if err != nil {
+		return err
 	}
 
 	return
@@ -68,7 +77,19 @@ func (req *GetRequest) deserializeV3(r proto.Reader, serialVersion int16) (Resul
 	}
 
 	if v, ok := v.(*types.MapValue); ok {
-		res.Value = v
+		if req.StructType != nil {
+			res.StructValue = reflect.New(req.StructType).Interface()
+			if err = protobinary.DecodeMapValue(res.StructValue, v); err != nil {
+				return nil, err
+			}
+		} else if req.StructValue != nil {
+			res.StructValue = req.StructValue
+			if err = protobinary.DecodeMapValue(res.StructValue, v); err != nil {
+				return nil, err
+			}
+		} else {
+			res.Value = v
+		}
 	}
 
 	timeMs, err := r.ReadPackedLong()
@@ -460,8 +481,15 @@ func (req *PutRequest) serializeV3(w proto.Writer, serialVersion int16) (err err
 		return
 	}
 
-	if _, err = w.WriteFieldValue(req.Value); err != nil {
-		return
+	if req.Value != nil {
+		_, err = w.WriteFieldValue(req.Value)
+	} else if req.StructValue != nil {
+		_, err = w.WriteStructValue(req.StructValue)
+	} else {
+		err = errors.New("missing Value or StructValue in PutRequest")
+	}
+	if err != nil {
+		return err
 	}
 
 	if _, err = w.WriteBoolean(req.updateTTL()); err != nil {
