@@ -79,7 +79,7 @@ type Client struct {
 
 	// Keep an internal map of tablename to next limits update time
 	tableLimitUpdateMap map[string]int64
-	limitMux            sync.Mutex
+	limitMux            sync.RWMutex
 
 	// (possibly negotiated) version of the protocol in use
 	serialVersion int16
@@ -88,7 +88,8 @@ type Client struct {
 	queryVersion int16
 
 	// latest topology from any request/response opearation
-	topology *common.TopologyInfo
+	topology    *common.TopologyInfo
+	topologyMux sync.RWMutex
 
 	// for managing one-time messaging
 	oneTimeMessages map[string]struct{}
@@ -965,7 +966,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 	if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isInternalRequest() {
 
-		req.SetTopology(c.topology)
+		req.SetTopology(c.getTopologyInfo())
 
 		// If the QueryRequest represents an advanced query, it will be bound
 		// with a queryDriver the first time the execute() is called for the query.
@@ -1039,15 +1040,15 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	}
 
 	// if not, see if we have limiters in our map for the given table
-	if c.rateLimiterMap != nil && readLimiter == nil && writeLimiter == nil {
+	if readLimiter == nil && writeLimiter == nil {
 		tableName := req.getTableName()
 		if tableName != "" {
-			rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
-			if !ok {
+			rp, ok, enabled := c.getRateLimiterPair(tableName)
+			if enabled && !ok {
 				if req.doesReads() || req.doesWrites() {
 					c.backgroundUpdateLimiters(tableName)
 				}
-			} else {
+			} else if ok {
 				writeLimiter = rp.WriteLimiter
 				readLimiter = rp.ReadLimiter
 				req.SetReadRateLimiter(readLimiter)
@@ -1215,7 +1216,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		// set the topology in the request, if not set already
 		if queryReq, ok := req.(*QueryRequest); !ok || queryReq.isInternalRequest() {
-			req.SetTopology(c.topology)
+			req.SetTopology(c.getTopologyInfo())
 		}
 
 		// Handle errors that may occur when retrieving authorization string.
@@ -1314,7 +1315,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		c.setTopologyInfo(result.GetTopologyInfo())
 
-		if tResult, ok := result.(*TableResult); ok && c.rateLimiterMap != nil {
+		if tResult, ok := result.(*TableResult); ok && c.rateLimitingEnabled() {
 			// update rate limiter settings for table
 			c.updateRateLimiters(tResult.TableName, tResult.Limits)
 		}
@@ -1341,8 +1342,23 @@ func (c *Client) setTopologyInfo(ti *common.TopologyInfo) {
 	if ti == nil {
 		return
 	}
+
+	c.topologyMux.Lock()
+	defer c.topologyMux.Unlock()
+
 	if c.topology == nil || c.topology.SeqNum < ti.SeqNum {
-		c.topology = ti
+		c.topology = cloneTopologyInfo(ti)
+	}
+}
+
+func cloneTopologyInfo(ti *common.TopologyInfo) *common.TopologyInfo {
+	if ti == nil {
+		return nil
+	}
+
+	return &common.TopologyInfo{
+		SeqNum:   ti.SeqNum,
+		ShardIDs: append([]int(nil), ti.ShardIDs...),
 	}
 }
 
@@ -1365,7 +1381,7 @@ func (c *Client) warmupClientAuth() {
 	c.logger.Fine("Auth warmed up successfully")
 }
 
-func (c *Client) tableNeedsRefresh(tableName string) bool {
+func (c *Client) tableNeedsRefreshLocked(tableName string) bool {
 	if c.tableLimitUpdateMap == nil {
 		return false
 	}
@@ -1375,7 +1391,7 @@ func (c *Client) tableNeedsRefresh(tableName string) bool {
 	return then <= nowNanos
 }
 
-func (c *Client) setTableNeedsRefresh(tableName string, needsRefresh bool) {
+func (c *Client) setTableNeedsRefreshLocked(tableName string, needsRefresh bool) {
 	if c.tableLimitUpdateMap == nil {
 		return
 	}
@@ -1394,14 +1410,41 @@ func (c *Client) backgroundUpdateLimiters(tableName string) {
 
 	c.limitMux.Lock()
 
-	if !c.tableNeedsRefresh(lTable) {
+	if !c.tableNeedsRefreshLocked(lTable) {
 		c.limitMux.Unlock()
 		return
 	}
-	c.setTableNeedsRefresh(lTable, false)
+	c.setTableNeedsRefreshLocked(lTable, false)
 	c.limitMux.Unlock()
 
 	go c.updateTableLimiters(lTable)
+}
+
+func (c *Client) rateLimitingEnabled() bool {
+	c.limitMux.RLock()
+	defer c.limitMux.RUnlock()
+	return c.rateLimiterMap != nil
+}
+
+func (c *Client) getRateLimiterPair(tableName string) (common.RateLimiterPair, bool, bool) {
+	c.limitMux.RLock()
+	defer c.limitMux.RUnlock()
+
+	if c.rateLimiterMap == nil {
+		return common.RateLimiterPair{}, false, false
+	}
+
+	rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
+	return rp, ok, true
+}
+
+func (c *Client) setTableLimitRefreshTime(tableName string, refreshTimeNanos int64) {
+	c.limitMux.Lock()
+	defer c.limitMux.Unlock()
+
+	if c.tableLimitUpdateMap != nil {
+		c.tableLimitUpdateMap[strings.ToLower(tableName)] = refreshTimeNanos
+	}
 }
 
 // Comsume rate limiter units after successful operation.
@@ -1432,13 +1475,16 @@ func (c *Client) consumeLimiterUnitsWithContext(ctx context.Context, rl common.R
 }
 
 func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
+	lTable := strings.ToLower(tableName)
+
+	c.limitMux.Lock()
+	defer c.limitMux.Unlock()
+
 	if c.rateLimiterMap == nil {
 		return false
 	}
 
-	lTable := strings.ToLower(tableName)
-
-	c.setTableNeedsRefresh(lTable, false)
+	c.setTableNeedsRefreshLocked(lTable, false)
 
 	if limits.ReadUnits <= 0 && limits.WriteUnits <= 0 {
 		delete(c.rateLimiterMap, lTable)
@@ -1486,13 +1532,13 @@ func (c *Client) updateTableLimiters(tableName string) {
 	if err != nil {
 		c.logger.Info("GetTableRequest for table '%s' returned error: %v", tableName, err)
 		// allow retry after 100ms
-		c.tableLimitUpdateMap[tableName] = time.Now().UnixNano() + (100 * 1000 * 1000)
+		c.setTableLimitRefreshTime(tableName, time.Now().UnixNano()+(100*1000*1000))
 		return
 	}
 	if res == nil {
 		c.logger.Info("GetTableRequest for table '%s' returned nil", tableName)
 		// allow retry after 100ms
-		c.tableLimitUpdateMap[tableName] = time.Now().UnixNano() + (100 * 1000 * 1000)
+		c.setTableLimitRefreshTime(tableName, time.Now().UnixNano()+(100*1000*1000))
 		return
 	}
 
@@ -1880,6 +1926,9 @@ func isRetryableError(err error) bool {
 // EnableRateLimiting is for testing purposes only. Applications should set
 // RateLimitingEnabled to true in the client Config to enable rate limiting.
 func (c *Client) EnableRateLimiting(enable bool, usePercent float64) {
+	c.limitMux.Lock()
+	defer c.limitMux.Unlock()
+
 	c.RateLimiterPercentage = usePercent
 	if enable {
 		if c.rateLimiterMap != nil {
@@ -1895,13 +1944,18 @@ func (c *Client) EnableRateLimiting(enable bool, usePercent float64) {
 
 // ResetRateLimiters is for testing puposes only.
 func (c *Client) ResetRateLimiters(tableName string) {
+	c.limitMux.RLock()
 	if c.rateLimiterMap == nil {
+		c.limitMux.RUnlock()
 		return
 	}
 	rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
 	if !ok {
+		c.limitMux.RUnlock()
 		return
 	}
+	c.limitMux.RUnlock()
+
 	rp.WriteLimiter.Reset()
 	rp.ReadLimiter.Reset()
 }
@@ -1976,7 +2030,9 @@ func (c *Client) decrementQueryVersion(queryVerUsed int16) bool {
 
 // getTopologyInfo returns the topology info stored in the client
 func (c *Client) getTopologyInfo() *common.TopologyInfo {
-	return c.topology
+	c.topologyMux.RLock()
+	defer c.topologyMux.RUnlock()
+	return cloneTopologyInfo(c.topology)
 }
 
 // GetQueryVersion is used for tests.

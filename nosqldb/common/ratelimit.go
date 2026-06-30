@@ -277,17 +277,20 @@ func NewSimpleRateLimiterWithDuration(rateLimitPerSec float64, durationSecs floa
 // Changing the limit may lead to unexpected spiky behavior, and may
 // affect other goroutines currently operating on the same limiter instance.
 func (srl *SimpleRateLimiter) SetLimitPerSecond(rateLimitPerSec float64) {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+
 	if rateLimitPerSec <= 0.0 {
 		srl.nanosPerUnit = 0
 	} else {
 		srl.nanosPerUnit = (int64)(nanosPerSecFloat / rateLimitPerSec)
 	}
-	srl.enforceMinimumDuration()
+	srl.enforceMinimumDurationLocked()
 }
 
 // Ensure that any duration set will allow a consume of 1 unit to
 // succeed
-func (srl *SimpleRateLimiter) enforceMinimumDuration() {
+func (srl *SimpleRateLimiter) enforceMinimumDurationLocked() {
 	if srl.durationNanos < srl.nanosPerUnit {
 		srl.durationNanos = srl.nanosPerUnit
 	}
@@ -296,11 +299,19 @@ func (srl *SimpleRateLimiter) enforceMinimumDuration() {
 // GetLimitPerSecond returns the number of units configured for this rate limiter instance
 // (the max number of units per second this limiter allows).
 func (srl *SimpleRateLimiter) GetLimitPerSecond() float64 {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+	return srl.getLimitPerSecondLocked()
+}
+
+func (srl *SimpleRateLimiter) getLimitPerSecondLocked() float64 {
 	return nanosPerSecFloat / (float64)(srl.nanosPerUnit)
 }
 
 // GetDuration returns the duration in seconds configured for this rate limiter instance
 func (srl *SimpleRateLimiter) GetDuration() float64 {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
 	return (float64)(srl.durationNanos) / nanosPerSecFloat
 }
 
@@ -313,12 +324,17 @@ func (srl *SimpleRateLimiter) GetDuration() float64 {
 // 5 seconds, a call to TryConsumeUnits(5000) will succeed
 // immediately with no waiting.
 func (srl *SimpleRateLimiter) SetDuration(durationSecs float64) {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+
 	srl.durationNanos = (int64)(durationSecs * nanosPerSecFloat)
-	srl.enforceMinimumDuration()
+	srl.enforceMinimumDurationLocked()
 }
 
 // Reset resets the rate limiter as if it was newly constructed.
 func (srl *SimpleRateLimiter) Reset() {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
 	srl.lastNano = time.Now().UnixNano()
 }
 
@@ -327,6 +343,9 @@ func (srl *SimpleRateLimiter) Reset() {
 // the rate limit.
 // rateToSet may be greater than 100.0 to set the limiter to "over its limit".
 func (srl *SimpleRateLimiter) SetCurrentRate(percent float64) {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+
 	// Note that "rate" isn't really clearly defined in this type
 	// of limiter, because there is no inherent "time period". So
 	// all "rate" operations just assume "for 1 second".
@@ -428,14 +447,14 @@ func sleepWithContext(ctx context.Context, d time.Duration) (time.Duration, erro
 func (srl *SimpleRateLimiter) consumeInternal(units int64, timeout time.Duration,
 	alwaysConsume bool, nowNanos int64) time.Duration {
 
+	// lock so only one goroutine at a time can update
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+
 	// If disabled, just return success
 	if srl.nanosPerUnit <= 0 {
 		return 0
 	}
-
-	// lock so only one goroutine at a time can update
-	srl.mux.Lock()
-	defer srl.mux.Unlock()
 
 	// determine how many nanos we need to add based on units requested
 	nanosNeeded := units * srl.nanosPerUnit
@@ -501,9 +520,12 @@ func (srl *SimpleRateLimiter) TryConsumeUnits(units int64) bool {
 
 // GetCurrentRate returns the current rate as a percentage of current limit (0.0 - 100.0).
 func (srl *SimpleRateLimiter) GetCurrentRate() float64 {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+
 	// see comment in setCurrentRate()
-	capacity := srl.getCapacity()
-	limit := srl.GetLimitPerSecond()
+	capacity := srl.getCapacityLocked()
+	limit := srl.getLimitPerSecondLocked()
 	rate := 100.0 - ((capacity * 100.0) / limit)
 	if rate < 0.0 {
 		return 0.0
@@ -520,7 +542,7 @@ func (srl *SimpleRateLimiter) ConsumeUnitsUnconditionally(units int64) {
 	srl.consumeInternal(units, 0, true, time.Now().UnixNano())
 }
 
-func (srl *SimpleRateLimiter) getCapacity() float64 {
+func (srl *SimpleRateLimiter) getCapacityLocked() float64 {
 	// ensure we never use more from the past than duration allows
 	nowNanos := time.Now().UnixNano()
 	maxPast := nowNanos - srl.durationNanos
@@ -531,6 +553,16 @@ func (srl *SimpleRateLimiter) getCapacity() float64 {
 }
 
 func (srl *SimpleRateLimiter) String() string {
+	srl.mux.Lock()
+	defer srl.mux.Unlock()
+
+	capacity := srl.getCapacityLocked()
+	limit := srl.getLimitPerSecondLocked()
+	rate := 100.0 - ((capacity * 100.0) / limit)
+	if rate < 0.0 {
+		rate = 0.0
+	}
+
 	return fmt.Sprintf("lastNano=%v, nanosPerUnit=%v, durationNanos=%v, limit=%v, capacity=%v, rate=%.2f",
-		srl.lastNano, srl.nanosPerUnit, srl.durationNanos, srl.GetLimitPerSecond(), srl.getCapacity(), srl.GetCurrentRate())
+		srl.lastNano, srl.nanosPerUnit, srl.durationNanos, limit, capacity, rate)
 }
