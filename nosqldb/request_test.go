@@ -151,6 +151,58 @@ func TestQueryRequestRejectsSerialV3UnsupportedIntent(t *testing.T) {
 	}
 }
 
+func TestValidateExternalVariablesRejectsInvalidMetadata(t *testing.T) {
+	tests := []struct {
+		name        string
+		numVars     int
+		variableIDs map[string]int
+	}{
+		{
+			name:        "negative count",
+			numVars:     -1,
+			variableIDs: map[string]int{},
+		},
+		{
+			name:        "huge count",
+			numVars:     maxStructuralCount + 1,
+			variableIDs: map[string]int{},
+		},
+		{
+			name:        "empty name",
+			numVars:     1,
+			variableIDs: map[string]int{"": 0},
+		},
+		{
+			name:        "negative id",
+			numVars:     1,
+			variableIDs: map[string]int{"$a": -1},
+		},
+		{
+			name:        "out of range id",
+			numVars:     1,
+			variableIDs: map[string]int{"$a": 1},
+		},
+		{
+			name:        "duplicate id",
+			numVars:     2,
+			variableIDs: map[string]int{"$a": 0, "$b": 0},
+		},
+		{
+			name:        "missing variable",
+			numVars:     2,
+			variableIDs: map[string]int{"$a": 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateExternalVariables(tt.variableIDs, tt.numVars); err == nil {
+				t.Fatal("expected invalid external variable metadata to be rejected")
+			}
+		})
+	}
+}
+
 func TestQueryRequestSerialV3AllowsRepresentableIntent(t *testing.T) {
 	req := &QueryRequest{
 		Statement:   "select * from T1",
@@ -162,6 +214,84 @@ func TestQueryRequestSerialV3AllowsRepresentableIntent(t *testing.T) {
 
 	if err := req.serializeV3(binary.NewWriter(), 3); err != nil {
 		t.Fatalf("serializeV3() got unexpected error: %v", err)
+	}
+}
+
+func TestPreparedStatementGetBoundVarValuesValidatesIDs(t *testing.T) {
+	prep := &PreparedStatement{
+		variableToIDs: map[string]int{
+			"$a": 1,
+			"$b": 0,
+		},
+	}
+	values, err := prep.getBoundVarValues(map[string]interface{}{
+		"$a": int64(10),
+		"$b": int64(20),
+	})
+	if err != nil {
+		t.Fatalf("getBoundVarValues returned unexpected error: %v", err)
+	}
+	if got, want := values[0], types.FieldValue(int64(20)); got != want {
+		t.Fatalf("values[0] = %v, want %v", got, want)
+	}
+	if got, want := values[1], types.FieldValue(int64(10)); got != want {
+		t.Fatalf("values[1] = %v, want %v", got, want)
+	}
+
+	if _, err = prep.getBoundVarValues(map[string]interface{}{"$unknown": int64(1)}); err == nil {
+		t.Fatal("expected unknown bind variable to be rejected")
+	}
+
+	prep.variableToIDs["$bad"] = -1
+	if _, err = prep.getBoundVarValues(map[string]interface{}{"$bad": int64(1)}); err == nil {
+		t.Fatal("expected invalid bind variable id to be rejected")
+	}
+}
+
+func TestRuntimeControlBlockRejectsInvalidExternalVariableID(t *testing.T) {
+	rcb := &runtimeControlBlock{
+		externalVars: []types.FieldValue{int64(1)},
+	}
+
+	if _, err := rcb.getExternalVar(-1); err == nil {
+		t.Fatal("expected negative external variable id to be rejected")
+	}
+	if _, err := rcb.getExternalVar(1); err == nil {
+		t.Fatal("expected out of range external variable id to be rejected")
+	}
+}
+
+func TestQueryRequestSnapshotsBindVariablesForActiveAdvancedQuery(t *testing.T) {
+	prep := &PreparedStatement{
+		bindVariables: map[string]interface{}{
+			"$id": int64(10),
+		},
+		variableToIDs: map[string]int{
+			"$id": 0,
+		},
+	}
+	req := &QueryRequest{PreparedStatement: prep}
+
+	newQueryDriver(req)
+	if got, want := req.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("snapshot value = %v, want %v", got, want)
+	}
+
+	if err := prep.SetVariable("$id", int64(20)); err != nil {
+		t.Fatalf("SetVariable returned unexpected error: %v", err)
+	}
+	if got, want := req.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("active query bind snapshot changed to %v, want %v", got, want)
+	}
+
+	internal := req.copyInternal()
+	if got, want := internal.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("internal continuation snapshot = %v, want %v", got, want)
+	}
+
+	internal.bindVariables["$id"] = int64(30)
+	if got, want := req.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("internal continuation mutated parent snapshot to %v, want %v", got, want)
 	}
 }
 

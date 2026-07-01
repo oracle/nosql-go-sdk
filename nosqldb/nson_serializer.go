@@ -1511,7 +1511,7 @@ func (req *QueryRequest) serialize(w proto.Writer, serialVersion int16, queryVer
 		if err = ns.writeField(PREPARED_QUERY, pstmt.statement); err != nil {
 			return
 		}
-		if err = ns.writeBindVariables(pstmt.bindVariables); err != nil {
+		if err = ns.writeBindVariables(req.getBindVariables()); err != nil {
 			return
 		}
 	} else {
@@ -2884,9 +2884,16 @@ func readDriverPlanInfo(arr []byte) (dpi *driverPlanInfo, err error) {
 				return nil, err
 			}
 
-			if name != nil {
-				dpi.externalVars[*name] = id
+			if name == nil {
+				return nil, nosqlerr.NewIllegalArgument("invalid external variable metadata: variable name cannot be nil")
 			}
+			if _, ok := dpi.externalVars[*name]; ok {
+				return nil, nosqlerr.NewIllegalArgument("duplicate external variable name %q", *name)
+			}
+			dpi.externalVars[*name] = id
+		}
+		if err = validateExternalVariables(dpi.externalVars, numVars); err != nil {
+			return nil, err
 		}
 	}
 
