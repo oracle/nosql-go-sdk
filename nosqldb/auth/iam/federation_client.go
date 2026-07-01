@@ -383,7 +383,8 @@ func (c *x509FederationClient) getSecurityToken() (securityToken, error) {
 	var err error
 
 	for retry := 0; retry < 5; retry++ {
-		httpRequest, err := c.makeHTTPRequest(request)
+		var httpRequest *http.Request
+		httpRequest, err = c.makeHTTPRequest(request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to make http request: %s", err.Error())
 		}
