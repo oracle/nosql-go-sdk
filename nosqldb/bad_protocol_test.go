@@ -14,7 +14,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"testing"
@@ -115,13 +114,7 @@ func (suite *BadProtocolTestSuite) createTableAndIndex() {
 
 // processTestResponse is a custom handleResponse function for the Client.
 // It checks error code from the response, does not parse the response content.
-func processTestResponse(httpResp *http.Response, req nosqldb.Request, serialVerUsed int16, queryVerUsed int16) (nosqldb.Result, error) {
-	data, err := io.ReadAll(httpResp.Body)
-	httpResp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
+func processTestResponse(data []byte, httpResp *http.Response, req nosqldb.Request, serialVerUsed int16, queryVerUsed int16) (nosqldb.Result, error) {
 	if httpResp.StatusCode == http.StatusOK {
 		buf := bytes.NewBuffer(data)
 		rd := binary.NewReader(buf)

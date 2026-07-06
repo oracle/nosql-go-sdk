@@ -15,12 +15,14 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
+
 // HasLastWriteMetadata is implemented by requests that can carry last write
 // metadata and report whether the request currently includes the metadata.
 type HasLastWriteMetadata interface {
@@ -1948,6 +1950,30 @@ func (r *QueryRequest) isInternalRequest() bool {
 	return r.isInternal
 }
 
+func (r *QueryRequest) queryStatsMetadata() queryStatsMetadata {
+	if r == nil {
+		return queryStatsMetadata{}
+	}
+
+	if r.PreparedStatement != nil {
+		prep := r.PreparedStatement
+		return queryStatsMetadata{
+			query:      prep.sqlText,
+			unprepared: false,
+			simple:     prep.isSimpleQuery(),
+			doesWrites: prep.doesWrites(),
+			plan:       prep.statsDriverPlan(),
+		}
+	}
+
+	return queryStatsMetadata{
+		query:      r.Statement,
+		unprepared: true,
+		simple:     false,
+		doesWrites: queryTextDoesWrites(r.Statement),
+	}
+}
+
 func (r *QueryRequest) setShardID(shardID int) {
 	r.shardID = &shardID
 }
@@ -2041,7 +2067,7 @@ type PreparedStatement struct {
 	namespace string
 
 	// operation is the operation code for the query.
-	operation byte
+	operation int
 
 	// driverQueryPlan represents the part of query plan that must be executed at the driver.
 	// It is received from the NoSQL database proxy when the query is prepared there.
@@ -2049,6 +2075,7 @@ type PreparedStatement struct {
 	//
 	// This is only used for advanced queries.
 	driverQueryPlan planIter
+	statsPlanCache  *preparedStatementStatsCache
 
 	// statement represents the serialized PreparedStatement created at the backend store.
 	// It is opaque for the driver.
@@ -2083,9 +2110,19 @@ type PreparedStatement struct {
 	bindVariables map[string]interface{}
 }
 
+type preparedStatementStatsCache struct {
+	once sync.Once
+	plan string
+}
+
 // The minimum length of byte sequences that represent the serialized prepared statement.
 // This is used for sanity check.
 const minSerializedStmtLen = 10
+
+const (
+	queryOperationUnknown = -1
+	queryOperationSelect  = 5
+)
 
 func newPreparedStatement(sqlText, queryPlan string,
 	statement []byte, driverPlan planIter, numIterators, numRegisters int,
@@ -2100,9 +2137,11 @@ func newPreparedStatement(sqlText, queryPlan string,
 		queryPlan:       queryPlan,
 		statement:       statement,
 		driverQueryPlan: driverPlan,
+		statsPlanCache:  &preparedStatementStatsCache{},
 		numIterators:    numIterators,
 		numRegisters:    numRegisters,
 		variableToIDs:   variableToIDs,
+		operation:       queryOperationUnknown,
 	}, nil
 }
 
@@ -2126,6 +2165,19 @@ func (p *PreparedStatement) SetVariable(name string, value interface{}) error {
 
 func (p *PreparedStatement) isSimpleQuery() bool {
 	return p.driverQueryPlan == nil
+}
+
+func (p *PreparedStatement) statsDriverPlan() string {
+	if p == nil || p.driverQueryPlan == nil {
+		return ""
+	}
+	if p.statsPlanCache == nil {
+		return p.driverQueryPlan.getPlan()
+	}
+	p.statsPlanCache.once.Do(func() {
+		p.statsPlanCache.plan = p.driverQueryPlan.getPlan()
+	})
+	return p.statsPlanCache.plan
 }
 
 func (p *PreparedStatement) getBoundVarValues() []types.FieldValue {
@@ -2158,6 +2210,52 @@ func (p *PreparedStatement) GetQueryPlan() string {
 // Added in SDK Version 1.4.0
 func (p *PreparedStatement) GetQuerySchema() string {
 	return p.querySchema
+}
+
+func (p *PreparedStatement) doesWrites() bool {
+	if p == nil {
+		return false
+	}
+	switch p.operation {
+	case queryOperationSelect:
+		return false
+	case queryOperationUnknown:
+		return queryTextDoesWrites(p.sqlText)
+	default:
+		return true
+	}
+}
+
+func queryTextDoesWrites(query string) bool {
+	normalized := strings.ToUpper(strings.TrimSpace(stripLeadingSQLComments(query)))
+	for _, prefix := range []string{"INSERT", "UPSERT", "UPDATE", "DELETE", "MERGE"} {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func stripLeadingSQLComments(query string) string {
+	for {
+		query = strings.TrimSpace(query)
+		switch {
+		case strings.HasPrefix(query, "--"):
+			if idx := strings.IndexByte(query, '\n'); idx >= 0 {
+				query = query[idx+1:]
+				continue
+			}
+			return ""
+		case strings.HasPrefix(query, "/*"):
+			if idx := strings.Index(query, "*/"); idx >= 0 {
+				query = query[idx+2:]
+				continue
+			}
+			return ""
+		default:
+			return query
+		}
+	}
 }
 
 // WriteMultipleRequest represents the input to a Client.WriteMultiple() operation.

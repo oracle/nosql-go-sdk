@@ -9,11 +9,11 @@
 //
 // To build the examples, use the command:
 //
-//   cd nosql-go-sdk
-//   make build-examples
+//	cd nosql-go-sdk
+//	make build-examples
 //
-// If build succeeds, the example binaries "basic", "delete" and "index" can
-// be found at the nosql-go-sdk/bin/examples directory.
+// If build succeeds, the example binaries "basic", "delete", "index" and
+// "stats" can be found at the nosql-go-sdk/bin/examples directory.
 //
 // The examples can run with the Oracle NoSQL Cloud Simulator, the Oracle NoSQL
 // Cloud Service and the Oracle NoSQL Database on-premise.
@@ -26,10 +26,10 @@
 //
 // (2) Assume the Cloud Simulator is running at localhost:8080, use the command:
 //
-//   cd nosql-go-sdk/bin/examples
-//   # Run the basic example.
-//   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic localhost:8080
+//	cd nosql-go-sdk/bin/examples
+//	# Run the basic example.
+//	# To run other examples, replace "basic" with the desired example binary.
+//	./basic localhost:8080
 //
 // 2. Run examples against the Oracle NoSQL Cloud Service with IAM configuration.
 //
@@ -37,36 +37,36 @@
 // See https://docs.cloud.oracle.com/iaas/Content/API/Concepts/sdkconfig.htm
 // for the format and contents of an IAM configuration file.
 //
-//   [DEFAULT]
-//   user=ocid1.user.oc1..aaaaaaaa65vwl75tewwm32rgqvm6i34unq
-//   fingerprint=20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34
-//   key_file=~/.oci/oci_api_key.pem
-//   pass_phrase=examplephrase
-//   tenancy=ocid1.tenancy.oc1..aaaaaaaaba3pv6wuzr4h25vqstifsfdsq
-//   region=us-ashburn-1
+//	[DEFAULT]
+//	user=ocid1.user.oc1..aaaaaaaa65vwl75tewwm32rgqvm6i34unq
+//	fingerprint=20:3b:97:13:55:1c:5b:0d:d3:37:d8:50:4e:c5:3a:34
+//	key_file=~/.oci/oci_api_key.pem
+//	pass_phrase=examplephrase
+//	tenancy=ocid1.tenancy.oc1..aaaaaaaaba3pv6wuzr4h25vqstifsfdsq
+//	region=us-ashburn-1
 //
 // (2) Assume the Oracle NoSQL Cloud Service is running at the US East (Ashburn)
 // region, the corresponding region id is "us-ashburn-1", use the command:
 //
-//   cd nosql-go-sdk/bin/examples
-//   # Run the basic example.
-//   # To run other examples, replace "basic" with the desired example binary
-//   #
-//   # usage 1:
-//   # Use the "DEFAULT" profile from the default configuration file ~/.oci/config.
-//   # Note the region id must be specified in that profile.
-//   ./basic -config=cloud
-//   #
-//   # usage 2:
-//   # Use the "DEFAULT" profile from a file other than ~/.oci/config, and
-//   # specify the region id on command line:
-//   ./basic -config=cloud -configFile=/path/to/iam_config us-ashburn-1
-//   #
-//   # usage 3:
-//   # You may also include -iamProfileID=<profile> to use a profile other
-//   # than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
-//   # use a compartment ID other than the "tenancy" OCID from the IAM config file.
-//   ./basic -config=cloud -configFile=/path/to/iam_config -iamProfileID=profile -iamCompartmentID=comp_id us-ashburn-1
+//	cd nosql-go-sdk/bin/examples
+//	# Run the basic example.
+//	# To run other examples, replace "basic" with the desired example binary
+//	#
+//	# usage 1:
+//	# Use the "DEFAULT" profile from the default configuration file ~/.oci/config.
+//	# Note the region id must be specified in that profile.
+//	./basic -config=cloud
+//	#
+//	# usage 2:
+//	# Use the "DEFAULT" profile from a file other than ~/.oci/config, and
+//	# specify the region id on command line:
+//	./basic -config=cloud -configFile=/path/to/iam_config us-ashburn-1
+//	#
+//	# usage 3:
+//	# You may also include -iamProfileID=<profile> to use a profile other
+//	# than "DEFAULT", and/or include -iamCompartmentID=<compartmentOCID> to
+//	# use a compartment ID other than the "tenancy" OCID from the IAM config file.
+//	./basic -config=cloud -configFile=/path/to/iam_config -iamProfileID=profile -iamCompartmentID=comp_id us-ashburn-1
 //
 // 3. Run examples against the Oracle NoSQL Database on-premise.
 //
@@ -78,27 +78,26 @@
 // create a configuration file that specifies the username and password used to
 // authenticate with the server, for example (~/kvstore_config):
 //
-//   username=user1
-//   password=NoSql00__123456
+//	username=user1
+//	password=NoSql00__123456
 //
 // (3) Assume the HTTP Proxy is running at https://localhost:8080, use the command to
 // run examples against the Oracle NoSQL Database Server that has security
 // configuration enabled:
 //
-//   cd nosql-go-sdk/bin/examples
-//   # Run the basic example.
-//   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=onprem -configFile=~/kvstore_config https://localhost:8080
+//	cd nosql-go-sdk/bin/examples
+//	# Run the basic example.
+//	# To run other examples, replace "basic" with the desired example binary.
+//	./basic -config=onprem -configFile=~/kvstore_config https://localhost:8080
 //
 // Assume the HTTP Proxy is running at http://localhost:8080, use the command to
 // run examples against the Oracle NoSQL Database Server that has security
 // configuration disabled:
 //
-//   cd nosql-go-sdk/bin/examples
-//   # Run the basic example.
-//   # To run other examples, replace "basic" with the desired example binary.
-//   ./basic -config=onprem localhost:8080
-//
+//	cd nosql-go-sdk/bin/examples
+//	# Run the basic example.
+//	# To run other examples, replace "basic" with the desired example binary.
+//	./basic -config=onprem localhost:8080
 package examples
 
 import (
