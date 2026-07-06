@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
+	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/suite"
@@ -38,6 +40,259 @@ type RequestTestSuite struct {
 
 func TestOpRequests(t *testing.T) {
 	suite.Run(t, new(RequestTestSuite))
+}
+
+func TestQueryRequestCopyInternalPreservesQueryIntent(t *testing.T) {
+	fpSpec := Decimal64
+	structType := reflect.TypeOf(struct {
+		ID int
+	}{})
+	req := &QueryRequest{
+		Timeout:                    3 * time.Second,
+		Limit:                      17,
+		MaxReadKB:                  11,
+		MaxWriteKB:                 12,
+		MaxMemoryConsumption:       13,
+		MaxServerMemoryConsumption: 14,
+		FPArithSpec:                &fpSpec,
+		Consistency:                types.Absolute,
+		Durability: types.Durability{
+			MasterSync:  types.SyncPolicySync,
+			ReplicaSync: types.SyncPolicyNoSync,
+			ReplicaAck:  types.ReplicaAckPolicySimpleMajority,
+		},
+		PreparedStatement: &PreparedStatement{},
+		traceLevel:        4,
+		TableName:         "T1",
+		Namespace:         "ns1",
+		LastWriteMetadata: "created-by:tester",
+		StructType:        structType,
+	}
+
+	internal := req.copyInternal()
+
+	if !internal.isInternal {
+		t.Fatal("copyInternal() did not mark the copied request as internal")
+	}
+	if internal.Namespace != req.Namespace {
+		t.Fatalf("copyInternal() Namespace=%q, want %q", internal.Namespace, req.Namespace)
+	}
+	if internal.MaxServerMemoryConsumption != req.MaxServerMemoryConsumption {
+		t.Fatalf("copyInternal() MaxServerMemoryConsumption=%d, want %d",
+			internal.MaxServerMemoryConsumption, req.MaxServerMemoryConsumption)
+	}
+	if internal.FPArithSpec != req.FPArithSpec {
+		t.Fatal("copyInternal() did not preserve FPArithSpec")
+	}
+	if internal.StructType != req.StructType {
+		t.Fatal("copyInternal() did not preserve StructType")
+	}
+}
+
+func TestQueryRequestRejectsVirtualScanQueryVersionDowngrade(t *testing.T) {
+	req := &QueryRequest{
+		Statement:   "select * from T1",
+		virtualScan: &virtualScan{shardID: 1, partitionID: 2},
+	}
+
+	err := req.serialize(binary.NewWriter(), 4, proto.QueryV3)
+	if err == nil {
+		t.Fatal("expected virtual scan query version downgrade to fail")
+	}
+	if !nosqlerr.Is(err, nosqlerr.IllegalArgument) {
+		t.Fatalf("got error %v, want IllegalArgument", err)
+	}
+}
+
+func TestQueryRequestRejectsSerialV3UnsupportedIntent(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *QueryRequest
+	}{
+		{
+			name: "namespace",
+			req:  &QueryRequest{Statement: "select * from T1", Namespace: "ns1"},
+		},
+		{
+			name: "server memory",
+			req:  &QueryRequest{Statement: "select * from T1", MaxServerMemoryConsumption: 1},
+		},
+		{
+			name: "last write metadata",
+			req:  &QueryRequest{Statement: "delete from T1 where id = 1", LastWriteMetadata: "deleted-by:tester"},
+		},
+		{
+			name: "virtual scan",
+			req:  &QueryRequest{Statement: "select * from T1", virtualScan: &virtualScan{shardID: 1}},
+		},
+		{
+			name: "durability",
+			req: &QueryRequest{
+				Statement: "delete from T1 where id = 1",
+				Durability: types.Durability{
+					MasterSync:  types.SyncPolicySync,
+					ReplicaSync: types.SyncPolicyNoSync,
+					ReplicaAck:  types.ReplicaAckPolicySimpleMajority,
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.req.serializeV3(binary.NewWriter(), 3)
+			if err == nil {
+				t.Fatal("expected serial V3 serialization to reject unsupported query intent")
+			}
+			if !nosqlerr.Is(err, nosqlerr.IllegalArgument) {
+				t.Fatalf("got error %v, want IllegalArgument", err)
+			}
+		})
+	}
+}
+
+func TestValidateExternalVariablesRejectsInvalidMetadata(t *testing.T) {
+	tests := []struct {
+		name        string
+		numVars     int
+		variableIDs map[string]int
+	}{
+		{
+			name:        "negative count",
+			numVars:     -1,
+			variableIDs: map[string]int{},
+		},
+		{
+			name:        "huge count",
+			numVars:     maxStructuralCount + 1,
+			variableIDs: map[string]int{},
+		},
+		{
+			name:        "empty name",
+			numVars:     1,
+			variableIDs: map[string]int{"": 0},
+		},
+		{
+			name:        "negative id",
+			numVars:     1,
+			variableIDs: map[string]int{"$a": -1},
+		},
+		{
+			name:        "out of range id",
+			numVars:     1,
+			variableIDs: map[string]int{"$a": 1},
+		},
+		{
+			name:        "duplicate id",
+			numVars:     2,
+			variableIDs: map[string]int{"$a": 0, "$b": 0},
+		},
+		{
+			name:        "missing variable",
+			numVars:     2,
+			variableIDs: map[string]int{"$a": 0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateExternalVariables(tt.variableIDs, tt.numVars); err == nil {
+				t.Fatal("expected invalid external variable metadata to be rejected")
+			}
+		})
+	}
+}
+
+func TestQueryRequestSerialV3AllowsRepresentableIntent(t *testing.T) {
+	req := &QueryRequest{
+		Statement:   "select * from T1",
+		Limit:       10,
+		MaxReadKB:   20,
+		MaxWriteKB:  30,
+		Consistency: types.Eventual,
+	}
+
+	if err := req.serializeV3(binary.NewWriter(), 3); err != nil {
+		t.Fatalf("serializeV3() got unexpected error: %v", err)
+	}
+}
+
+func TestPreparedStatementGetBoundVarValuesValidatesIDs(t *testing.T) {
+	prep := &PreparedStatement{
+		variableToIDs: map[string]int{
+			"$a": 1,
+			"$b": 0,
+		},
+	}
+	values, err := prep.getBoundVarValues(map[string]interface{}{
+		"$a": int64(10),
+		"$b": int64(20),
+	})
+	if err != nil {
+		t.Fatalf("getBoundVarValues returned unexpected error: %v", err)
+	}
+	if got, want := values[0], types.FieldValue(int64(20)); got != want {
+		t.Fatalf("values[0] = %v, want %v", got, want)
+	}
+	if got, want := values[1], types.FieldValue(int64(10)); got != want {
+		t.Fatalf("values[1] = %v, want %v", got, want)
+	}
+
+	if _, err = prep.getBoundVarValues(map[string]interface{}{"$unknown": int64(1)}); err == nil {
+		t.Fatal("expected unknown bind variable to be rejected")
+	}
+
+	prep.variableToIDs["$bad"] = -1
+	if _, err = prep.getBoundVarValues(map[string]interface{}{"$bad": int64(1)}); err == nil {
+		t.Fatal("expected invalid bind variable id to be rejected")
+	}
+}
+
+func TestRuntimeControlBlockRejectsInvalidExternalVariableID(t *testing.T) {
+	rcb := &runtimeControlBlock{
+		externalVars: []types.FieldValue{int64(1)},
+	}
+
+	if _, err := rcb.getExternalVar(-1); err == nil {
+		t.Fatal("expected negative external variable id to be rejected")
+	}
+	if _, err := rcb.getExternalVar(1); err == nil {
+		t.Fatal("expected out of range external variable id to be rejected")
+	}
+}
+
+func TestQueryRequestSnapshotsBindVariablesForActiveAdvancedQuery(t *testing.T) {
+	prep := &PreparedStatement{
+		bindVariables: map[string]interface{}{
+			"$id": int64(10),
+		},
+		variableToIDs: map[string]int{
+			"$id": 0,
+		},
+	}
+	req := &QueryRequest{PreparedStatement: prep}
+
+	newQueryDriver(req)
+	if got, want := req.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("snapshot value = %v, want %v", got, want)
+	}
+
+	if err := prep.SetVariable("$id", int64(20)); err != nil {
+		t.Fatalf("SetVariable returned unexpected error: %v", err)
+	}
+	if got, want := req.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("active query bind snapshot changed to %v, want %v", got, want)
+	}
+
+	internal := req.copyInternal()
+	if got, want := internal.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("internal continuation snapshot = %v, want %v", got, want)
+	}
+
+	internal.bindVariables["$id"] = int64(30)
+	if got, want := req.getBindVariables()["$id"], interface{}(int64(10)); got != want {
+		t.Fatalf("internal continuation mutated parent snapshot to %v, want %v", got, want)
+	}
 }
 
 func (suite *RequestTestSuite) TestValidateTimeout() {
@@ -92,6 +347,53 @@ func (suite *RequestTestSuite) TestValidateTableName() {
 	for i, r := range tests {
 		err := validateTableName(r.table)
 		suite.Equalf(r.want, err, "Testcase %d: validateTableName(%v) got unexpected error", i+1, r.table)
+	}
+}
+
+func (suite *RequestTestSuite) TestValidateQueryRequestSource() {
+	prepStmt := &PreparedStatement{}
+	tests := []struct {
+		name string
+		req  *QueryRequest
+		want error
+	}{
+		{
+			name: "neither statement nor prepared statement",
+			req:  &QueryRequest{Timeout: time.Millisecond, Consistency: types.Absolute},
+			want: nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set"),
+		},
+		{
+			name: "both statement and prepared statement",
+			req: &QueryRequest{
+				Statement:         "select * from users",
+				PreparedStatement: prepStmt,
+				Timeout:           time.Millisecond,
+				Consistency:       types.Absolute,
+			},
+			want: nosqlerr.NewIllegalArgument("QueryRequest: Statement and PreparedStatement cannot both be set"),
+		},
+		{
+			name: "only statement",
+			req: &QueryRequest{
+				Statement:   "select * from users",
+				Timeout:     time.Millisecond,
+				Consistency: types.Absolute,
+			},
+		},
+		{
+			name: "only prepared statement",
+			req: &QueryRequest{
+				PreparedStatement: prepStmt,
+				Timeout:           time.Millisecond,
+				Consistency:       types.Absolute,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			suite.Equal(tt.want, tt.req.validate())
+		})
 	}
 }
 

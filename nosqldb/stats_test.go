@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
+	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
 	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
@@ -82,6 +83,43 @@ type statsBlockingExecutor struct{}
 func (statsBlockingExecutor) Do(req *http.Request) (*http.Response, error) {
 	<-req.Context().Done()
 	return nil, req.Context().Err()
+}
+
+type statsBlockingRetryHandler struct {
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (*statsBlockingRetryHandler) MaxNumRetries() uint {
+	return 1
+}
+
+func (*statsBlockingRetryHandler) ShouldRetry(Request, uint, error) bool {
+	return true
+}
+
+func (*statsBlockingRetryHandler) Delay(Request, uint, error) {}
+
+func (h *statsBlockingRetryHandler) DelayWithContext(ctx context.Context, _ Request, _ uint, _ error) error {
+	h.once.Do(func() {
+		close(h.entered)
+	})
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+type statsBlockingRateLimiter struct {
+	common.RateLimiter
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (l *statsBlockingRateLimiter) ConsumeUnitsWithContext(ctx context.Context, _ int64, _ time.Duration, _ bool) (time.Duration, error) {
+	l.once.Do(func() {
+		close(l.entered)
+	})
+	<-ctx.Done()
+	return 0, ctx.Err()
 }
 
 type statsCloseCountingProvider struct {
@@ -1849,6 +1887,99 @@ func TestDoExecuteRecordsStatsObservationOnContextCancel(t *testing.T) {
 	assert.Equal(t, float64(1), request["httpRequestCount"])
 	assert.Equal(t, float64(1), request["errors"])
 	assert.NotContains(t, request, "httpRequestLatencyMs")
+}
+
+func TestDoExecuteRecordsStatsWhenRetryDelayIsCanceled(t *testing.T) {
+	client, err := NewClient(Config{
+		Mode:           "cloudsim",
+		Endpoint:       "localhost:8080",
+		StatsProfile:   StatsProfileMore,
+		StatsEnableLog: boolPtr(false),
+	})
+	require.NoError(t, err)
+	defer client.Close()
+
+	retryHandler := &statsBlockingRetryHandler{entered: make(chan struct{})}
+	client.RetryHandler = retryHandler
+	client.executor = &statsSequenceExecutor{
+		steps: []statsExecutorStep{{
+			err: &url.Error{
+				Op:  http.MethodPost,
+				URL: "http://localhost:8080",
+				Err: mockErr{msg: "temporary transport failure", isTemp: true},
+			},
+		}},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		req := &GetRequest{TableName: "stats_table", Timeout: 5 * time.Second}
+		_, executeErr := client.doExecute(ctx, req, []byte{1, 2, 3}, proto.DefaultSerialVersion, proto.DefaultQueryVersion)
+		result <- executeErr
+	}()
+
+	select {
+	case <-retryHandler.entered:
+	case <-time.After(time.Second):
+		t.Fatal("retry handler was not entered")
+	}
+	cancel()
+
+	select {
+	case err = <-result:
+	case <-time.After(time.Second):
+		t.Fatal("request did not stop after context cancellation")
+	}
+	require.Equal(t, context.Canceled, err)
+
+	payload := decodeStatsSnapshot(t, client.GetStatsControl().snapshotAndReset())
+	request := findStatsRequest(t, payload, "Get")
+	assert.Equal(t, float64(1), request["httpRequestCount"])
+	assert.Equal(t, float64(1), request["errors"])
+}
+
+func TestDoExecuteRecordsStatsWhenRateLimiterWaitIsCanceled(t *testing.T) {
+	client, err := NewClient(Config{
+		Mode:           "cloudsim",
+		Endpoint:       "localhost:8080",
+		StatsProfile:   StatsProfileMore,
+		StatsEnableLog: boolPtr(false),
+	})
+	require.NoError(t, err)
+	defer client.Close()
+
+	limiter := &statsBlockingRateLimiter{
+		RateLimiter: common.NewSimpleRateLimiter(1),
+		entered:     make(chan struct{}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		req := &GetRequest{TableName: "stats_table", Timeout: 5 * time.Second}
+		req.SetReadRateLimiter(limiter)
+		_, executeErr := client.doExecute(ctx, req, []byte{1, 2, 3}, proto.DefaultSerialVersion, proto.DefaultQueryVersion)
+		result <- executeErr
+	}()
+
+	select {
+	case <-limiter.entered:
+	case <-time.After(time.Second):
+		t.Fatal("rate limiter was not entered")
+	}
+	cancel()
+
+	select {
+	case err = <-result:
+	case <-time.After(time.Second):
+		t.Fatal("request did not stop after context cancellation")
+	}
+	require.Equal(t, context.Canceled, err)
+
+	payload := decodeStatsSnapshot(t, client.GetStatsControl().snapshotAndReset())
+	request := findStatsRequest(t, payload, "Get")
+	assert.Equal(t, float64(1), request["httpRequestCount"])
+	assert.Equal(t, float64(1), request["errors"])
 }
 
 func TestDoExecuteRecordsStatsObservationOnRequestTimeout(t *testing.T) {

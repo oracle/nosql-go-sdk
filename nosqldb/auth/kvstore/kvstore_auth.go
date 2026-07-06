@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
@@ -80,6 +81,9 @@ type AccessTokenProvider struct {
 	// isClosed represents if the provider is closed or not.
 	isClosed bool
 
+	// isClosing represents if the provider close lifecycle has started.
+	isClosing int32
+
 	// Cached token that can be reused when it is valid.
 	cachedToken *auth.Token
 
@@ -87,8 +91,9 @@ type AccessTokenProvider struct {
 	// the provider is allowed to renew the token.
 	expiryWindow time.Duration
 
-	mutex sync.RWMutex
-	wg    sync.WaitGroup
+	mutex    sync.RWMutex
+	authLock sync.Mutex
+	wg       sync.WaitGroup
 }
 
 // NewAccessTokenProviderFromFile creates an access token provider using the
@@ -96,8 +101,8 @@ type AccessTokenProvider struct {
 // the username and password that used to authenticate with the Oracle NoSQL
 // Server in the form of:
 //
-//   username=user1
-//   password=NoSql00__123456
+//	username=user1
+//	password=NoSql00__123456
 //
 // This is a variadic function that may be invoked with zero or more arguments
 // for the options parameter, but only the first argument for the options
@@ -214,7 +219,7 @@ func (p *AccessTokenProvider) AuthorizationScheme() string {
 // AuthorizationString returns an authorization string used for the specified
 // request, which is in the form of:
 //
-//   Bearer <access_token>
+//	Bearer <access_token>
 //
 // This method looks for the access token from local cache, if found, returns
 // the token, otherwise acquires the access token from remote authorization
@@ -227,28 +232,40 @@ func (p *AccessTokenProvider) AuthorizationScheme() string {
 // A cached token may not get a chance to renew if it is not retrieved by the
 // provider within the expiry window, which means it is not recently used.
 func (p *AccessTokenProvider) AuthorizationString(req auth.Request) (auth string, err error) {
-	if !p.isSecure || p.checkClosed() {
+	if !p.isSecure || p.closeStarted() {
 		return
 	}
 
 	p.mutex.RLock()
+	if p.isClosed || p.closeStarted() {
+		p.mutex.RUnlock()
+		return
+	}
 	token, ok, needRenew := p.getCachedToken()
+	if ok {
+		auth = token.AuthString()
+	}
 	p.mutex.RUnlock()
 
 	// Cached token is nil or expired.
 	if !ok {
+		if !p.beginAuthWork() {
+			return
+		}
+		defer p.wg.Done()
 		return p.login()
 	}
 
 	if needRenew {
-		p.wg.Add(1)
-		go func() {
-			defer p.wg.Done()
-			p.renewToken()
-		}()
+		if p.beginAuthWork() {
+			go func() {
+				defer p.wg.Done()
+				p.renewToken()
+			}()
+		}
 	}
 
-	return token.AuthString(), nil
+	return auth, nil
 }
 
 // SignHTTPRequest is unused in kvstore on-prem logic
@@ -263,30 +280,70 @@ func (p *AccessTokenProvider) GetLogger() *logger.Logger {
 
 // Close releases resources allocated by the provider and sets closed state for the provider.
 func (p *AccessTokenProvider) Close() error {
-	if !p.isSecure || p.checkClosed() {
+	if !p.isSecure {
 		return nil
 	}
 
-	p.wg.Wait()
+	if !atomic.CompareAndSwapInt32(&p.isClosing, 0, 1) {
+		return nil
+	}
 
 	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	if p.isClosed {
+		p.mutex.Unlock()
+		return nil
+	}
+	p.isClosed = true
+	token := p.cachedToken
+	p.cachedToken = nil
+	p.mutex.Unlock()
 
-	if err := p.logout(); err != nil {
+	p.wg.Wait()
+
+	if err := p.logoutToken(token); err != nil {
 		// Log a warning message, do not return the error.
 		p.logger.Warn("%v", err)
 	}
 
-	p.isClosed = true
-	p.cachedToken = nil
 	return nil
+}
+
+// InvalidateCachedToken clears the cached bearer token so the next
+// AuthorizationString call must acquire a fresh token.
+func (p *AccessTokenProvider) InvalidateCachedToken() {
+	if !p.isSecure {
+		return
+	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.cachedToken = nil
 }
 
 // checkClosed checks if the provider is closed.
 func (p *AccessTokenProvider) checkClosed() bool {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
-	return p.isClosed
+	return p.isClosed || p.closeStarted()
+}
+
+func (p *AccessTokenProvider) closeStarted() bool {
+	return atomic.LoadInt32(&p.isClosing) != 0
+}
+
+func (p *AccessTokenProvider) beginAuthWork() bool {
+	if p.closeStarted() {
+		return false
+	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if p.isClosed || p.closeStarted() {
+		return false
+	}
+
+	p.wg.Add(1)
+	return true
 }
 
 // getCachedToken looks for the token from cache and checks if the cached token
@@ -306,35 +363,81 @@ func (p *AccessTokenProvider) getCachedToken() (token *auth.Token, ok bool, need
 // If login succeeds this method returns an authorization string that contains
 // an access token retrieved from server.
 func (p *AccessTokenProvider) login() (auth string, err error) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.authLock.Lock()
+	defer p.authLock.Unlock()
 
-	token, err := p.doRequest(loginService, p.basicAuth)
+	p.mutex.RLock()
+	if p.isClosed || p.closeStarted() {
+		p.mutex.RUnlock()
+		return
+	}
+	token, ok, _ := p.getCachedToken()
+	if ok {
+		auth = token.AuthString()
+		p.mutex.RUnlock()
+		return
+	}
+	p.mutex.RUnlock()
+
+	token, err = p.doRequest(loginService, p.basicAuth)
 	if err != nil {
 		return
 	}
 
+	auth = token.AuthString()
+
+	p.mutex.Lock()
+	if p.isClosed || p.closeStarted() {
+		p.mutex.Unlock()
+		if err = p.logoutToken(token); err != nil {
+			p.logger.Warn("%v", err)
+			err = nil
+		}
+		return "", nil
+	}
 	p.cachedToken = token
-	return token.AuthString(), nil
+	p.mutex.Unlock()
+	return auth, nil
 }
 
 // renewToken attempts to renew the token that currently in use.
 func (p *AccessTokenProvider) renewToken() error {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.authLock.Lock()
+	defer p.authLock.Unlock()
 
-	oldToken, ok, _ := p.getCachedToken()
-	if !ok {
+	p.mutex.RLock()
+	if p.isClosed || p.closeStarted() {
+		p.mutex.RUnlock()
 		return nil
 	}
+	oldToken, ok, _ := p.getCachedToken()
+	if !ok {
+		p.mutex.RUnlock()
+		return nil
+	}
+	oldAuth := oldToken.AuthString()
+	p.mutex.RUnlock()
 
-	token, err := p.doRequest(renewService, oldToken.AuthString())
+	token, err := p.doRequest(renewService, oldAuth)
 	if err != nil {
 		p.logger.Warn("%v", err)
 		return err
 	}
 
+	p.mutex.Lock()
+	if p.isClosed || p.closeStarted() {
+		p.mutex.Unlock()
+		if err = p.logoutToken(token); err != nil {
+			p.logger.Warn("%v", err)
+		}
+		return nil
+	}
+	if p.cachedToken == nil || p.cachedToken.AuthString() != oldAuth {
+		p.mutex.Unlock()
+		return nil
+	}
 	p.cachedToken = token
+	p.mutex.Unlock()
 	return nil
 }
 
@@ -342,6 +445,14 @@ func (p *AccessTokenProvider) renewToken() error {
 func (p *AccessTokenProvider) logout() error {
 	token, ok, _ := p.getCachedToken()
 	if !ok {
+		return nil
+	}
+
+	return p.logoutToken(token)
+}
+
+func (p *AccessTokenProvider) logoutToken(token *auth.Token) error {
+	if token == nil || token.Expired() {
 		return nil
 	}
 
@@ -353,8 +464,12 @@ func (p *AccessTokenProvider) logout() error {
 // service using the authorization string.
 func (p *AccessTokenProvider) doRequest(service, auth string) (token *auth.Token, err error) {
 	url := p.endpoint + service
-	p.reqHeaders["Authorization"] = auth
-	resp, err := httputil.DoRequest(context.Background(), p.httpClient, p.timeout, http.MethodGet, url, nil, p.reqHeaders, p.logger)
+	headers := make(map[string]string, len(p.reqHeaders)+1)
+	for k, v := range p.reqHeaders {
+		headers[k] = v
+	}
+	headers["Authorization"] = auth
+	resp, err := httputil.DoRequest(context.Background(), p.httpClient, p.timeout, http.MethodGet, url, nil, headers, p.logger)
 	if err != nil {
 		return
 	}

@@ -143,7 +143,10 @@ func (iter *extVarRefIter) next(rcb *runtimeControlBlock) (bool, error) {
 		return false, nil
 	}
 
-	value := rcb.getExternalVar(iter.id)
+	value, err := rcb.getExternalVar(iter.id)
+	if err != nil {
+		return false, err
+	}
 	if value == nil {
 		return false, nosqlerr.NewIllegalState("the external variable %q has not been set", iter.name)
 	}

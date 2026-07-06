@@ -8,6 +8,8 @@
 package common
 
 import (
+	"context"
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
@@ -65,6 +67,29 @@ func TestDurationLogic(t *testing.T) {
 	delay = limiter.ConsumeUnits(10)
 	if delay > 0 {
 		t.Fatalf("Expected limiter delay of 0ms, got %dus", (delay / time.Microsecond))
+	}
+}
+
+func TestConsumeUnitsWithContextCancellation(t *testing.T) {
+	limiter := NewSimpleRateLimiterWithDuration(1, 1)
+	limiter.SetCurrentRate(200)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err := limiter.ConsumeUnitsWithContext(ctx, 0, 2*time.Second, false)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if elapsed >= 300*time.Millisecond {
+		t.Fatalf("expected limiter wait to stop early, elapsed=%v", elapsed)
 	}
 }
 

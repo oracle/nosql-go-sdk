@@ -10,11 +10,13 @@ package nosqldb
 import (
 	"errors"
 	"math/big"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto"
+	protobinary "github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
@@ -39,8 +41,15 @@ func (req *GetRequest) serializeV3(w proto.Writer, serialVersion int16) (err err
 		return
 	}
 
-	if _, err = w.WriteFieldValue(req.Key); err != nil {
-		return
+	if req.Key != nil {
+		_, err = w.WriteFieldValue(req.Key)
+	} else if req.StructValue != nil {
+		_, err = w.WriteStructValue(req.StructValue)
+	} else {
+		err = errors.New("missing Key or StructValue in GetRequest")
+	}
+	if err != nil {
+		return err
 	}
 
 	return
@@ -68,7 +77,19 @@ func (req *GetRequest) deserializeV3(r proto.Reader, serialVersion int16) (Resul
 	}
 
 	if v, ok := v.(*types.MapValue); ok {
-		res.Value = v
+		if req.StructType != nil {
+			res.StructValue = reflect.New(req.StructType).Interface()
+			if err = protobinary.DecodeMapValue(res.StructValue, v); err != nil {
+				return nil, err
+			}
+		} else if req.StructValue != nil {
+			res.StructValue = req.StructValue
+			if err = protobinary.DecodeMapValue(res.StructValue, v); err != nil {
+				return nil, err
+			}
+		} else {
+			res.Value = v
+		}
 	}
 
 	timeMs, err := r.ReadPackedLong()
@@ -460,8 +481,15 @@ func (req *PutRequest) serializeV3(w proto.Writer, serialVersion int16) (err err
 		return
 	}
 
-	if _, err = w.WriteFieldValue(req.Value); err != nil {
-		return
+	if req.Value != nil {
+		_, err = w.WriteFieldValue(req.Value)
+	} else if req.StructValue != nil {
+		_, err = w.WriteStructValue(req.StructValue)
+	} else {
+		err = errors.New("missing Value or StructValue in PutRequest")
+	}
+	if err != nil {
+		return err
 	}
 
 	if _, err = w.WriteBoolean(req.updateTTL()); err != nil {
@@ -905,15 +933,24 @@ func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (p
 		if err != nil {
 			return
 		}
+		if err = validateStructuralCount(numIterators, "iterators"); err != nil {
+			return
+		}
 
 		numRegisters, err = r.ReadInt()
 		if err != nil {
+			return
+		}
+		if err = validateStructuralCount(numRegisters, "registers"); err != nil {
 			return
 		}
 
 		var numVars int
 		numVars, err = r.ReadInt()
 		if err != nil {
+			return
+		}
+		if err = validateStructuralCount(numVars, "external variables"); err != nil {
 			return
 		}
 
@@ -932,9 +969,18 @@ func deserializeV3PrepStmt(r proto.Reader, sqlText string, getQueryPlan bool) (p
 					return
 				}
 
-				if name != nil {
-					extVariables[*name] = id
+				if name == nil {
+					err = nosqlerr.NewIllegalArgument("invalid external variable metadata: variable name cannot be nil")
+					return
 				}
+				if _, ok := extVariables[*name]; ok {
+					err = nosqlerr.NewIllegalArgument("duplicate external variable name %q", *name)
+					return
+				}
+				extVariables[*name] = id
+			}
+			if err = validateExternalVariables(extVariables, numVars); err != nil {
+				return
 			}
 		}
 
@@ -976,6 +1022,10 @@ func deserializeV3TopologyInfo(r proto.Reader) (topoInfo *common.TopologyInfo, e
 }
 
 func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err error) {
+	if err = req.checkSerialVersionSupported(serialVersion); err != nil {
+		return
+	}
+
 	if err = serializeV3Op(w, proto.Query, req.Timeout); err != nil {
 		return
 	}
@@ -1044,7 +1094,8 @@ func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err e
 		return
 	}
 
-	n := len(pstmt.bindVariables)
+	bindVariables := req.getBindVariables()
+	n := len(bindVariables)
 	if n <= 0 {
 		// bind variables is nil
 		_, err = w.WritePackedInt(0)
@@ -1055,7 +1106,7 @@ func (req *QueryRequest) serializeV3(w proto.Writer, serialVersion int16) (err e
 		return
 	}
 
-	for k, v := range pstmt.bindVariables {
+	for k, v := range bindVariables {
 		if _, err = w.WriteString(&k); err != nil {
 			return
 		}

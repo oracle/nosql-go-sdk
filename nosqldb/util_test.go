@@ -9,6 +9,7 @@ package nosqldb
 
 import (
 	"net/http"
+	"sync/atomic"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/auth"
 	"github.com/oracle/nosql-go-sdk/nosqldb/logger"
@@ -24,7 +25,8 @@ func equalError(a, b error) bool {
 // DummyAccessTokenProvider represents a dummy access token provider, which is used by tests.
 // It implements the AccessTokenProvider interface.
 type DummyAccessTokenProvider struct {
-	TenantID string
+	TenantID      string
+	invalidations int32
 }
 
 func (p *DummyAccessTokenProvider) AuthorizationScheme() string {
@@ -37,6 +39,10 @@ func (p *DummyAccessTokenProvider) AuthorizationString(req auth.Request) (string
 
 func (p *DummyAccessTokenProvider) Close() error {
 	return nil
+}
+
+func (p *DummyAccessTokenProvider) InvalidateCachedToken() {
+	atomic.AddInt32(&p.invalidations, 1)
 }
 
 func (p DummyAccessTokenProvider) SignHTTPRequest(req *http.Request) error {
