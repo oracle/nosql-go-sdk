@@ -8,6 +8,7 @@
 package nosqldb
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
@@ -351,7 +352,8 @@ func (suite *RequestTestSuite) TestValidateTableName() {
 }
 
 func (suite *RequestTestSuite) TestValidateQueryRequestSource() {
-	prepStmt := &PreparedStatement{}
+	const statement = "select * from users"
+	prepStmt := &PreparedStatement{sqlText: statement}
 	tests := []struct {
 		name string
 		req  *QueryRequest
@@ -363,19 +365,42 @@ func (suite *RequestTestSuite) TestValidateQueryRequestSource() {
 			want: nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set"),
 		},
 		{
-			name: "both statement and prepared statement",
+			name: "matching statement and prepared statement",
 			req: &QueryRequest{
-				Statement:         "select * from users",
+				Statement:         statement,
 				PreparedStatement: prepStmt,
 				Timeout:           time.Millisecond,
 				Consistency:       types.Absolute,
 			},
-			want: nosqlerr.NewIllegalArgument("QueryRequest: Statement and PreparedStatement cannot both be set"),
+		},
+		{
+			name: "conflicting statement and prepared statement",
+			req: &QueryRequest{
+				Statement: "select * from admins",
+				PreparedStatement: &PreparedStatement{
+					sqlText: statement,
+				},
+				Timeout:     time.Millisecond,
+				Consistency: types.Absolute,
+			},
+			want: nosqlerr.NewIllegalArgument("QueryRequest: Statement does not match PreparedStatement SQL text"),
+		},
+		{
+			name: "different statement text",
+			req: &QueryRequest{
+				Statement: "select  * from users",
+				PreparedStatement: &PreparedStatement{
+					sqlText: statement,
+				},
+				Timeout:     time.Millisecond,
+				Consistency: types.Absolute,
+			},
+			want: nosqlerr.NewIllegalArgument("QueryRequest: Statement does not match PreparedStatement SQL text"),
 		},
 		{
 			name: "only statement",
 			req: &QueryRequest{
-				Statement:   "select * from users",
+				Statement:   statement,
 				Timeout:     time.Millisecond,
 				Consistency: types.Absolute,
 			},
@@ -394,6 +419,64 @@ func (suite *RequestTestSuite) TestValidateQueryRequestSource() {
 		suite.Run(tt.name, func() {
 			suite.Equal(tt.want, tt.req.validate())
 		})
+	}
+}
+
+func TestQueryRequestMatchingSourcesUsePreparedSerialization(t *testing.T) {
+	const statement = "select * from users"
+	prepStmt := &PreparedStatement{
+		sqlText:   statement,
+		statement: []byte("prepared-query"),
+	}
+
+	preparedOnly := &QueryRequest{PreparedStatement: prepStmt}
+	matchingSources := &QueryRequest{
+		Statement:         statement,
+		PreparedStatement: prepStmt,
+	}
+
+	tests := []struct {
+		name      string
+		serialize func(*QueryRequest, proto.Writer) error
+	}{
+		{
+			name: "NSON",
+			serialize: func(req *QueryRequest, w proto.Writer) error {
+				return req.serialize(w, 4, 4)
+			},
+		},
+		{
+			name: "V3",
+			serialize: func(req *QueryRequest, w proto.Writer) error {
+				return req.serializeV3(w, 3)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			preparedWriter := binary.NewWriter()
+			if err := tt.serialize(preparedOnly, preparedWriter); err != nil {
+				t.Fatalf("serialize prepared-only request: %v", err)
+			}
+
+			matchingWriter := binary.NewWriter()
+			if err := tt.serialize(matchingSources, matchingWriter); err != nil {
+				t.Fatalf("serialize matching-source request: %v", err)
+			}
+
+			if !bytes.Equal(matchingWriter.Bytes(), preparedWriter.Bytes()) {
+				t.Fatal("matching-source request did not serialize as the prepared request")
+			}
+		})
+	}
+
+	internal := matchingSources.copyInternal()
+	if internal.Statement != "" {
+		t.Fatalf("copyInternal() Statement=%q, want empty", internal.Statement)
+	}
+	if internal.PreparedStatement != prepStmt {
+		t.Fatal("copyInternal() did not preserve PreparedStatement")
 	}
 }
 

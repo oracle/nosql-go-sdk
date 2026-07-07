@@ -1676,10 +1676,11 @@ var (
 	}
 )
 
-// QueryRequest encapsulates a query. A query may be either a string query
-// statement or a prepared query, which may include bind variables.
-// A query request cannot have both a string statement and prepared query, but
-// it must have one or the other.
+// QueryRequest encapsulates a query. A query must specify a string query
+// statement or a prepared query, which may include bind variables. During
+// execution the SDK may retain the string statement after it populates the
+// prepared query returned by the server. If both are present, they must
+// represent the same SQL text and the prepared query is used for execution.
 //
 // For performance reasons prepared queries are preferred for queries that may
 // be reused. Prepared queries bypass compilation of the query. They also allow
@@ -1856,8 +1857,9 @@ func (r *QueryRequest) validate() (err error) {
 		return nosqlerr.NewIllegalArgument("QueryRequest: either Statement or PreparedStatement should be set")
 	}
 
-	if r.Statement != "" && r.PreparedStatement != nil {
-		return nosqlerr.NewIllegalArgument("QueryRequest: Statement and PreparedStatement cannot both be set")
+	if r.Statement != "" && r.PreparedStatement != nil &&
+		r.Statement != r.PreparedStatement.sqlText {
+		return nosqlerr.NewIllegalArgument("QueryRequest: Statement does not match PreparedStatement SQL text")
 	}
 
 	if r.LastWriteMetadata != "" {
