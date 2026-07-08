@@ -34,6 +34,8 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
+const rateLimitDelayHeader = "X-Nosql-RL-Delay-Ms"
+
 // Client represents an Oracle NoSQL database client used to access the Oracle
 // NoSQL database cloud service or on-premise Oracle NoSQL database servers.
 type Client struct {
@@ -1437,6 +1439,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		if err != nil {
 			continue
 		}
+		rateDelayedTime += rateLimitDelayFromHeader(httpResp.Header)
 		if queryReq, ok := req.(*QueryRequest); ok && statsQueryEnabled {
 			queryMetadata := queryReq.queryStatsMetadata()
 			requestMetadata.query = &queryMetadata
@@ -1842,6 +1845,23 @@ func readHTTPResponseBody(httpResp *http.Response) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func rateLimitDelayFromHeader(header http.Header) time.Duration {
+	if header == nil {
+		return 0
+	}
+
+	value := strings.TrimSpace(header.Get(rateLimitDelayHeader))
+	if value == "" {
+		return 0
+	}
+
+	delayMs, err := strconv.ParseInt(value, 10, 32)
+	if err != nil || delayMs <= 0 {
+		return 0
+	}
+	return time.Duration(delayMs) * time.Millisecond
 }
 
 func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16, queryVerUsed int16) (res Result, err error) {

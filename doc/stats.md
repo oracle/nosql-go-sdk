@@ -33,6 +33,10 @@ field names, request names, latency units, and the `Client stats|` log prefix.
    the current interval, resets the interval counters, calls the optional
    `StatsHandler`, and logs JSON if `StatsEnableLog` is enabled.
 
+`rateLimitDelayMs` includes both waits introduced by the SDK's local rate
+limiters and delay reported by the server or proxy in the
+`X-Nosql-RL-Delay-Ms` response header.
+
 ## Profile behavior
 
 * `NONE`: no request collection and no periodic stats payload.

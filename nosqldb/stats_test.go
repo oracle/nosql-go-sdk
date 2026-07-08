@@ -34,12 +34,17 @@ import (
 type statsTestExecutor struct {
 	body       string
 	statusCode int
+	header     http.Header
 }
 
 func (e statsTestExecutor) Do(req *http.Request) (*http.Response, error) {
+	header := e.header
+	if header == nil {
+		header = make(http.Header)
+	}
 	return &http.Response{
 		StatusCode: e.statusCode,
-		Header:     make(http.Header),
+		Header:     header,
 		Body:       io.NopCloser(strings.NewReader(e.body)),
 	}, nil
 }
@@ -120,6 +125,18 @@ func (l *statsBlockingRateLimiter) ConsumeUnitsWithContext(ctx context.Context, 
 	})
 	<-ctx.Done()
 	return 0, ctx.Err()
+}
+
+type statsFixedDelayRateLimiter struct {
+	common.RateLimiter
+	delay time.Duration
+}
+
+func (l *statsFixedDelayRateLimiter) ConsumeUnitsWithContext(_ context.Context, units int64, _ time.Duration, _ bool) (time.Duration, error) {
+	if units <= 0 {
+		return 0, nil
+	}
+	return l.delay, nil
 }
 
 type statsCloseCountingProvider struct {
@@ -1660,6 +1677,76 @@ func TestDoExecuteRecordsStatsObservation(t *testing.T) {
 	latency := request["httpRequestLatencyMs"].(map[string]interface{})
 	assert.Contains(t, latency, "95th")
 	assert.Contains(t, latency, "99th")
+}
+
+func TestRateLimitDelayFromHeader(t *testing.T) {
+	tests := []struct {
+		name  string
+		set   bool
+		value string
+		want  time.Duration
+	}{
+		{name: "missing header"},
+		{name: "empty header", set: true},
+		{name: "valid delay", set: true, value: "17", want: 17 * time.Millisecond},
+		{name: "surrounding whitespace", set: true, value: " 9 ", want: 9 * time.Millisecond},
+		{name: "zero delay", set: true, value: "0"},
+		{name: "negative delay", set: true, value: "-1"},
+		{name: "malformed delay", set: true, value: "invalid"},
+		{name: "overflowing delay", set: true, value: "2147483648"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var header http.Header
+			if test.set {
+				header = make(http.Header)
+				header.Set(rateLimitDelayHeader, test.value)
+			}
+			assert.Equal(t, test.want, rateLimitDelayFromHeader(header))
+		})
+	}
+}
+
+func TestDoExecuteAddsServerAndLocalRateLimitDelay(t *testing.T) {
+	client, err := NewClient(Config{
+		Mode:           "cloudsim",
+		Endpoint:       "localhost:8080",
+		StatsProfile:   StatsProfileMore,
+		StatsEnableLog: boolPtr(false),
+	})
+	require.NoError(t, err)
+	defer client.Close()
+
+	header := make(http.Header)
+	header.Set(rateLimitDelayHeader, "17")
+	client.executor = statsTestExecutor{
+		body:       "response-body",
+		statusCode: http.StatusOK,
+		header:     header,
+	}
+	client.handleResponse = func(data []byte, httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error) {
+		return &GetResult{Capacity: Capacity{ReadUnits: 1}}, nil
+	}
+
+	localDelay := 3 * time.Millisecond
+	limiter := &statsFixedDelayRateLimiter{
+		RateLimiter: common.NewSimpleRateLimiter(100),
+		delay:       localDelay,
+	}
+	req := &GetRequest{TableName: "stats_table", Timeout: time.Second}
+	req.SetReadRateLimiter(limiter)
+
+	result, err := client.doExecute(context.Background(), req, []byte{1, 2, 3}, proto.DefaultSerialVersion, proto.DefaultQueryVersion)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	wantDelay := 20 * time.Millisecond
+	assert.Equal(t, wantDelay, result.Delayed().RateLimitTime)
+
+	payload := decodeStatsSnapshot(t, client.GetStatsControl().snapshotAndReset())
+	request := findStatsRequest(t, payload, "Get")
+	assert.Equal(t, float64(wantDelay/time.Millisecond), request["rateLimitDelayMs"])
 }
 
 func TestReadHTTPResponseBodyAlwaysClosesBody(t *testing.T) {

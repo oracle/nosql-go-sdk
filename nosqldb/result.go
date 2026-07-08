@@ -38,7 +38,8 @@ type Result interface {
 
 // DelayInfo contains information about the amount of time a request was delayed.
 type DelayInfo struct {
-	// RateLimitTime represents the time delayed due to internal rate limiting.
+	// RateLimitTime represents the total delay due to rate limiting, including
+	// delay introduced by the SDK and delay reported by the server or proxy.
 	RateLimitTime time.Duration `json:"rateLimitTime"`
 	// RetryTime represents the time delayed due to internal request retries.
 	RetryTime time.Duration `json:"retryTime"`
