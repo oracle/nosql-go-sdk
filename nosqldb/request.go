@@ -2024,7 +2024,7 @@ func (r *QueryRequest) queryStatsMetadata() queryStatsMetadata {
 		query:      r.Statement,
 		unprepared: true,
 		simple:     false,
-		doesWrites: queryTextDoesWrites(r.Statement),
+		doesWrites: false,
 	}
 }
 
@@ -2177,6 +2177,9 @@ const minSerializedStmtLen = 10
 const (
 	queryOperationUnknown = -1
 	queryOperationSelect  = 5
+	queryOperationUpdate  = 6
+	queryOperationInsert  = 17
+	queryOperationDelete  = 18
 )
 
 func newPreparedStatement(sqlText, queryPlan string,
@@ -2329,49 +2332,7 @@ func (p *PreparedStatement) GetQuerySchema() string {
 }
 
 func (p *PreparedStatement) doesWrites() bool {
-	if p == nil {
-		return false
-	}
-	switch p.operation {
-	case queryOperationSelect:
-		return false
-	case queryOperationUnknown:
-		return queryTextDoesWrites(p.sqlText)
-	default:
-		return true
-	}
-}
-
-func queryTextDoesWrites(query string) bool {
-	normalized := strings.ToUpper(strings.TrimSpace(stripLeadingSQLComments(query)))
-	for _, prefix := range []string{"INSERT", "UPSERT", "UPDATE", "DELETE", "MERGE"} {
-		if strings.HasPrefix(normalized, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func stripLeadingSQLComments(query string) string {
-	for {
-		query = strings.TrimSpace(query)
-		switch {
-		case strings.HasPrefix(query, "--"):
-			if idx := strings.IndexByte(query, '\n'); idx >= 0 {
-				query = query[idx+1:]
-				continue
-			}
-			return ""
-		case strings.HasPrefix(query, "/*"):
-			if idx := strings.Index(query, "*/"); idx >= 0 {
-				query = query[idx+2:]
-				continue
-			}
-			return ""
-		default:
-			return query
-		}
-	}
+	return p != nil && p.operation != queryOperationSelect
 }
 
 // WriteMultipleRequest represents the input to a Client.WriteMultiple() operation.
