@@ -8,6 +8,7 @@
 package nosqldb
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -36,6 +37,29 @@ func TestNewDefaultRetryHandler(t *testing.T) {
 		if err == nil && h.MaxNumRetries() != r.retries {
 			t.Errorf("MaxNumRetries() got %d; want %d", h.MaxNumRetries(), r.retries)
 		}
+	}
+}
+
+func TestDefaultRetryHandlerRecordsElapsedDelayWhenCanceled(t *testing.T) {
+	const scheduledDelay = time.Minute
+	const previousRetryTime = 25 * time.Millisecond
+
+	handler, err := NewDefaultRetryHandler(1, scheduledDelay)
+	if err != nil {
+		t.Fatalf("NewDefaultRetryHandler() error = %v", err)
+	}
+	req := &GetRequest{}
+	req.SetRetryTime(previousRetryTime)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = handler.DelayWithContext(ctx, req, 0, errors.New("retryable error"))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("DelayWithContext() error = %v, want %v", err, context.Canceled)
+	}
+	if got := req.GetRetryTime(); got < previousRetryTime || got >= previousRetryTime+scheduledDelay {
+		t.Fatalf("GetRetryTime() = %v, want elapsed delay in [%v, %v)",
+			got, previousRetryTime, previousRetryTime+scheduledDelay)
 	}
 }
 

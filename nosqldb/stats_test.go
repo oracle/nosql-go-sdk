@@ -91,32 +91,23 @@ func (statsBlockingExecutor) Do(req *http.Request) (*http.Response, error) {
 }
 
 type statsBlockingRetryHandler struct {
+	*DefaultRetryHandler
 	entered chan struct{}
 	once    sync.Once
 }
 
-func (*statsBlockingRetryHandler) MaxNumRetries() uint {
-	return 1
-}
-
-func (*statsBlockingRetryHandler) ShouldRetry(Request, uint, error) bool {
-	return true
-}
-
-func (*statsBlockingRetryHandler) Delay(Request, uint, error) {}
-
-func (h *statsBlockingRetryHandler) DelayWithContext(ctx context.Context, _ Request, _ uint, _ error) error {
+func (h *statsBlockingRetryHandler) DelayWithContext(ctx context.Context, req Request, numRetries uint, err error) error {
 	h.once.Do(func() {
 		close(h.entered)
 	})
-	<-ctx.Done()
-	return ctx.Err()
+	return h.DefaultRetryHandler.DelayWithContext(ctx, req, numRetries, err)
 }
 
 type statsBlockingRateLimiter struct {
 	common.RateLimiter
 	entered chan struct{}
 	once    sync.Once
+	waited  time.Duration
 }
 
 func (l *statsBlockingRateLimiter) ConsumeUnitsWithContext(ctx context.Context, _ int64, _ time.Duration, _ bool) (time.Duration, error) {
@@ -124,7 +115,7 @@ func (l *statsBlockingRateLimiter) ConsumeUnitsWithContext(ctx context.Context, 
 		close(l.entered)
 	})
 	<-ctx.Done()
-	return 0, ctx.Err()
+	return l.waited, ctx.Err()
 }
 
 type statsFixedDelayRateLimiter struct {
@@ -1986,7 +1977,13 @@ func TestDoExecuteRecordsStatsWhenRetryDelayIsCanceled(t *testing.T) {
 	require.NoError(t, err)
 	defer client.Close()
 
-	retryHandler := &statsBlockingRetryHandler{entered: make(chan struct{})}
+	const scheduledDelay = 5 * time.Second
+	defaultRetryHandler, err := NewDefaultRetryHandler(1, scheduledDelay)
+	require.NoError(t, err)
+	retryHandler := &statsBlockingRetryHandler{
+		DefaultRetryHandler: defaultRetryHandler,
+		entered:             make(chan struct{}),
+	}
 	client.RetryHandler = retryHandler
 	client.executor = &statsSequenceExecutor{
 		steps: []statsExecutorStep{{
@@ -2024,49 +2021,85 @@ func TestDoExecuteRecordsStatsWhenRetryDelayIsCanceled(t *testing.T) {
 	request := findStatsRequest(t, payload, "Get")
 	assert.Equal(t, float64(1), request["httpRequestCount"])
 	assert.Equal(t, float64(1), request["errors"])
+	retry := statsRetryPayload(t, request)
+	delayMs, ok := retry["delayMs"].(float64)
+	require.True(t, ok)
+	assert.Less(t, delayMs, float64(scheduledDelay/time.Millisecond))
+	assert.Equal(t, float64(0), retry["count"])
 }
 
 func TestDoExecuteRecordsStatsWhenRateLimiterWaitIsCanceled(t *testing.T) {
-	client, err := NewClient(Config{
-		Mode:           "cloudsim",
-		Endpoint:       "localhost:8080",
-		StatsProfile:   StatsProfileMore,
-		StatsEnableLog: boolPtr(false),
-	})
-	require.NoError(t, err)
-	defer client.Close()
-
-	limiter := &statsBlockingRateLimiter{
-		RateLimiter: common.NewSimpleRateLimiter(1),
-		entered:     make(chan struct{}),
+	const partialWait = 17 * time.Millisecond
+	tests := []struct {
+		name        string
+		requestName string
+		newRequest  func(*statsBlockingRateLimiter) Request
+	}{
+		{
+			name:        "read limiter",
+			requestName: "Get",
+			newRequest: func(limiter *statsBlockingRateLimiter) Request {
+				req := &GetRequest{TableName: "stats_table", Timeout: 5 * time.Second}
+				req.SetReadRateLimiter(limiter)
+				return req
+			},
+		},
+		{
+			name:        "write limiter",
+			requestName: "Put",
+			newRequest: func(limiter *statsBlockingRateLimiter) Request {
+				req := &PutRequest{TableName: "stats_table", Timeout: 5 * time.Second}
+				req.SetWriteRateLimiter(limiter)
+				return req
+			},
+		},
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	result := make(chan error, 1)
-	go func() {
-		req := &GetRequest{TableName: "stats_table", Timeout: 5 * time.Second}
-		req.SetReadRateLimiter(limiter)
-		_, executeErr := client.doExecute(ctx, req, []byte{1, 2, 3}, proto.DefaultSerialVersion, proto.DefaultQueryVersion)
-		result <- executeErr
-	}()
 
-	select {
-	case <-limiter.entered:
-	case <-time.After(time.Second):
-		t.Fatal("rate limiter was not entered")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, err := NewClient(Config{
+				Mode:           "cloudsim",
+				Endpoint:       "localhost:8080",
+				StatsProfile:   StatsProfileMore,
+				StatsEnableLog: boolPtr(false),
+			})
+			require.NoError(t, err)
+			defer client.Close()
+
+			limiter := &statsBlockingRateLimiter{
+				RateLimiter: common.NewSimpleRateLimiter(1),
+				entered:     make(chan struct{}),
+				waited:      partialWait,
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			result := make(chan error, 1)
+			go func() {
+				_, executeErr := client.doExecute(ctx, test.newRequest(limiter), []byte{1, 2, 3}, proto.DefaultSerialVersion, proto.DefaultQueryVersion)
+				result <- executeErr
+			}()
+
+			select {
+			case <-limiter.entered:
+			case <-time.After(time.Second):
+				t.Fatal("rate limiter was not entered")
+			}
+			cancel()
+
+			select {
+			case err = <-result:
+			case <-time.After(time.Second):
+				t.Fatal("request did not stop after context cancellation")
+			}
+			require.Equal(t, context.Canceled, err)
+
+			payload := decodeStatsSnapshot(t, client.GetStatsControl().snapshotAndReset())
+			request := findStatsRequest(t, payload, test.requestName)
+			assert.Equal(t, float64(1), request["httpRequestCount"])
+			assert.Equal(t, float64(1), request["errors"])
+			assert.Equal(t, float64(partialWait/time.Millisecond), request["rateLimitDelayMs"])
+		})
 	}
-	cancel()
-
-	select {
-	case err = <-result:
-	case <-time.After(time.Second):
-		t.Fatal("request did not stop after context cancellation")
-	}
-	require.Equal(t, context.Canceled, err)
-
-	payload := decodeStatsSnapshot(t, client.GetStatsControl().snapshotAndReset())
-	request := findStatsRequest(t, payload, "Get")
-	assert.Equal(t, float64(1), request["httpRequestCount"])
-	assert.Equal(t, float64(1), request["errors"])
 }
 
 func TestDoExecuteRecordsStatsObservationOnRequestTimeout(t *testing.T) {

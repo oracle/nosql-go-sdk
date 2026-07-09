@@ -1290,6 +1290,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			} else {
 				// note this may sleep for a while
 				ms, limiterErr := c.consumeLimiterUnitsWithContext(ctx, readLimiter, 0, timeout, false)
+				rateDelayedTime += ms
 				if limiterErr != nil {
 					if deadlineErr := checkDeadline(reqTimeout, limiterErr); deadlineErr != nil {
 						observeError()
@@ -1299,7 +1300,6 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 					observeError()
 					return nil, err
 				}
-				rateDelayedTime += ms
 			}
 		}
 		if writeLimiter != nil && checkWriteUnits {
@@ -1319,6 +1319,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			} else {
 				// note this may sleep for a while
 				ms, limiterErr := c.consumeLimiterUnitsWithContext(ctx, writeLimiter, 0, timeout, false)
+				rateDelayedTime += ms
 				if limiterErr != nil {
 					if deadlineErr := checkDeadline(reqTimeout, limiterErr); deadlineErr != nil {
 						observeError()
@@ -1328,7 +1329,6 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 					observeError()
 					return nil, err
 				}
-				rateDelayedTime += ms
 			}
 		}
 

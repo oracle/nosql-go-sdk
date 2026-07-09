@@ -131,15 +131,21 @@ func (r DefaultRetryHandler) DelayWithContext(ctx context.Context, req Request, 
 		return ctx.Err()
 	}
 
-	req.SetRetryTime(req.GetRetryTime() + d)
-
+	retryTime := req.GetRetryTime()
+	waitStart := time.Now()
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 
 	select {
 	case <-timer.C:
+		req.SetRetryTime(retryTime + d)
 		return nil
 	case <-ctx.Done():
+		waited := time.Since(waitStart)
+		if waited > d {
+			waited = d
+		}
+		req.SetRetryTime(retryTime + waited)
 		return ctx.Err()
 	}
 }
