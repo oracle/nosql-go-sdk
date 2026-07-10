@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+- Added configurable client-side statistics with Java-compatible `REGULAR`,
+  `MORE`, and `ALL` profiles, periodic JSON logging, callback delivery, runtime
+  controls, exact or bounded-memory percentile calculation, and request/query
+  lifecycle coverage.
+
 ## 1.4.8 - 2026-04-22
 
 ## Added

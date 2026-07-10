@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -61,6 +62,7 @@ func newConfig(configFile string) (*Config, error) {
 		return nil, errors.New("config file not specified")
 	}
 
+	configFile = resolveConfigFile(configFile)
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %v", configFile, err)
@@ -73,6 +75,34 @@ func newConfig(configFile string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func resolveConfigFile(configFile string) string {
+	if filepath.IsAbs(configFile) {
+		return configFile
+	}
+
+	if _, err := os.Stat(configFile); err == nil {
+		return configFile
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return configFile
+	}
+
+	for {
+		candidate := filepath.Join(wd, configFile)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+
+		parent := filepath.Dir(wd)
+		if parent == wd {
+			return configFile
+		}
+		wd = parent
+	}
 }
 
 // IsCloud returns true if tests are configured to run against the NoSQL cloud

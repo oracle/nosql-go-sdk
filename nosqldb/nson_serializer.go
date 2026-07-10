@@ -2677,7 +2677,7 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 	// TODO
 	var tableName string
 	var namespace string
-	var operation byte
+	operation := queryOperationUnknown
 	var querySchema string
 
 	var walker *mapWalker
@@ -2750,7 +2750,7 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 			var val int
 			val, err = readNsonInt(r, name)
 			if err == nil {
-				operation = byte(val)
+				operation = val
 			}
 		default:
 			err = skipNsonField(r, name)
@@ -2801,12 +2801,11 @@ func readNsonPrepareOrQuery(qreq *QueryRequest, qres *QueryResult,
 
 	if dpi != nil {
 		prep.driverQueryPlan = dpi.driverQueryPlan
+		prep.statsPlanCache = &preparedStatementStatsCache{}
 		prep.numIterators = dpi.numIterators
 		prep.numRegisters = dpi.numRegisters
 		prep.variableToIDs = dpi.externalVars
 	}
-
-	// TODO: namespace, tableName, operation??
 
 	if pres != nil {
 		pres.PreparedStatement = *prep

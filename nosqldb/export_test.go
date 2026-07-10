@@ -14,7 +14,7 @@ import (
 
 // This file exports functions/methods that are used in test codes.
 
-type HandleResponse func(httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error)
+type HandleResponse func(data []byte, httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error)
 
 func (c *Client) SetResponseHandler(fn HandleResponse) {
 	c.handleResponse = fn

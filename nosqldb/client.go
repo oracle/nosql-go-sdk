@@ -34,6 +34,8 @@ import (
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 )
 
+const rateLimitDelayHeader = "X-Nosql-RL-Delay-Ms"
+
 // Client represents an Oracle NoSQL database client used to access the Oracle
 // NoSQL database cloud service or on-premise Oracle NoSQL database servers.
 type Client struct {
@@ -50,6 +52,12 @@ type Client struct {
 
 	// queryLogger logs trace information for advanced queries.
 	queryLogger *queryTracer
+
+	// statsControl controls client-side statistics runtime settings.
+	statsControl *StatsControl
+
+	// closeState ensures client resources are released at most once.
+	closeState uint32
 
 	// requestURL represents the server URL that is the target of all client requests.
 	requestURL string
@@ -68,7 +76,7 @@ type Client struct {
 	// handleResponse specifies a function that is used to handle the response
 	// returned from server.
 	// This is used internally by tests for customizing response processing.
-	handleResponse func(httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error)
+	handleResponse func(data []byte, httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error)
 
 	// isCloud represents whether the client connects to the cloud service or
 	// cloud simulator.
@@ -158,6 +166,7 @@ func NewClient(cfg Config) (*Client, error) {
 		serverHost:    cfg.host,
 		executor:      cfg.httpClient,
 		logger:        cfg.Logger,
+		statsControl:  newStatsControl(cfg),
 		isCloud:       cfg.IsCloud() || cfg.IsCloudSim(),
 		serialVersion: proto.DefaultSerialVersion,
 		queryVersion:  proto.DefaultQueryVersion,
@@ -177,12 +186,25 @@ func NewClient(cfg Config) (*Client, error) {
 	c.oneTimeMessages = make(map[string]struct{})
 
 	c.warmupClientAuth()
+	c.statsControl.startEmitter()
 
 	return c, nil
 }
 
-// Close releases any resources used by Client.
+// Close logs the final client-side statistics interval and releases any
+// resources used by Client. Close is idempotent and safe to call from a
+// StatsHandler. If a stats handler callback is already active, delivery of the
+// final snapshot to the handler is deferred until active callbacks return and
+// may occur after Close returns.
 func (c *Client) Close() error {
+	if !atomic.CompareAndSwapUint32(&c.closeState, 0, 1) {
+		return nil
+	}
+
+	if c.statsControl != nil {
+		c.statsControl.shutdown()
+	}
+
 	if c.AuthorizationProvider != nil {
 		c.AuthorizationProvider.Close()
 	}
@@ -195,6 +217,14 @@ func (c *Client) Close() error {
 	// may still be in use by the application
 
 	return nil
+}
+
+// GetStatsControl returns the runtime statistics control associated with this client.
+func (c *Client) GetStatsControl() *StatsControl {
+	if c == nil {
+		return nil
+	}
+	return c.statsControl
 }
 
 // Get retrieves the row associated with a primary key.
@@ -964,6 +994,25 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		return nil, errNilContext
 	}
 
+	statsControl := c.statsControl
+	statsEnabled := statsControl != nil && statsControl.isEnabled()
+	statsQueryEnabled := statsEnabled && statsControl.queryStatsEnabled()
+	var requestMetadata statsRequestMetadata
+	requestSize := 0
+	if statsEnabled {
+		requestMetadata = statsRequestMetadataForRequest(req)
+		requestSize = len(data)
+		if statsQueryEnabled {
+			if queryReq, ok := req.(*QueryRequest); ok {
+				queryMetadata := queryReq.queryStatsMetadata()
+				requestMetadata.query = &queryMetadata
+				if !queryReq.isInternalRequest() {
+					statsControl.observeQuery(queryMetadata)
+				}
+			}
+		}
+	}
+
 	if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isInternalRequest() {
 
 		req.SetTopology(c.getTopologyInfo())
@@ -1023,6 +1072,10 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	secInfoTimeout := c.DefaultSecurityInfoTimeout()
 	numRetries := 0
 	numThrottleRetries := 0
+	numAuthRetries := 0
+	numStatsThrottleRetries := 0
+	lastResponseSize := 0
+	lastRequestLatency := time.Duration(0)
 
 	req.SetRetryTime(0)
 	var rateDelayedTime time.Duration = 0
@@ -1058,6 +1111,37 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 	}
 
 	startTime := time.Now()
+	observeSuccess := func() {
+		if !statsEnabled || !statsControl.isEnabled() {
+			return
+		}
+		statsControl.observe(newStatsSuccess(
+			requestMetadata,
+			requestSize,
+			lastResponseSize,
+			lastRequestLatency,
+			numRetries,
+			req.GetRetryTime(),
+			numAuthRetries,
+			numStatsThrottleRetries,
+			rateDelayedTime,
+		))
+	}
+	observeError := func() {
+		if !statsEnabled || !statsControl.isEnabled() {
+			return
+		}
+		statsControl.observe(newStatsError(
+			requestMetadata,
+			requestSize,
+			lastResponseSize,
+			numRetries,
+			req.GetRetryTime(),
+			numAuthRetries,
+			numStatsThrottleRetries,
+			rateDelayedTime,
+		))
+	}
 	remainingTimeout := func(timeout time.Duration) time.Duration {
 		if timeout <= 0 {
 			return 0
@@ -1090,6 +1174,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		if err != nil {
 			isSecErr := nosqlerr.IsSecurityInfoUnavailable(err)
+			isAuthRetry := isStatsAuthRetry(err)
 			if isSecErr {
 				timeout = secInfoTimeout
 			} else {
@@ -1097,6 +1182,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			}
 
 			if deadlineErr := checkDeadline(timeout, err); deadlineErr != nil {
+				observeError()
 				return nil, deadlineErr
 			}
 
@@ -1120,40 +1206,57 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 			if nosqlerr.Is(err, nosqlerr.UnsupportedProtocol) {
 				if !c.decrementSerialVersion(serialVerUsed) {
+					observeError()
 					return nil, err
 				}
 				// if serial version mismatch, we must re-serialize the request
 				data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
 				if err != nil {
+					observeError()
 					return nil, err
+				}
+				if statsEnabled {
+					requestSize = len(data)
 				}
 			} else if nosqlerr.Is(err, nosqlerr.UnsupportedQueryVersion) {
 				if !c.decrementQueryVersion(queryVerUsed) {
+					observeError()
 					return nil, err
 				}
 				// if query version mismatch, we must re-serialize the request
 				data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
 				if err != nil {
+					observeError()
 					return nil, err
+				}
+				if statsEnabled {
+					requestSize = len(data)
 				}
 			} else {
 				retryCtx, retryCancel, deadlineErr := contextWithRemainingTimeout(timeout, err)
 				if deadlineErr != nil {
+					observeError()
 					return nil, deadlineErr
 				}
 				shouldRetry, retryErr := c.handleError(retryCtx, err, req, numThrottleRetries)
 				retryCancel()
 				if retryErr != nil {
 					if deadlineErr = checkDeadline(timeout, err); deadlineErr != nil {
+						observeError()
 						return nil, deadlineErr
 					}
+					observeError()
 					return nil, retryErr
 				}
 				if !shouldRetry {
+					observeError()
 					return nil, err
 				}
 			}
 
+			if isAuthRetry {
+				numAuthRetries++
+			}
 			if isSecErr {
 				c.logger.Fine("Client.execute() got error %v, numRetries: %d, numThrottleRetries: %d",
 					err, numRetries, numThrottleRetries)
@@ -1162,6 +1265,9 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 					err, numRetries, numThrottleRetries)
 				// Only count errors other than SecurityInfoUnavailable as throttle retries.
 				numThrottleRetries++
+				if isStatsThrottleError(err) {
+					numStatsThrottleRetries++
+				}
 			}
 			// Increase number of retries
 			numRetries++
@@ -1170,28 +1276,35 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		// Before executing request: wait for rate limiter(s) to go below limit
 		if readLimiter != nil && checkReadUnits {
 			if deadlineErr := checkDeadline(reqTimeout, err); deadlineErr != nil {
+				observeError()
 				return nil, deadlineErr
 			}
 			// wait for read limiter to come below the limit
 			timeout = remainingTimeout(reqTimeout)
 			if timeout <= 0 {
 				if !readLimiter.TryConsumeUnits(0) {
-					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
+					err = nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
+					observeError()
+					return nil, err
 				}
 			} else {
 				// note this may sleep for a while
 				ms, limiterErr := c.consumeLimiterUnitsWithContext(ctx, readLimiter, 0, timeout, false)
+				rateDelayedTime += ms
 				if limiterErr != nil {
 					if deadlineErr := checkDeadline(reqTimeout, limiterErr); deadlineErr != nil {
+						observeError()
 						return nil, deadlineErr
 					}
-					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
+					err = nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to read rate limiting")
+					observeError()
+					return nil, err
 				}
-				rateDelayedTime += ms
 			}
 		}
 		if writeLimiter != nil && checkWriteUnits {
 			if deadlineErr := checkDeadline(reqTimeout, err); deadlineErr != nil {
+				observeError()
 				return nil, deadlineErr
 			}
 			// wait for write limiter to come below the limit
@@ -1199,18 +1312,23 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			timeout = remainingTimeout(reqTimeout)
 			if timeout <= 0 {
 				if !writeLimiter.TryConsumeUnits(0) {
-					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
+					err = nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
+					observeError()
+					return nil, err
 				}
 			} else {
 				// note this may sleep for a while
 				ms, limiterErr := c.consumeLimiterUnitsWithContext(ctx, writeLimiter, 0, timeout, false)
+				rateDelayedTime += ms
 				if limiterErr != nil {
 					if deadlineErr := checkDeadline(reqTimeout, limiterErr); deadlineErr != nil {
+						observeError()
 						return nil, deadlineErr
 					}
-					return nil, nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
+					err = nosqlerr.New(nosqlerr.RequestTimeout, "Could not execute request due to write rate limiting")
+					observeError()
+					return nil, err
 				}
-				rateDelayedTime += ms
 			}
 		}
 
@@ -1227,6 +1345,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		httpReq, err = httputil.NewPostRequest(c.requestURL, data)
 		if err != nil {
+			observeError()
 			return nil, err
 		}
 
@@ -1259,6 +1378,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		err = c.signHTTPRequest(httpReq)
 		if err != nil {
+			observeError()
 			return nil, err
 		}
 
@@ -1293,23 +1413,41 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, err)
 		if deadlineErr != nil {
+			observeError()
 			return nil, deadlineErr
 		}
 		httpReq = httpReq.WithContext(reqCtx)
+		requestStart := time.Now()
 		httpResp, err = c.executor.Do(httpReq)
 		if err != nil {
+			lastRequestLatency = time.Since(requestStart)
 			reqCancel()
 			continue
 		}
 
-		result, err = c.handleResponse(httpResp, req, serialVerUsed, queryVerUsed)
+		var responseData []byte
+		responseData, err = readHTTPResponseBody(httpResp)
+		lastRequestLatency = time.Since(requestStart)
+		lastResponseSize = len(responseData)
 		// Cancel request context after response body has been read.
 		reqCancel()
 		if err != nil {
 			continue
 		}
 
+		result, err = c.handleResponse(responseData, httpResp, req, serialVerUsed, queryVerUsed)
+		if err != nil {
+			continue
+		}
+		rateDelayedTime += rateLimitDelayFromHeader(httpResp.Header)
+		if queryReq, ok := req.(*QueryRequest); ok && statsQueryEnabled {
+			queryMetadata := queryReq.queryStatsMetadata()
+			requestMetadata.query = &queryMetadata
+			statsControl.observeQueryMetadata(queryMetadata)
+		}
+
 		if result == nil {
+			observeSuccess()
 			return result, nil
 		}
 
@@ -1334,6 +1472,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		result.Delayed().setRateLimitTime(rateDelayedTime)
 		result.Delayed().setRetryTime(req.GetRetryTime())
 
+		observeSuccess()
 		return result, nil
 	}
 }
@@ -1671,14 +1810,12 @@ func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16
 
 // processResponse processes the http response returned from server.
 //
-// If the http response status code is 200, this method reads in response
-// content and parses them as an appropriate result suitable for the request.
-// Otherwise, it returns the http error.
-func (c *Client) processResponse(httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error) {
-	data, err := io.ReadAll(httpResp.Body)
-	httpResp.Body.Close()
-	if err != nil {
-		return nil, err
+// If the http response status code is 200, this method parses the response
+// content as an appropriate result suitable for the request. Otherwise, it
+// returns the http error.
+func (c *Client) processResponse(data []byte, httpResp *http.Response, req Request, serialVerUsed int16, queryVerUsed int16) (Result, error) {
+	if httpResp == nil {
+		return nil, nosqlerr.New(nosqlerr.UnknownError, "nil http response")
 	}
 
 	if httpResp.StatusCode == http.StatusOK {
@@ -1693,6 +1830,38 @@ func (c *Client) processResponse(httpResp *http.Response, req Request, serialVer
 	}
 
 	return nil, c.processNotOKResponse(data, httpResp.StatusCode)
+}
+
+func readHTTPResponseBody(httpResp *http.Response) ([]byte, error) {
+	if httpResp == nil {
+		return nil, nosqlerr.New(nosqlerr.UnknownError, "nil http response")
+	}
+	if httpResp.Body == nil {
+		return nil, nil
+	}
+	data, err := io.ReadAll(httpResp.Body)
+	httpResp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func rateLimitDelayFromHeader(header http.Header) time.Duration {
+	if header == nil {
+		return 0
+	}
+
+	value := strings.TrimSpace(header.Get(rateLimitDelayHeader))
+	if value == "" {
+		return 0
+	}
+
+	delayMs, err := strconv.ParseInt(value, 10, 32)
+	if err != nil || delayMs <= 0 {
+		return 0
+	}
+	return time.Duration(delayMs) * time.Millisecond
 }
 
 func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16, queryVerUsed int16) (res Result, err error) {

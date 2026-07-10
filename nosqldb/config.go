@@ -40,6 +40,9 @@ const (
 
 	// The default Consistency value.
 	defaultConsistency = types.Eventual
+
+	// The default interval for periodic client-side statistics snapshots.
+	defaultStatsInterval = 600 * time.Second
 )
 
 // Config represents a group of configuration parameters for a Client.
@@ -102,6 +105,41 @@ type Config struct {
 	// Configurations for logging.
 	LoggingConfig `json:"loggingConfig,omitempty"`
 
+	// StatsProfile specifies how much client-side statistics data to collect.
+	// The default value is StatsProfileNone. StatsProfileAll retains raw query
+	// text as aggregation keys and may emit query text and client-side plans to
+	// the configured handler and logger. Applications should avoid
+	// StatsProfileAll when statements may contain sensitive literals or
+	// unbounded combinations of literal values.
+	StatsProfile StatsProfile `json:"statsProfile,omitempty"`
+
+	// StatsInterval specifies how often statistics snapshots are emitted.
+	// If set, it must be a whole number of seconds greater than or equal to 1.
+	// The default value is 600 seconds, matching the Java and Python SDKs.
+	StatsInterval time.Duration `json:"statsInterval,omitempty"`
+
+	// StatsPrettyPrint specifies whether emitted statistics JSON should be
+	// pretty-printed. The default value is false.
+	StatsPrettyPrint bool `json:"statsPrettyPrint,omitempty"`
+
+	// StatsEnableLog specifies whether statistics snapshots should be logged.
+	// If nil, logging is enabled by default for non-NONE profiles, matching the
+	// Java SDK behavior. DisableLogging suppresses this default unless
+	// StatsEnableLog is explicitly true or a custom logger is configured. Use a
+	// pointer to distinguish "not set" from false.
+	StatsEnableLog *bool `json:"statsEnableLog,omitempty"`
+
+	// StatsPercentileMode specifies how latency percentile values are
+	// calculated for StatsProfileMore and StatsProfileAll. The default is
+	// StatsPercentileExact, which is closest to the Java SDK behavior but stores
+	// one latency sample per successful request for each interval. Use
+	// StatsPercentileHDR for bounded memory at high request volumes.
+	StatsPercentileMode StatsPercentileMode `json:"statsPercentileMode,omitempty"`
+
+	// StatsHandler specifies an optional application callback that receives
+	// statistics snapshots. It is not serialized as part of Config.
+	StatsHandler StatsHandler `json:"-"`
+
 	// Authorization provider.
 	// If not specified, use the default authorization provider depending on the
 	// configuration mode:
@@ -148,11 +186,25 @@ func (c *Config) validate() error {
 		return fmt.Errorf("cannot have both Endpoint and Region specified")
 	}
 
+	if err := c.validateStatsConfig(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (c *Config) setDefaults() (err error) {
 	err = c.validate()
+	if err != nil {
+		return
+	}
+
+	c.StatsProfile, err = c.StatsProfile.normalized()
+	if err != nil {
+		return
+	}
+
+	c.StatsPercentileMode, err = c.StatsPercentileMode.normalized()
 	if err != nil {
 		return
 	}
@@ -314,6 +366,78 @@ func (c *Config) IsCloud() bool {
 // IsCloudSim returns whether the configuration is used for cloud simulator.
 func (c *Config) IsCloudSim() bool {
 	return strings.EqualFold(c.Mode, "cloudsim")
+}
+
+func (c *Config) validateStatsConfig() error {
+	if !c.StatsProfile.isValid() {
+		return fmt.Errorf("invalid stats profile %q; expected one of: NONE, REGULAR, MORE, ALL", c.StatsProfile)
+	}
+
+	if c.StatsInterval != 0 && c.StatsInterval < time.Second {
+		return fmt.Errorf("stats interval must be at least 1 second")
+	}
+	if c.StatsInterval%time.Second != 0 {
+		return fmt.Errorf("stats interval must be a whole number of seconds")
+	}
+
+	if !c.StatsPercentileMode.isValid() {
+		return fmt.Errorf("invalid stats percentile mode %q; expected one of: EXACT, HDR", c.StatsPercentileMode)
+	}
+
+	return nil
+}
+
+// DefaultStatsProfile returns the configured statistics profile, or
+// StatsProfileNone if no profile is configured.
+func (c *Config) DefaultStatsProfile() StatsProfile {
+	if c == nil {
+		return StatsProfileNone
+	}
+	profile, err := c.StatsProfile.normalized()
+	if err != nil {
+		return c.StatsProfile
+	}
+	return profile
+}
+
+// DefaultStatsInterval returns the configured statistics interval, or 600
+// seconds if no interval is configured.
+func (c *Config) DefaultStatsInterval() time.Duration {
+	if c == nil || c.StatsInterval == 0 {
+		return defaultStatsInterval
+	}
+	return c.StatsInterval
+}
+
+// DefaultStatsPrettyPrint returns whether statistics JSON should be
+// pretty-printed. The default is false.
+func (c *Config) DefaultStatsPrettyPrint() bool {
+	if c == nil {
+		return false
+	}
+	return c.StatsPrettyPrint
+}
+
+// DefaultStatsEnableLog returns the configured stats logging value, or true if
+// it is not configured. Effective stats logging also honors DisableLogging.
+func (c *Config) DefaultStatsEnableLog() bool {
+	if c == nil || c.StatsEnableLog == nil {
+		return true
+	}
+	return *c.StatsEnableLog
+}
+
+// DefaultStatsPercentileMode returns the configured percentile mode, or
+// StatsPercentileExact if no mode is configured.
+func (c *Config) DefaultStatsPercentileMode() StatsPercentileMode {
+	if c == nil {
+		return StatsPercentileExact
+	}
+	mode, err := c.StatsPercentileMode.normalized()
+	if err != nil {
+		return c.StatsPercentileMode
+	}
+	return mode
 }
 
 func parseEndpoint(endpoint string) (protocol, host, port string, err error) {

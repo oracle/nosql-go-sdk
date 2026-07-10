@@ -269,6 +269,86 @@ defer client.Close()
 // ...
 ```
 
+## Client-side statistics
+
+The SDK can emit client-side statistics using the same profile model and JSON
+field names as the Oracle NoSQL Java SDK. Enable statistics when creating a
+`nosqldb.Client`:
+
+```go
+enableStatsLog := true
+cfg := nosqldb.Config{
+    Endpoint:         "http://localhost:8080",
+    Mode:             "cloudsim",
+    StatsProfile:     nosqldb.StatsProfileMore,
+    StatsInterval:    5 * time.Second,
+    StatsPrettyPrint: true,
+    StatsEnableLog:   &enableStatsLog,
+}
+client, err := nosqldb.NewClient(cfg)
+```
+
+The available profiles are:
+
+* `StatsProfileNone`: disables stats collection and emits no periodic stats.
+* `StatsProfileRegular`: emits aggregate request stats.
+* `StatsProfileMore`: adds `95th` and `99th` latency percentiles.
+* `StatsProfileAll`: adds query-level `queries` entries.
+
+`StatsProfileAll` uses raw SQL text as an aggregation key and can emit SQL text
+and client-side query plans. Do not use it with statements containing sensitive
+literals or unbounded literal combinations unless the handler and logs are
+appropriately protected. Prefer bind variables to limit query cardinality.
+
+When stats logging is enabled, stats are written at `Info` level with the
+Java-compatible `Client stats|` prefix. If no logger is configured, or the
+logger is `logger.DefaultLogger`, stats use a dedicated `Info` logger that
+writes to standard error. An explicitly configured custom logger is used as-is
+and must allow `Info` logs. The first log line contains configuration metadata
+such as SDK name, SDK version, client id, profile, interval, pretty-print
+setting, percentile mode, and rate-limiting status. Periodic stats payloads
+contain `clientId`, `startTime`, `endTime`, `requests`, and, when applicable,
+`queries`.
+
+Applications can also receive snapshots directly:
+
+```go
+cfg.StatsHandler = nosqldb.StatsHandlerFunc(func(stats *nosqldb.StatsSnapshot) {
+    fmt.Println(stats.JSON())
+})
+```
+
+The handler may be called from an SDK goroutine and should be safe for
+concurrent use. It may call `Client.Close()`; a final callback is deferred until
+all active callbacks return and may run after `Client.Close()` returns. The
+final interval is still written synchronously when stats logging is enabled.
+Non-`NONE` profiles continue to emit empty interval payloads while the client
+is alive; those payloads contain `clientId`, `startTime`, `endTime`, and an empty
+`requests` array.
+
+Statistics can be adjusted at runtime using `client.GetStatsControl()`:
+
+```go
+stats := client.GetStatsControl()
+_ = stats.SetProfile(nosqldb.StatsProfileAll)
+stats.SetPrettyPrint(true)
+stats.Start()
+```
+
+Changing profiles emits the current partial interval under the old profile
+before applying the new one. Runtime controls cannot restart collection after
+`Client.Close()`.
+
+The default `StatsPercentileExact` mode retains one latency sample per
+successful request until the interval is emitted. For high request rates or
+long intervals, use `StatsPercentileHDR` for bounded memory.
+
+To run the stats example against a local Cloud Simulator:
+
+```sh
+go run ./examples/stats -profile=MORE -interval=5 localhost:8080
+```
+
 ## Simple Example
 
 Below is a complete simple example program that opens a `nosqldb.Client` handle, creates a simple table if it does not already exist, puts, gets, and deletes a row, then drops the table.
@@ -534,6 +614,8 @@ See also:
   environments.
 * [Working with Tables](https://github.com/oracle/nosql-go-sdk/blob/master/doc/tables.md)
   for details on how to use tables to store and retrieve data.
+* [Client-side statistics](https://github.com/oracle/nosql-go-sdk/blob/master/doc/stats.md)
+  for details on statistics profiles, emitted JSON, and validation guidance.
 
 ## API Reference
 
