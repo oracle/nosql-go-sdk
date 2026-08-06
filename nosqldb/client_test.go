@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
+	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -670,6 +671,31 @@ func TestTopologyInfoIsCloned(t *testing.T) {
 	ti = client.getTopologyInfo()
 	require.NotNil(t, ti)
 	require.Equal(t, []int{1, 2, 3}, ti.ShardIDs)
+}
+
+func TestClientHTTPTransportOwnership(t *testing.T) {
+	owned, err := newMockClient()
+	require.NoError(t, err)
+	require.True(t, owned.ownsHTTPTransport)
+	require.NotNil(t, owned.closeIdleConnections)
+	closeCalls := 0
+	owned.closeIdleConnections = func() { closeCalls++ }
+	require.NoError(t, owned.Close())
+	require.NoError(t, owned.Close())
+	require.Equal(t, 1, closeCalls)
+
+	sharedHTTP, err := httputil.NewHTTPClient(httputil.HTTPConfig{})
+	require.NoError(t, err)
+	shared, err := NewClient(Config{
+		Mode:                  "onprem",
+		Endpoint:              "localhost:8080",
+		AuthorizationProvider: &DummyAccessTokenProvider{TenantID: "test"},
+		httpClient:            sharedHTTP,
+	})
+	require.NoError(t, err)
+	require.False(t, shared.ownsHTTPTransport)
+	require.Nil(t, shared.closeIdleConnections)
+	require.NoError(t, shared.Close())
 }
 
 func TestTopologySnapshotRemainsImmutable(t *testing.T) {

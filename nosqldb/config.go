@@ -171,7 +171,8 @@ type Config struct {
 	port     string
 	protocol string
 
-	httpClient *httputil.HTTPClient
+	httpClient     *httputil.HTTPClient
+	ownsHTTPClient bool
 }
 
 func (c *Config) validate() error {
@@ -254,6 +255,7 @@ func (c *Config) setDefaults() (err error) {
 		// is not required.
 		if c.AuthorizationProvider == nil && len(c.Username) > 0 && len(c.Password) > 0 {
 			c.httpClient, err = httputil.NewHTTPClient(c.HTTPConfig)
+			c.ownsHTTPClient = err == nil
 			if err != nil {
 				return err
 			}
@@ -279,6 +281,7 @@ func (c *Config) setDefaults() (err error) {
 			if atp.GetHTTPClient() == nil {
 				if c.httpClient == nil {
 					c.httpClient, err = httputil.NewHTTPClient(c.HTTPConfig)
+					c.ownsHTTPClient = err == nil
 					if err != nil {
 						return err
 					}

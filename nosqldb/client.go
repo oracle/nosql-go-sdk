@@ -58,6 +58,9 @@ type Client struct {
 	// closeState ensures client resources are released at most once.
 	closeState uint32
 
+	closeIdleConnections func()
+	ownsHTTPTransport    bool
+
 	// requestURL represents the server URL that is the target of all client requests.
 	requestURL string
 
@@ -155,21 +158,26 @@ func NewClient(cfg Config) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
+		cfg.ownsHTTPClient = true
 	}
 
 	c := &Client{
-		Config:        cfg,
-		HTTPClient:    cfg.httpClient,
-		requestURL:    cfg.Endpoint + sdkutil.DataServiceURI,
-		requestID:     0,
-		serverHost:    cfg.host,
-		executor:      cfg.httpClient,
-		logger:        cfg.Logger,
-		statsControl:  newStatsControl(cfg),
-		isCloud:       cfg.IsCloud() || cfg.IsCloudSim(),
-		serialVersion: proto.DefaultSerialVersion,
-		queryVersion:  proto.DefaultQueryVersion,
-		topology:      nil,
+		Config:            cfg,
+		HTTPClient:        cfg.httpClient,
+		requestURL:        cfg.Endpoint + sdkutil.DataServiceURI,
+		requestID:         0,
+		serverHost:        cfg.host,
+		executor:          cfg.httpClient,
+		logger:            cfg.Logger,
+		statsControl:      newStatsControl(cfg),
+		isCloud:           cfg.IsCloud() || cfg.IsCloudSim(),
+		serialVersion:     proto.DefaultSerialVersion,
+		queryVersion:      proto.DefaultQueryVersion,
+		topology:          nil,
+		ownsHTTPTransport: cfg.ownsHTTPClient,
+	}
+	if c.ownsHTTPTransport {
+		c.closeIdleConnections = cfg.httpClient.CloseIdleConnections
 	}
 	c.handleResponse = c.processResponse
 	c.queryLogger, err = newQueryLogger()
@@ -210,6 +218,10 @@ func (c *Client) Close() error {
 
 	if c.queryLogger != nil {
 		c.queryLogger.Close()
+	}
+
+	if c.closeIdleConnections != nil {
+		c.closeIdleConnections()
 	}
 
 	// do not close logger; it may have been passed to us and
@@ -1189,6 +1201,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 
 	for {
 
+		attemptCause := err
 		if err != nil {
 			isSecErr := nosqlerr.IsSecurityInfoUnavailable(err)
 			isAuthRetry := isStatsAuthRetry(err)
@@ -1445,7 +1458,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 			}
 		}
 
-		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, err)
+		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, attemptCause)
 		if deadlineErr != nil {
 			httpReq.Body.Close()
 			observeError()
