@@ -57,6 +57,26 @@ func TestLeaseBodyReadAfterCloseAndDoubleClose(t *testing.T) {
 	require.Equal(t, int32(0), atomic.LoadInt32(&lease.refs))
 }
 
+func TestLeaseBodyWriteToAndClose(t *testing.T) {
+	payload := bytes.Repeat([]byte("payload-"), 128)
+	lease := newRequestBufferLeaseFromBytes(payload)
+	body, err := lease.newBody()
+	require.NoError(t, err)
+
+	writerTo, ok := body.(io.WriterTo)
+	require.True(t, ok)
+	var got bytes.Buffer
+	n, err := writerTo.WriteTo(&got)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(payload)), n)
+	require.Equal(t, payload, got.Bytes())
+	require.NoError(t, body.Close())
+
+	_, err = writerTo.WriteTo(io.Discard)
+	require.Equal(t, http.ErrBodyReadAfterClose, err)
+	lease.releaseOwner()
+}
+
 func TestLeaseBodyConcurrentReadAndClose(t *testing.T) {
 	lease := newRequestBufferLeaseFromBytes(bytes.Repeat([]byte("x"), 64*1024))
 	body, err := lease.newBody()
