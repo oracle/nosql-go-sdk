@@ -8,8 +8,6 @@
 package common
 
 import (
-	"reflect"
-	"sort"
 	"time"
 )
 
@@ -123,10 +121,21 @@ func (ti *TopologyInfo) Equals(otherTopo *TopologyInfo) bool {
 		return false
 	}
 
-	// Sort the slice of shard IDs and compare.
-	sort.Ints(ti.ShardIDs)
-	sort.Ints(otherTopo.ShardIDs)
-	return reflect.DeepEqual(ti.ShardIDs, otherTopo.ShardIDs)
+	if (ti.ShardIDs == nil) != (otherTopo.ShardIDs == nil) {
+		return false
+	}
+
+	counts := make(map[int]int, len(ti.ShardIDs))
+	for _, shardID := range ti.ShardIDs {
+		counts[shardID]++
+	}
+	for _, shardID := range otherTopo.ShardIDs {
+		if counts[shardID] == 0 {
+			return false
+		}
+		counts[shardID]--
+	}
+	return true
 }
 
 // GetTopologyInfo returns the entire topology info

@@ -151,7 +151,7 @@ func newRCB(driver *queryDriver, rootIter planIter, numIterators, numRegisters i
 		iterStates:   make([]planIterState, numIterators),
 		registers:    make([]types.FieldValue, numRegisters),
 		externalVars: externalVars,
-		baseTopology: driver.getClient().getTopologyInfo(),
+		baseTopology: driver.getClient().topologySnapshot(),
 	}, nil
 }
 

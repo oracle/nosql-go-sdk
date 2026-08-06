@@ -1015,7 +1015,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 	if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isInternalRequest() {
 
-		req.SetTopology(c.getTopologyInfo())
+		req.SetTopology(c.topologySnapshot())
 
 		// If the QueryRequest represents an advanced query, it will be bound
 		// with a queryDriver the first time the execute() is called for the query.
@@ -1334,7 +1334,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		// set the topology in the request, if not set already
 		if queryReq, ok := req.(*QueryRequest); !ok || queryReq.isInternalRequest() {
-			req.SetTopology(c.getTopologyInfo())
+			req.SetTopology(c.topologySnapshot())
 		}
 
 		// Handle errors that may occur when retrieving authorization string.
@@ -2205,11 +2205,16 @@ func (c *Client) decrementQueryVersion(queryVerUsed int16) bool {
 	return false
 }
 
-// getTopologyInfo returns the topology info stored in the client
-func (c *Client) getTopologyInfo() *common.TopologyInfo {
+// topologySnapshot returns the immutable topology currently published by the client.
+func (c *Client) topologySnapshot() *common.TopologyInfo {
 	c.topologyMux.RLock()
 	defer c.topologyMux.RUnlock()
-	return cloneTopologyInfo(c.topology)
+	return c.topology
+}
+
+// getTopologyInfo returns a mutable copy of the topology stored in the client.
+func (c *Client) getTopologyInfo() *common.TopologyInfo {
+	return cloneTopologyInfo(c.topologySnapshot())
 }
 
 // GetQueryVersion is used for tests.
