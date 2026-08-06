@@ -140,6 +140,15 @@ func (b *leaseBody) Read(p []byte) (int, error) {
 	return b.reader.Read(p)
 }
 
+func (b *leaseBody) WriteTo(w io.Writer) (int64, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return 0, http.ErrBodyReadAfterClose
+	}
+	return b.reader.WriteTo(w)
+}
+
 func (b *leaseBody) Close() error {
 	b.once.Do(func() {
 		b.mu.Lock()
