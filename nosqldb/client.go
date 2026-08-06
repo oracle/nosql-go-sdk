@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -1462,10 +1461,11 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 			continue
 		}
 
-		var responseData []byte
-		responseData, err = readHTTPResponseBody(httpResp)
+		responseLease, readErr := readHTTPResponseBodyLease(httpResp)
 		lastRequestLatency = time.Since(requestStart)
+		responseData := responseLease.bytes()
 		lastResponseSize = len(responseData)
+		err = readErr
 		// Cancel request context after response body has been read.
 		reqCancel()
 		if err != nil {
@@ -1473,6 +1473,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 		}
 
 		result, err = c.handleResponse(responseData, httpResp, req, serialVerUsed, queryVerUsed)
+		responseLease.release()
 		if err != nil {
 			continue
 		}
@@ -1878,18 +1879,12 @@ func (c *Client) processResponse(data []byte, httpResp *http.Response, req Reque
 }
 
 func readHTTPResponseBody(httpResp *http.Response) ([]byte, error) {
-	if httpResp == nil {
-		return nil, nosqlerr.New(nosqlerr.UnknownError, "nil http response")
-	}
-	if httpResp.Body == nil {
-		return nil, nil
-	}
-	data, err := io.ReadAll(httpResp.Body)
-	httpResp.Body.Close()
+	lease, err := readHTTPResponseBodyLease(httpResp)
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	defer lease.release()
+	return append([]byte(nil), lease.bytes()...), nil
 }
 
 func rateLimitDelayFromHeader(header http.Header) time.Duration {
@@ -1911,7 +1906,8 @@ func rateLimitDelayFromHeader(header http.Header) time.Duration {
 
 func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16, queryVerUsed int16) (res Result, err error) {
 	buf := bytes.NewBuffer(data)
-	rd := binary.NewReader(buf)
+	rd := binary.GetReader(buf)
+	defer binary.PutReader(rd)
 
 	var code int
 	if serialVerUsed >= 4 {

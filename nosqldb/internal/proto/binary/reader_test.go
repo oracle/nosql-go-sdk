@@ -134,18 +134,27 @@ func BenchmarkReadDouble(b *testing.B) {
 	}
 }
 
+var benchmarkStringSink *string
+
 func BenchmarkReadString(b *testing.B) {
 	w := NewWriter()
 	s := "Oracle NoSQL Database"
 	w.WriteString(&s)
-	buf := w.Bytes()
-	r := NewReader(bytes.NewBuffer(buf))
+	buf := append([]byte(nil), w.Bytes()...)
+	input := bytes.NewBuffer(make([]byte, 0, len(buf)))
 	b.SetBytes(int64(len(buf)))
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r.ReadString()
+		input.Reset()
+		input.Write(buf)
+		r := GetReader(input)
+		benchmarkStringSink, _ = r.ReadString()
+		PutReader(r)
 	}
 }
+
+var benchmarkMapSink *types.MapValue
 
 func BenchmarkReadMap(b *testing.B) {
 	w := NewWriter()
@@ -157,12 +166,17 @@ func BenchmarkReadMap(b *testing.B) {
 	mv.Put("array", []types.FieldValue{1, 2, 3, 4})
 	mv.Put("bytes", []byte{1, 2, 3, 4, 5, 6, 7, 8})
 	w.WriteMap(mv)
-	buf := w.Bytes()
-	r := NewReader(bytes.NewBuffer(buf))
+	buf := append([]byte(nil), w.Bytes()...)
+	input := bytes.NewBuffer(make([]byte, 0, len(buf)))
 	b.SetBytes(int64(len(buf)))
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r.ReadMap()
+		input.Reset()
+		input.Write(buf)
+		r := GetReader(input)
+		benchmarkMapSink, _ = r.ReadMap()
+		PutReader(r)
 	}
 }
 
