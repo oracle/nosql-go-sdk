@@ -29,6 +29,21 @@ func (suite *MapValueTestSuite) TestNewOrderedMapValue() {
 	suite.doMapValueTest(true)
 }
 
+func (suite *MapValueTestSuite) TestNewOrderedMapValueWithCapacity() {
+	m := NewOrderedMapValueWithCapacity(3)
+	suite.True(m.IsOrdered())
+	suite.Equal(0, m.Len())
+	suite.Equal(3, cap(m.keys))
+
+	m.Put("a", 1).Put("b", 2).Put("c", 3)
+	suite.Equal([]string{"a", "b", "c"}, m.keys)
+	suite.Equal(3, m.Len())
+
+	m = NewOrderedMapValueWithCapacity(-1)
+	suite.True(m.IsOrdered())
+	suite.Equal(0, cap(m.keys))
+}
+
 // TestNewMapValueFromJSON tests the NewMapValueFromJSON() function that
 // creates an unordered MapValue from the specified JSON.
 func (suite *MapValueTestSuite) TestNewMapValueFromJSON() {

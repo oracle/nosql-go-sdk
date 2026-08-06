@@ -153,12 +153,24 @@ func (w *Writer) WriteString(value *string) (n int, err error) {
 		return w.WritePackedInt(-1)
 	}
 
-	rs := []rune(*value)
-	byteLen := 0
-	for _, r := range rs {
-		byteLen += utf8.RuneLen(r)
+	s := *value
+	if utf8.ValidString(s) {
+		n, err = w.WritePackedInt(len(s))
+		if err != nil || len(s) == 0 {
+			return
+		}
+
+		off := w.ensure(len(s))
+		copy(w.buf[off:], s)
+		return n + len(s), nil
 	}
 
+	// Preserve the existing behavior for malformed UTF-8: each invalid byte is
+	// encoded as RuneError.
+	byteLen := 0
+	for _, r := range s {
+		byteLen += utf8.RuneLen(r)
+	}
 	n, err = w.WritePackedInt(byteLen)
 	if err != nil || byteLen == 0 {
 		return
@@ -166,7 +178,7 @@ func (w *Writer) WriteString(value *string) (n int, err error) {
 
 	off := w.ensure(byteLen)
 	startOff := off
-	for _, r := range rs {
+	for _, r := range s {
 		off += utf8.EncodeRune(w.buf[off:], r)
 	}
 	n += (off - startOff)

@@ -175,6 +175,13 @@ func (r *Reader) ReadString() (*string, error) {
 		return nil, err
 	}
 
+	if utf8.Valid(buf) {
+		s := string(buf)
+		return &s, nil
+	}
+
+	// Preserve the existing behavior for malformed UTF-8 by replacing each
+	// invalid sequence with RuneError.
 	cnt := utf8.RuneCount(buf)
 	runeBuf := make([]rune, cnt)
 	for i := 0; i < cnt && len(buf) > 0; i++ {
@@ -223,7 +230,7 @@ func (r *Reader) ReadMap() (*types.MapValue, error) {
 		return nil, err
 	}
 
-	value := types.NewOrderedMapValue()
+	value := types.NewOrderedMapValueWithCapacity(size)
 	for i := 0; i < size; i++ {
 		k, err := r.ReadString()
 		if err != nil {

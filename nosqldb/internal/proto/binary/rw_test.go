@@ -10,12 +10,15 @@ package binary
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
 	"github.com/stretchr/testify/suite"
@@ -627,4 +630,94 @@ func (suite *ReadWriteTestSuite) TestReadWriteStruct() {
 	_, err := r.ReadInt()
 	suite.Equalf(io.EOF, err, "ReadInt() got unexpected error")
 
+}
+
+func legacyWriteString(value *string) []byte {
+	w := NewWriter()
+	if value == nil {
+		w.WritePackedInt(-1)
+		return append([]byte(nil), w.Bytes()...)
+	}
+
+	runes := []rune(*value)
+	byteLen := 0
+	for _, r := range runes {
+		byteLen += utf8.RuneLen(r)
+	}
+	w.WritePackedInt(byteLen)
+	for _, r := range runes {
+		var encoded [utf8.UTFMax]byte
+		n := utf8.EncodeRune(encoded[:], r)
+		w.Write(encoded[:n])
+	}
+	return append([]byte(nil), w.Bytes()...)
+}
+
+func legacyReadString(r *Reader) (*string, error) {
+	byteLen, err := r.ReadPackedInt()
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case byteLen < -1:
+		return nil, errors.New("binary.Reader: invalid length of string")
+	case byteLen == -1:
+		return nil, nil
+	case byteLen == 0:
+		s := ""
+		return &s, nil
+	}
+	if err = r.validateRemainingLength(byteLen, "string"); err != nil {
+		return nil, err
+	}
+	buf, err := r.readFull(byteLen)
+	if err != nil {
+		return nil, err
+	}
+	cnt := utf8.RuneCount(buf)
+	runeBuf := make([]rune, cnt)
+	for i := 0; i < cnt && len(buf) > 0; i++ {
+		r, off := utf8.DecodeRune(buf)
+		runeBuf[i] = r
+		buf = buf[off:]
+	}
+	s := string(runeBuf)
+	return &s, nil
+}
+
+func FuzzWriteStringCompatibility(f *testing.F) {
+	for _, seed := range []string{"", "Oracle NoSQL", "multibyte", string([]byte{0xff, 0xfe, 0x61})} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		w := NewWriter()
+		if _, err := w.WriteString(&value); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(w.Bytes(), legacyWriteString(&value)) {
+			t.Fatalf("wire output differs for %q", value)
+		}
+	})
+}
+
+func FuzzReadStringCompatibility(f *testing.F) {
+	f.Add([]byte{0})
+	f.Add([]byte{1, 0xff})
+	f.Add([]byte{3, 0xe2, 0x82, 0xac})
+	f.Fuzz(func(t *testing.T, data []byte) {
+		newReader := NewReader(bytes.NewBuffer(append([]byte(nil), data...)))
+		oldReader := NewReader(bytes.NewBuffer(append([]byte(nil), data...)))
+		got, gotErr := newReader.ReadString()
+		want, wantErr := legacyReadString(oldReader)
+
+		if fmt.Sprint(gotErr) != fmt.Sprint(wantErr) {
+			t.Fatalf("error differs: got %v, want %v", gotErr, wantErr)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("value differs: got %v, want %v", got, want)
+		}
+		if newReader.GetBuffer().Len() != oldReader.GetBuffer().Len() {
+			t.Fatalf("reader position differs: got remaining %d, want %d", newReader.GetBuffer().Len(), oldReader.GetBuffer().Len())
+		}
+	})
 }
