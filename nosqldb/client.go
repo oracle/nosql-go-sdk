@@ -1461,7 +1461,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 			continue
 		}
 
-		responseLease, readErr := readHTTPResponseBodyLease(httpResp)
+		responseLease, readErr := readHTTPResponseBodyLease(httpResp, c.MaxResponseSize)
 		lastRequestLatency = time.Since(requestStart)
 		responseData := responseLease.bytes()
 		lastResponseSize = len(responseData)
@@ -1879,7 +1879,7 @@ func (c *Client) processResponse(data []byte, httpResp *http.Response, req Reque
 }
 
 func readHTTPResponseBody(httpResp *http.Response) ([]byte, error) {
-	lease, err := readHTTPResponseBodyLease(httpResp)
+	lease, err := readHTTPResponseBodyLease(httpResp, 0)
 	if err != nil {
 		return nil, err
 	}
