@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
   `MORE`, and `ALL` profiles, periodic JSON logging, callback delivery, runtime
   controls, exact or bounded-memory percentile calculation, and request/query
   lifecycle coverage.
+- Added latest OCI region codes
 
 ## 1.4.8 - 2026-04-22
 
