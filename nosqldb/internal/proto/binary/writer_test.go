@@ -91,6 +91,7 @@ func BenchmarkWriteString(b *testing.B) {
 	w := NewWriter()
 	str := "Oracle NoSQL Database"
 	b.SetBytes(int64(len(str)))
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w.WriteString(&str)
@@ -131,6 +132,7 @@ func BenchmarkWriteMap(b *testing.B) {
 	mv.Put("bytes", []byte{1, 2, 3, 4, 5, 6, 7, 8})
 	n, _ := w.WriteMap(mv)
 	b.SetBytes(int64(n))
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w.WriteMap(mv)

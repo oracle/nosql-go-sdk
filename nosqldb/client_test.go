@@ -672,6 +672,49 @@ func TestTopologyInfoIsCloned(t *testing.T) {
 	require.Equal(t, []int{1, 2, 3}, ti.ShardIDs)
 }
 
+func TestTopologySnapshotRemainsImmutable(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	client.setTopologyInfo(&common.TopologyInfo{SeqNum: 1, ShardIDs: []int{1, 2, 3}})
+	old := client.topologySnapshot()
+	client.setTopologyInfo(&common.TopologyInfo{SeqNum: 2, ShardIDs: []int{4, 5, 6}})
+
+	require.Equal(t, 1, old.SeqNum)
+	require.Equal(t, []int{1, 2, 3}, old.ShardIDs)
+	require.Equal(t, 2, client.topologySnapshot().SeqNum)
+}
+
+func TestTopologyInfoEqualsDoesNotMutate(t *testing.T) {
+	tests := []struct {
+		name  string
+		left  *common.TopologyInfo
+		right *common.TopologyInfo
+		equal bool
+	}{
+		{"same values different order", &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{3, 1, 2}}, &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{2, 3, 1}}, true},
+		{"duplicates equal", &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{1, 1, 2}}, &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{2, 1, 1}}, true},
+		{"duplicates differ", &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{1, 1, 2}}, &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{1, 2, 2}}, false},
+		{"nil and empty differ", &common.TopologyInfo{SeqNum: 1}, &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{}}, false},
+		{"sequence differs", &common.TopologyInfo{SeqNum: 1, ShardIDs: []int{1}}, &common.TopologyInfo{SeqNum: 2, ShardIDs: []int{1}}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var leftBefore, rightBefore []int
+			if tc.left.ShardIDs != nil {
+				leftBefore = append([]int{}, tc.left.ShardIDs...)
+			}
+			if tc.right.ShardIDs != nil {
+				rightBefore = append([]int{}, tc.right.ShardIDs...)
+			}
+			require.Equal(t, tc.equal, tc.left.Equals(tc.right))
+			require.Equal(t, leftBefore, tc.left.ShardIDs)
+			require.Equal(t, rightBefore, tc.right.ShardIDs)
+		})
+	}
+}
+
 func newMockClient() (*Client, error) {
 	authProvider := &DummyAccessTokenProvider{
 		TenantID: "TestTenantId",

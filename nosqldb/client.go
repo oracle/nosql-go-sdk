@@ -12,7 +12,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -922,7 +921,7 @@ func (c *Client) nextRequestID() int32 {
 // processRequest processes the specified request before it is sent to server.
 // This method applies default configurations such as timeout and consistency
 // values for the request if they are not specified for the request.
-func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
+func (c *Client) processRequestLease(req Request) (lease *requestBufferLease, serialVerUsed int16, queryVerUsed int16, err error) {
 	if req == nil {
 		return nil, 0, 0, errNilRequest
 	}
@@ -943,17 +942,27 @@ func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, 
 		return nil, 0, 0, err
 	}
 
-	data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
+	lease, serialVerUsed, queryVerUsed, err = c.serializeRequestLease(req)
 	if err != nil || !c.isCloud {
 		return
 	}
 
 	// check request size for cloud
-	if err = checkRequestSizeLimit(req, len(data)); err != nil {
+	if err = checkRequestSizeLimit(req, len(lease.bytes())); err != nil {
+		lease.releaseOwner()
 		return nil, 0, 0, err
 	}
 
 	return
+}
+
+func (c *Client) processRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
+	lease, serialVerUsed, queryVerUsed, err := c.processRequestLease(req)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer lease.releaseOwner()
+	return append([]byte(nil), lease.bytes()...), serialVerUsed, queryVerUsed, nil
 }
 
 // Validates that all features required by the given request are enabled.
@@ -977,22 +986,30 @@ func (c *Client) execute(req Request) (Result, error) {
 }
 
 func (c *Client) executeWithContext(ctx context.Context, req Request) (Result, error) {
-	data, serialVerUsed, queryVerUsed, err := c.processRequest(req)
+	lease, serialVerUsed, queryVerUsed, err := c.processRequestLease(req)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.doExecute(ctx, req, data, serialVerUsed, queryVerUsed)
+	return c.doExecuteWithLease(ctx, req, lease, serialVerUsed, queryVerUsed)
 }
 
-func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16) (result Result, err error) {
+func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serialVerUsed int16, queryVerUsed int16) (Result, error) {
+	return c.doExecuteWithLease(ctx, req, newRequestBufferLeaseFromBytes(data), serialVerUsed, queryVerUsed)
+}
+
+func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *requestBufferLease, serialVerUsed int16, queryVerUsed int16) (result Result, err error) {
+	if lease == nil {
+		return nil, errors.New("nil request buffer lease")
+	}
+	defer func() { lease.releaseOwner() }()
 	if req == nil {
 		return nil, errNilRequest
 	}
-
 	if ctx == nil {
 		return nil, errNilContext
 	}
+	data := lease.bytes()
 
 	statsControl := c.statsControl
 	statsEnabled := statsControl != nil && statsControl.isEnabled()
@@ -1015,7 +1032,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 	if queryReq, ok := req.(*QueryRequest); ok && !queryReq.isInternalRequest() {
 
-		req.SetTopology(c.getTopologyInfo())
+		req.SetTopology(c.topologySnapshot())
 
 		// If the QueryRequest represents an advanced query, it will be bound
 		// with a queryDriver the first time the execute() is called for the query.
@@ -1210,7 +1227,15 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 					return nil, err
 				}
 				// if serial version mismatch, we must re-serialize the request
-				data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
+				newLease, newSerialVersion, newQueryVersion, serializeErr := c.serializeRequestLease(req)
+				if serializeErr == nil {
+					lease.releaseOwner()
+					lease = newLease
+					data = lease.bytes()
+					serialVerUsed = newSerialVersion
+					queryVerUsed = newQueryVersion
+				}
+				err = serializeErr
 				if err != nil {
 					observeError()
 					return nil, err
@@ -1224,7 +1249,15 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 					return nil, err
 				}
 				// if query version mismatch, we must re-serialize the request
-				data, serialVerUsed, queryVerUsed, err = c.serializeRequest(req)
+				newLease, newSerialVersion, newQueryVersion, serializeErr := c.serializeRequestLease(req)
+				if serializeErr == nil {
+					lease.releaseOwner()
+					lease = newLease
+					data = lease.bytes()
+					serialVerUsed = newSerialVersion
+					queryVerUsed = newQueryVersion
+				}
+				err = serializeErr
 				if err != nil {
 					observeError()
 					return nil, err
@@ -1334,7 +1367,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		// set the topology in the request, if not set already
 		if queryReq, ok := req.(*QueryRequest); !ok || queryReq.isInternalRequest() {
-			req.SetTopology(c.getTopologyInfo())
+			req.SetTopology(c.topologySnapshot())
 		}
 
 		// Handle errors that may occur when retrieving authorization string.
@@ -1343,7 +1376,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 			continue
 		}
 
-		httpReq, err = httputil.NewPostRequest(c.requestURL, data)
+		httpReq, err = newLeasedPostRequest(c.requestURL, lease)
 		if err != nil {
 			observeError()
 			return nil, err
@@ -1352,7 +1385,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		reqID := int(c.nextRequestID())
 		httpReq.Header.Add("x-nosql-request-id", strconv.Itoa(reqID))
 		httpReq.Header.Add("Host", c.serverHost)
-		httpReq.Header.Set("Content-Length", strconv.Itoa(len(data)))
+		httpReq.Header.Set("Content-Length", strconv.FormatInt(httpReq.ContentLength, 10))
 		httpReq.Header.Set("Content-Type", "application/octet-stream")
 		httpReq.Header.Set("Accept", "application/octet-stream")
 		httpReq.Header.Set("Connection", "keep-alive")
@@ -1378,6 +1411,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		err = c.signHTTPRequest(httpReq)
 		if err != nil {
+			httpReq.Body.Close()
 			observeError()
 			return nil, err
 		}
@@ -1413,22 +1447,25 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 
 		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, err)
 		if deadlineErr != nil {
+			httpReq.Body.Close()
 			observeError()
 			return nil, deadlineErr
 		}
 		httpReq = httpReq.WithContext(reqCtx)
 		requestStart := time.Now()
 		httpResp, err = c.executor.Do(httpReq)
+		httpReq.Body.Close()
 		if err != nil {
 			lastRequestLatency = time.Since(requestStart)
 			reqCancel()
 			continue
 		}
 
-		var responseData []byte
-		responseData, err = readHTTPResponseBody(httpResp)
+		responseLease, readErr := readHTTPResponseBodyLease(httpResp)
 		lastRequestLatency = time.Since(requestStart)
+		responseData := responseLease.bytes()
 		lastResponseSize = len(responseData)
+		err = readErr
 		// Cancel request context after response body has been read.
 		reqCancel()
 		if err != nil {
@@ -1436,6 +1473,7 @@ func (c *Client) doExecute(ctx context.Context, req Request, data []byte, serial
 		}
 
 		result, err = c.handleResponse(responseData, httpResp, req, serialVerUsed, queryVerUsed)
+		responseLease.release()
 		if err != nil {
 			continue
 		}
@@ -1787,10 +1825,17 @@ func (c *Client) signHTTPRequest(httpReq *http.Request) error {
 // serializeRequest serializes the specified request into a slice of bytes that
 // will be sent to the server. The serial version is always written followed by
 // the actual request payload.
-func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16, queryVerUsed int16, err error) {
+func (c *Client) serializeRequestLease(req Request) (lease *requestBufferLease, serialVerUsed int16, queryVerUsed int16, err error) {
 	serialVerUsed = c.serialVersion
 	queryVerUsed = c.queryVersion
-	wr := binary.NewWriter()
+	lease = acquireRequestBufferLease()
+	wr := lease.writer
+	defer func() {
+		if err != nil {
+			lease.releaseOwner()
+			lease = nil
+		}
+	}()
 	if _, err = wr.WriteSerialVersion(serialVerUsed); err != nil {
 		return nil, 0, 0, err
 	}
@@ -1805,7 +1850,8 @@ func (c *Client) serializeRequest(req Request) (data []byte, serialVerUsed int16
 		}
 	}
 
-	return wr.Bytes(), serialVerUsed, queryVerUsed, nil
+	lease.data = wr.Bytes()
+	return lease, serialVerUsed, queryVerUsed, nil
 }
 
 // processResponse processes the http response returned from server.
@@ -1833,18 +1879,12 @@ func (c *Client) processResponse(data []byte, httpResp *http.Response, req Reque
 }
 
 func readHTTPResponseBody(httpResp *http.Response) ([]byte, error) {
-	if httpResp == nil {
-		return nil, nosqlerr.New(nosqlerr.UnknownError, "nil http response")
-	}
-	if httpResp.Body == nil {
-		return nil, nil
-	}
-	data, err := io.ReadAll(httpResp.Body)
-	httpResp.Body.Close()
+	lease, err := readHTTPResponseBodyLease(httpResp)
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	defer lease.release()
+	return append([]byte(nil), lease.bytes()...), nil
 }
 
 func rateLimitDelayFromHeader(header http.Header) time.Duration {
@@ -1866,7 +1906,8 @@ func rateLimitDelayFromHeader(header http.Header) time.Duration {
 
 func (c *Client) processOKResponse(data []byte, req Request, serialVerUsed int16, queryVerUsed int16) (res Result, err error) {
 	buf := bytes.NewBuffer(data)
-	rd := binary.NewReader(buf)
+	rd := binary.GetReader(buf)
+	defer binary.PutReader(rd)
 
 	var code int
 	if serialVerUsed >= 4 {
@@ -2205,11 +2246,16 @@ func (c *Client) decrementQueryVersion(queryVerUsed int16) bool {
 	return false
 }
 
-// getTopologyInfo returns the topology info stored in the client
-func (c *Client) getTopologyInfo() *common.TopologyInfo {
+// topologySnapshot returns the immutable topology currently published by the client.
+func (c *Client) topologySnapshot() *common.TopologyInfo {
 	c.topologyMux.RLock()
 	defer c.topologyMux.RUnlock()
-	return cloneTopologyInfo(c.topology)
+	return c.topology
+}
+
+// getTopologyInfo returns a mutable copy of the topology stored in the client.
+func (c *Client) getTopologyInfo() *common.TopologyInfo {
+	return cloneTopologyInfo(c.topologySnapshot())
 }
 
 // GetQueryVersion is used for tests.

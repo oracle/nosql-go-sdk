@@ -242,10 +242,19 @@ func NewMapValueFromJSON(jsonStr string) (*MapValue, error) {
 // An ordered MapValue guarantees that key/value pairs can be retrieved over the
 // GetByIndex(i int) method by specifying the insertion order.
 func NewOrderedMapValue() *MapValue {
+	return NewOrderedMapValueWithCapacity(16)
+}
+
+// NewOrderedMapValueWithCapacity creates an ordered MapValue with capacity for
+// the specified number of entries. A negative capacity is treated as zero.
+func NewOrderedMapValueWithCapacity(capacity int) *MapValue {
+	if capacity < 0 {
+		capacity = 0
+	}
 	return &MapValue{
-		m:                  make(map[string]interface{}),
+		m:                  make(map[string]interface{}, capacity),
 		keepInsertionOrder: true,
-		keys:               make([]string, 0, 16),
+		keys:               make([]string, 0, capacity),
 	}
 }
 

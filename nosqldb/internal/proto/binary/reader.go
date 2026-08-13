@@ -15,6 +15,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -28,6 +29,12 @@ const maxCollectionElements int = 1 << 20
 // proxy and drivers.
 //
 // Reader implements the io.Reader and io.ByteReader interfaces.
+const maxPooledReaderBufferCapacity = 64 * 1024
+
+var readerPool = sync.Pool{New: func() interface{} {
+	return NewReader(new(bytes.Buffer))
+}}
+
 type Reader struct {
 	// The underlying io.Reader.
 	rd *bytes.Buffer
@@ -41,6 +48,29 @@ func NewReader(r *bytes.Buffer) *Reader {
 	return &Reader{
 		rd:  r,
 		buf: make([]byte, 64, 256),
+	}
+}
+
+// GetReader obtains a reset binary reader for the supplied buffer.
+func GetReader(buf *bytes.Buffer) *Reader {
+	r := readerPool.Get().(*Reader)
+	r.rd = buf
+	if cap(r.buf) < 64 {
+		r.buf = make([]byte, 64, 256)
+	} else {
+		r.buf = r.buf[:64]
+	}
+	return r
+}
+
+// PutReader releases a reader obtained from GetReader.
+func PutReader(r *Reader) {
+	if r == nil {
+		return
+	}
+	r.rd = nil
+	if cap(r.buf) <= maxPooledReaderBufferCapacity {
+		readerPool.Put(r)
 	}
 }
 
@@ -175,6 +205,13 @@ func (r *Reader) ReadString() (*string, error) {
 		return nil, err
 	}
 
+	if utf8.Valid(buf) {
+		s := string(buf)
+		return &s, nil
+	}
+
+	// Preserve the existing behavior for malformed UTF-8 by replacing each
+	// invalid sequence with RuneError.
 	cnt := utf8.RuneCount(buf)
 	runeBuf := make([]rune, cnt)
 	for i := 0; i < cnt && len(buf) > 0; i++ {
@@ -223,7 +260,7 @@ func (r *Reader) ReadMap() (*types.MapValue, error) {
 		return nil, err
 	}
 
-	value := types.NewOrderedMapValue()
+	value := types.NewOrderedMapValueWithCapacity(size)
 	for i := 0; i < size; i++ {
 		k, err := r.ReadString()
 		if err != nil {
