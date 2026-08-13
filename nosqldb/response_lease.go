@@ -9,6 +9,10 @@ package nosqldb
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"sync"
 
@@ -17,7 +21,26 @@ import (
 
 const maxPooledResponseBufferCapacity = 64 * 1024
 
-var responseBufferPool = sync.Pool{New: func() interface{} { return new(bytes.Buffer) }}
+var (
+	responseBufferPool = sync.Pool{New: func() interface{} { return new(bytes.Buffer) }}
+	// ErrResponseSizeLimitExceeded identifies a response that exceeded MaxResponseSize.
+	ErrResponseSizeLimitExceeded = errors.New("response size limit exceeded")
+)
+
+// ResponseSizeLimitError reports an oversized response. Observed is a lower
+// bound when reading stopped after MaxResponseSize plus one byte.
+type ResponseSizeLimitError struct {
+	Limit    int64
+	Observed int64
+}
+
+func (e *ResponseSizeLimitError) Error() string {
+	return fmt.Sprintf("response size limit exceeded: limit=%d observed-at-least=%d", e.Limit, e.Observed)
+}
+
+func (e *ResponseSizeLimitError) Unwrap() error {
+	return ErrResponseSizeLimitExceeded
+}
 
 type responseBufferLease struct {
 	buffer *bytes.Buffer
@@ -52,7 +75,7 @@ func (l *responseBufferLease) release() {
 	})
 }
 
-func readHTTPResponseBodyLease(httpResp *http.Response) (*responseBufferLease, error) {
+func readHTTPResponseBodyLease(httpResp *http.Response, limit int64) (*responseBufferLease, error) {
 	if httpResp == nil {
 		return nil, nosqlerr.New(nosqlerr.UnknownError, "nil http response")
 	}
@@ -61,10 +84,24 @@ func readHTTPResponseBodyLease(httpResp *http.Response) (*responseBufferLease, e
 	}
 	defer httpResp.Body.Close()
 
+	unlimited := limit == 0 || limit == math.MaxInt64
+	if !unlimited && !httpResp.Uncompressed && httpResp.ContentLength > limit {
+		return nil, &ResponseSizeLimitError{Limit: limit, Observed: httpResp.ContentLength}
+	}
+
 	lease := acquireResponseBufferLease()
-	if _, err := lease.buffer.ReadFrom(httpResp.Body); err != nil {
+	reader := io.Reader(httpResp.Body)
+	if !unlimited {
+		reader = &io.LimitedReader{R: httpResp.Body, N: limit + 1}
+	}
+	if _, err := lease.buffer.ReadFrom(reader); err != nil {
 		lease.release()
 		return nil, err
+	}
+	if !unlimited && int64(lease.buffer.Len()) > limit {
+		observed := int64(lease.buffer.Len())
+		lease.release()
+		return nil, &ResponseSizeLimitError{Limit: limit, Observed: observed}
 	}
 	return lease, nil
 }
