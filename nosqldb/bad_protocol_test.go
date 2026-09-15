@@ -749,7 +749,9 @@ func (suite *BadProtocolTestSuite) TestBadWriteMultipleRequest() {
 		suite.wr.Reset()
 		suite.wr.WritePackedInt(v)
 		copy(data[off:], suite.wr.Bytes())
-		suite.doBadProtoTest(req, data, desc, nosqlerr.BadProtocolMessage)
+		suite.doBadProtoTest2(req, data, desc,
+			nosqlerr.BadProtocolMessage,
+			nosqlerr.IllegalArgument)
 	}
 
 	// Invalid opcode for sub requests.

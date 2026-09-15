@@ -91,9 +91,10 @@ type AccessTokenProvider struct {
 	// the provider is allowed to renew the token.
 	expiryWindow time.Duration
 
-	mutex    sync.RWMutex
-	authLock sync.Mutex
-	wg       sync.WaitGroup
+	mutex      sync.RWMutex
+	authLock   sync.Mutex
+	isRenewing bool
+	wg         sync.WaitGroup
 }
 
 // NewAccessTokenProviderFromFile creates an access token provider using the
@@ -257,9 +258,9 @@ func (p *AccessTokenProvider) AuthorizationString(req auth.Request) (auth string
 	}
 
 	if needRenew {
-		if p.beginAuthWork() {
+		if p.beginRenewWork() {
 			go func() {
-				defer p.wg.Done()
+				defer p.endRenewWork()
 				p.renewToken()
 			}()
 		}
@@ -344,6 +345,36 @@ func (p *AccessTokenProvider) beginAuthWork() bool {
 
 	p.wg.Add(1)
 	return true
+}
+
+// beginRenewWork starts a renewal only if the currently cached token still
+// needs one and another renewal is not already in progress.
+func (p *AccessTokenProvider) beginRenewWork() bool {
+	if p.closeStarted() {
+		return false
+	}
+
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if p.isClosed || p.closeStarted() || p.isRenewing {
+		return false
+	}
+
+	_, ok, needRenew := p.getCachedToken()
+	if !ok || !needRenew {
+		return false
+	}
+
+	p.isRenewing = true
+	p.wg.Add(1)
+	return true
+}
+
+func (p *AccessTokenProvider) endRenewWork() {
+	p.mutex.Lock()
+	p.isRenewing = false
+	p.mutex.Unlock()
+	p.wg.Done()
 }
 
 // getCachedToken looks for the token from cache and checks if the cached token

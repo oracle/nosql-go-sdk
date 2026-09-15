@@ -321,7 +321,7 @@ func (suite *AuthTestSuite) TestAuthorizationString() {
 
 	// Test the case where client connects to the NoSQL database server that has
 	// security configuration enabled.
-	tokenLifetime := 2 * time.Second
+	tokenLifetime := time.Second
 	username := "TestUser01"
 	password := []byte("NoSql00__123456")
 
@@ -366,7 +366,7 @@ func (suite *AuthTestSuite) TestAuthorizationString() {
 	suite.getAuthStringTest("single goroutine", mockServer, p)
 
 	// Invalidate the cache to force a login.
-	p.cachedToken = nil
+	p.InvalidateCachedToken()
 	var wg sync.WaitGroup
 	cnt := 20
 	for i := 0; i < cnt; i++ {
@@ -388,6 +388,77 @@ func (suite *AuthTestSuite) TestInvalidateCachedToken() {
 	p.cachedToken = auth.NewToken("rejected-token", "", time.Hour)
 	p.InvalidateCachedToken()
 	suite.Nil(p.cachedToken)
+}
+
+func (suite *AuthTestSuite) TestConcurrentAuthorizationStringCoalescesRenewal() {
+	const (
+		username = "TestUser01"
+		initial  = "initial-token"
+	)
+	password := []byte("NoSql00__123456")
+	mockServer := &mockAuthServer{
+		tokenLifetime: 5 * time.Second,
+		username:      username,
+		password:      password,
+		renewStarted:  make(chan struct{}, 1),
+		continueRenew: make(chan struct{}),
+	}
+	mockServer.Server = httptest.NewTLSServer(mockServer)
+	defer mockServer.Server.Close()
+
+	p, err := NewAccessTokenProvider(username, password, auth.ProviderOptions{
+		HTTPClient:   testHTTPClient,
+		Logger:       testLogger,
+		ExpiryWindow: 5 * time.Second,
+	})
+	suite.Require().NoError(err)
+	p.SetEndpoint(mockServer.Server.URL)
+	defer p.Close()
+	var releaseRenewOnce sync.Once
+	releaseRenew := func() {
+		releaseRenewOnce.Do(func() { close(mockServer.continueRenew) })
+	}
+	defer releaseRenew()
+
+	token := auth.NewToken(initial, auth.BearerToken, 5*time.Second)
+	p.mutex.Lock()
+	p.cachedToken = token
+	p.mutex.Unlock()
+	mockServer.setIssuedToken(initial)
+
+	authString, err := p.AuthorizationString(nil)
+	suite.Require().NoError(err)
+	suite.Equal(token.AuthString(), authString)
+
+	select {
+	case <-mockServer.renewStarted:
+	case <-time.After(time.Second):
+		suite.FailNow("timed out waiting for token renewal")
+	}
+
+	const numAuthCalls = 32
+	errCh := make(chan error, numAuthCalls)
+	var wg sync.WaitGroup
+	for i := 0; i < numAuthCalls; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, authErr := p.AuthorizationString(nil)
+			if authErr == nil && got != token.AuthString() {
+				authErr = fmt.Errorf("got authorization string %q, want %q", got, token.AuthString())
+			}
+			errCh <- authErr
+		}()
+	}
+	wg.Wait()
+	releaseRenew()
+	p.wg.Wait()
+	close(errCh)
+
+	for authErr := range errCh {
+		suite.NoError(authErr)
+	}
+	suite.Equal(1, mockServer.getRenewRequests())
 }
 
 func (suite *AuthTestSuite) TestConcurrentAuthorizationStringAndClose() {
@@ -439,7 +510,6 @@ func (suite *AuthTestSuite) getAuthStringTest(testName string,
 
 	// Run the test for a duration that is twice the lifetime of the access token.
 	// This makes sure the access token renew process is tested.
-	server.tokenLifetime = 1 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), 2*server.tokenLifetime)
 	defer cancel()
 
@@ -461,8 +531,10 @@ func (suite *AuthTestSuite) getAuthStringTest(testName string,
 				continue
 			}
 
-			wantAuthStr := auth.BearerToken + " " + server.getIssuedToken()
-			suite.Equalf(wantAuthStr, gotAuthStr, msg+"got unexpected auth string")
+			// Renewal is asynchronous, so the server may issue a newer token after
+			// AuthorizationString returns. Verify that the returned token was issued
+			// rather than requiring it to be the server's latest token.
+			suite.Truef(server.wasIssued(gotAuthStr), msg+"got unexpected auth string %q", gotAuthStr)
 		}
 	}
 }
@@ -522,9 +594,13 @@ type mockAuthServer struct {
 	password []byte
 	// The duration of time the access token is granted for.
 	tokenLifetime time.Duration
-	// A mutex used to guard the read/write of issuedToken.
-	mutex       sync.RWMutex
-	issuedToken string
+	// A mutex used to guard issued token state.
+	mutex         sync.RWMutex
+	issuedToken   string
+	issued        map[string]struct{}
+	renewStarted  chan struct{}
+	continueRenew chan struct{}
+	renewRequests int
 }
 
 // ServeHTTP handles login, logout and renew requests for clients.
@@ -548,8 +624,8 @@ func (m *mockAuthServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// of milliseconds elapsed since January 1, 1970 UTC.
 		expireAt := time.Now().Add(m.tokenLifetime).Unix() * 1000
 		token := m.generateAccessToken()
-		fmt.Fprintf(w, `{"token": "%s", "expireAt": %d}`, token, expireAt)
 		m.setIssuedToken(token)
+		fmt.Fprintf(w, `{"token": "%s", "expireAt": %d}`, token, expireAt)
 
 	case strings.HasSuffix(r.URL.Path, renewService), strings.HasSuffix(r.URL.Path, logoutService):
 		authStr := r.Header.Get("Authorization")
@@ -577,10 +653,20 @@ func (m *mockAuthServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Issue a new access token for the client.
 		if strings.HasSuffix(r.URL.Path, renewService) {
+			m.recordRenewRequest()
+			if m.renewStarted != nil {
+				select {
+				case m.renewStarted <- struct{}{}:
+				default:
+				}
+			}
+			if m.continueRenew != nil {
+				<-m.continueRenew
+			}
 			expireAt := time.Now().Add(m.tokenLifetime).Unix() * 1000
 			token := m.generateAccessToken()
-			fmt.Fprintf(w, `{"token": "%s", "expireAt": %d}`, token, expireAt)
 			m.setIssuedToken(token)
+			fmt.Fprintf(w, `{"token": "%s", "expireAt": %d}`, token, expireAt)
 			return
 		}
 
@@ -599,7 +685,32 @@ func (m *mockAuthServer) getIssuedToken() string {
 func (m *mockAuthServer) setIssuedToken(token string) {
 	m.mutex.Lock()
 	m.issuedToken = token
+	if token != "" {
+		if m.issued == nil {
+			m.issued = make(map[string]struct{})
+		}
+		m.issued[auth.BearerToken+" "+token] = struct{}{}
+	}
 	m.mutex.Unlock()
+}
+
+func (m *mockAuthServer) wasIssued(authString string) bool {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	_, ok := m.issued[authString]
+	return ok
+}
+
+func (m *mockAuthServer) recordRenewRequest() {
+	m.mutex.Lock()
+	m.renewRequests++
+	m.mutex.Unlock()
+}
+
+func (m *mockAuthServer) getRenewRequests() int {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return m.renewRequests
 }
 
 func (m *mockAuthServer) generateAccessToken() string {
