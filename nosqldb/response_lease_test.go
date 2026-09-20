@@ -9,7 +9,9 @@ package nosqldb
 
 import (
 	"bytes"
+	"errors"
 	"io"
+	"math"
 	"net/http"
 	"testing"
 
@@ -30,7 +32,7 @@ func (b *trackedResponseBody) Close() error {
 
 func TestResponseLeaseClosesBodyAndReleasesBuffer(t *testing.T) {
 	body := &trackedResponseBody{Reader: bytes.NewBufferString("response")}
-	lease, err := readHTTPResponseBodyLease(&http.Response{Body: body})
+	lease, err := readHTTPResponseBodyLease(&http.Response{Body: body}, 0)
 	require.NoError(t, err)
 	require.True(t, body.closed)
 	require.Equal(t, []byte("response"), lease.bytes())
@@ -50,7 +52,7 @@ func TestResponseValuesDoNotAliasPooledBuffer(t *testing.T) {
 	_, err := writer.WriteMap(value)
 	require.NoError(t, err)
 
-	lease, err := readHTTPResponseBodyLease(&http.Response{Body: io.NopCloser(bytes.NewReader(writer.Bytes()))})
+	lease, err := readHTTPResponseBodyLease(&http.Response{Body: io.NopCloser(bytes.NewReader(writer.Bytes()))}, 0)
 	require.NoError(t, err)
 	reader := binary.GetReader(bytes.NewBuffer(lease.bytes()))
 	decoded, err := reader.ReadMap()
@@ -82,10 +84,74 @@ func TestResponseValuesDoNotAliasPooledBuffer(t *testing.T) {
 
 func TestResponseLeaseDropsLargeBuffer(t *testing.T) {
 	body := bytes.Repeat([]byte("x"), maxPooledResponseBufferCapacity+1)
-	lease, err := readHTTPResponseBodyLease(&http.Response{Body: io.NopCloser(bytes.NewReader(body))})
+	lease, err := readHTTPResponseBodyLease(&http.Response{Body: io.NopCloser(bytes.NewReader(body))}, 0)
 	require.NoError(t, err)
 	buffer := lease.buffer
 	require.True(t, buffer.Cap() > maxPooledResponseBufferCapacity)
 	lease.release()
 	require.Nil(t, lease.buffer)
+}
+
+func TestResponseSizeLimit(t *testing.T) {
+	tests := []struct {
+		name          string
+		limit         int64
+		body          []byte
+		contentLength int64
+		uncompressed  bool
+		wantError     bool
+	}{
+		{"unlimited zero", 0, []byte("abcdef"), 6, false, false},
+		{"unlimited max int", math.MaxInt64, []byte("abcdef"), 6, false, false},
+		{"max int minus one", math.MaxInt64 - 1, []byte("abcdef"), 6, false, false},
+		{"exact limit", 6, []byte("abcdef"), 6, false, false},
+		{"known oversized", 5, []byte("abcdef"), 6, false, true},
+		{"unknown oversized", 5, []byte("abcdef"), -1, false, true},
+		{"decompressed oversized", 5, []byte("abcdef"), 3, true, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := &trackedResponseBody{Reader: bytes.NewReader(tc.body)}
+			lease, err := readHTTPResponseBodyLease(&http.Response{
+				Body:          body,
+				ContentLength: tc.contentLength,
+				Uncompressed:  tc.uncompressed,
+			}, tc.limit)
+			require.True(t, body.closed)
+			if !tc.wantError {
+				require.NoError(t, err)
+				require.Equal(t, tc.body, lease.bytes())
+				lease.release()
+				return
+			}
+
+			require.Error(t, err)
+			require.True(t, errors.Is(err, ErrResponseSizeLimitExceeded))
+			var sizeErr *ResponseSizeLimitError
+			require.True(t, errors.As(err, &sizeErr))
+			require.Equal(t, tc.limit, sizeErr.Limit)
+			require.True(t, sizeErr.Observed > tc.limit)
+			require.Nil(t, lease)
+		})
+	}
+}
+
+type failingResponseReader struct{}
+
+func (failingResponseReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failure")
+}
+
+func TestResponseSizeLimitReadErrorClosesBody(t *testing.T) {
+	body := &trackedResponseBody{Reader: failingResponseReader{}}
+	lease, err := readHTTPResponseBodyLease(&http.Response{Body: body, ContentLength: -1}, 8)
+	require.Error(t, err)
+	require.True(t, body.closed)
+	require.Nil(t, lease)
+}
+
+func TestNegativeMaxResponseSizeRejected(t *testing.T) {
+	cfg := Config{MaxResponseSize: -1}
+	require.Error(t, cfg.validate())
 }

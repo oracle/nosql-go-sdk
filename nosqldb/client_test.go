@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/oracle/nosql-go-sdk/nosqldb/common"
+	"github.com/oracle/nosql-go-sdk/nosqldb/httputil"
 	"github.com/oracle/nosql-go-sdk/nosqldb/internal/proto/binary"
 	"github.com/oracle/nosql-go-sdk/nosqldb/nosqlerr"
 	"github.com/oracle/nosql-go-sdk/nosqldb/types"
@@ -672,6 +673,31 @@ func TestTopologyInfoIsCloned(t *testing.T) {
 	require.Equal(t, []int{1, 2, 3}, ti.ShardIDs)
 }
 
+func TestClientHTTPTransportOwnership(t *testing.T) {
+	owned, err := newMockClient()
+	require.NoError(t, err)
+	require.True(t, owned.ownsHTTPTransport)
+	require.NotNil(t, owned.closeIdleConnections)
+	closeCalls := 0
+	owned.closeIdleConnections = func() { closeCalls++ }
+	require.NoError(t, owned.Close())
+	require.NoError(t, owned.Close())
+	require.Equal(t, 1, closeCalls)
+
+	sharedHTTP, err := httputil.NewHTTPClient(httputil.HTTPConfig{})
+	require.NoError(t, err)
+	shared, err := NewClient(Config{
+		Mode:                  "onprem",
+		Endpoint:              "localhost:8080",
+		AuthorizationProvider: &DummyAccessTokenProvider{TenantID: "test"},
+		httpClient:            sharedHTTP,
+	})
+	require.NoError(t, err)
+	require.False(t, shared.ownsHTTPTransport)
+	require.Nil(t, shared.closeIdleConnections)
+	require.NoError(t, shared.Close())
+}
+
 func TestTopologySnapshotRemainsImmutable(t *testing.T) {
 	client, err := newMockClient()
 	require.NoError(t, err)
@@ -884,5 +910,106 @@ func (e *deadlineRecordingExecutor) Do(req *http.Request) (*http.Response, error
 		Op:  req.Method,
 		URL: req.URL.String(),
 		Err: mockErr{msg: "non-retryable error"},
+	}
+}
+
+type contextBlockingExecutor struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (e *contextBlockingExecutor) Do(req *http.Request) (*http.Response, error) {
+	e.once.Do(func() { close(e.started) })
+	<-req.Context().Done()
+	return nil, req.Context().Err()
+}
+
+func TestLimiterCleanupRetainsRecentlyAccessedEntry(t *testing.T) {
+	client, err := NewClient(Config{
+		Mode:                "cloudsim",
+		Endpoint:            "localhost:8080",
+		RateLimitingEnabled: true,
+	})
+	require.NoError(t, err)
+	defer client.Close()
+
+	now := time.Now()
+	old := &tableLimiterEntry{lastAccessUnixNano: now.Add(-limiterInactiveTTL - time.Hour).UnixNano()}
+	recent := &tableLimiterEntry{lastAccessUnixNano: now.Add(-time.Minute).UnixNano()}
+	client.limitMux.Lock()
+	client.rateLimiterMap["old"] = old
+	client.rateLimiterMap["recent"] = recent
+	client.limitMux.Unlock()
+
+	require.Equal(t, 1, client.cleanupRateLimitersAt(now))
+	client.limitMux.RLock()
+	_, oldExists := client.rateLimiterMap["old"]
+	_, recentExists := client.rateLimiterMap["recent"]
+	client.limitMux.RUnlock()
+	require.False(t, oldExists)
+	require.True(t, recentExists)
+
+	atomic.StoreInt64(&recent.lastAccessUnixNano, now.Add(-limiterInactiveTTL-time.Hour).UnixNano())
+	_, _, _ = client.getRateLimiterPair("recent")
+	require.Equal(t, 0, client.cleanupRateLimitersAt(now))
+}
+
+func TestCloseCancelsAndWaitsForLimiterRefresh(t *testing.T) {
+	client, err := NewClient(Config{
+		Mode:                "cloudsim",
+		Endpoint:            "localhost:8080",
+		RateLimitingEnabled: true,
+	})
+	require.NoError(t, err)
+	executor := &contextBlockingExecutor{started: make(chan struct{})}
+	client.executor = executor
+	client.backgroundUpdateLimiters("table")
+
+	select {
+	case <-executor.started:
+	case <-time.After(time.Second):
+		t.Fatal("limiter refresh did not start")
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		_ = client.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not wait for and cancel limiter refresh")
+	}
+	require.False(t, client.startBackground(func(context.Context) {}))
+	require.NoError(t, client.Close())
+}
+
+func TestStartBackgroundRacesWithClose(t *testing.T) {
+	client, err := newMockClient()
+	require.NoError(t, err)
+
+	start := make(chan struct{})
+	var schedulers sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		schedulers.Add(1)
+		go func() {
+			defer schedulers.Done()
+			<-start
+			client.startBackground(func(ctx context.Context) { <-ctx.Done() })
+		}()
+	}
+	close(start)
+
+	closed := make(chan struct{})
+	go func() {
+		_ = client.Close()
+		close(closed)
+	}()
+	schedulers.Wait()
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close deadlocked while background work was being scheduled")
 	}
 }

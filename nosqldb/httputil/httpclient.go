@@ -62,11 +62,18 @@ func NewHTTPClient(cfg HTTPConfig) (*HTTPClient, error) {
 		}
 	}
 
+	if cfg.MaxConnsPerHost < 0 {
+		return nil, fmt.Errorf("max connections per host must not be negative")
+	}
+
 	if cfg.MaxIdleConns != 0 {
 		tr.MaxIdleConns = cfg.MaxIdleConns
 	}
 	if cfg.MaxIdleConnsPerHost != 0 {
 		tr.MaxIdleConnsPerHost = cfg.MaxIdleConnsPerHost
+	}
+	if cfg.MaxConnsPerHost > 0 {
+		tr.MaxConnsPerHost = cfg.MaxConnsPerHost
 	}
 	if cfg.IdleConnTimeout != 0 {
 		tr.IdleConnTimeout = cfg.IdleConnTimeout
@@ -115,6 +122,14 @@ func (hc *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return hc.client.Do(req)
 }
 
+// CloseIdleConnections closes connections that are idle in the transport.
+// It does not interrupt active requests.
+func (hc *HTTPClient) CloseIdleConnections() {
+	if hc != nil && hc.client != nil {
+		hc.client.CloseIdleConnections()
+	}
+}
+
 // DefaultHTTPClient is a default HTTPClient instance that is ready to use.
 var DefaultHTTPClient = &HTTPClient{
 	client: http.DefaultClient,
@@ -153,6 +168,9 @@ type HTTPConfig struct {
 	// to keep per-host.
 	// The default value is 100.
 	MaxIdleConnsPerHost int `json:"maxIdleConnsPerHost,omitempty"`
+
+	// MaxConnsPerHost limits total connections per host. Zero is unlimited.
+	MaxConnsPerHost int `json:"maxConnsPerHost,omitempty"`
 
 	// IdleConnTimeout is the maximum amount of time an idle (keep-alive)
 	// connection will remain idle before closing itself.

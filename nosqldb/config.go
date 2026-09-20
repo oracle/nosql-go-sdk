@@ -102,6 +102,10 @@ type Config struct {
 	// Configurations for HTTP client.
 	httputil.HTTPConfig `json:"httpConfig,omitempty"`
 
+	// MaxResponseSize limits bytes read from the response body presented by net/http.
+	// Zero and math.MaxInt64 are effectively unlimited.
+	MaxResponseSize int64 `json:"maxResponseSize,omitempty"`
+
 	// Configurations for logging.
 	LoggingConfig `json:"loggingConfig,omitempty"`
 
@@ -167,7 +171,8 @@ type Config struct {
 	port     string
 	protocol string
 
-	httpClient *httputil.HTTPClient
+	httpClient     *httputil.HTTPClient
+	ownsHTTPClient bool
 }
 
 func (c *Config) validate() error {
@@ -184,6 +189,10 @@ func (c *Config) validate() error {
 
 	if len(c.Endpoint) > 0 && len(c.Region) > 0 {
 		return fmt.Errorf("cannot have both Endpoint and Region specified")
+	}
+
+	if c.MaxResponseSize < 0 {
+		return fmt.Errorf("max response size must not be negative")
 	}
 
 	if err := c.validateStatsConfig(); err != nil {
@@ -246,6 +255,7 @@ func (c *Config) setDefaults() (err error) {
 		// is not required.
 		if c.AuthorizationProvider == nil && len(c.Username) > 0 && len(c.Password) > 0 {
 			c.httpClient, err = httputil.NewHTTPClient(c.HTTPConfig)
+			c.ownsHTTPClient = err == nil
 			if err != nil {
 				return err
 			}
@@ -271,6 +281,7 @@ func (c *Config) setDefaults() (err error) {
 			if atp.GetHTTPClient() == nil {
 				if c.httpClient == nil {
 					c.httpClient, err = httputil.NewHTTPClient(c.HTTPConfig)
+					c.ownsHTTPClient = err == nil
 					if err != nil {
 						return err
 					}

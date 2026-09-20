@@ -35,6 +35,14 @@ import (
 
 const rateLimitDelayHeader = "X-Nosql-RL-Delay-Ms"
 
+type tableLimiterEntry struct {
+	// Keep first to guarantee 64-bit alignment on 32-bit systems.
+	lastAccessUnixNano int64
+	limiters           common.RateLimiterPair
+	hasLimiters        bool
+	nextRefresh        time.Time
+}
+
 // Client represents an Oracle NoSQL database client used to access the Oracle
 // NoSQL database cloud service or on-premise Oracle NoSQL database servers.
 type Client struct {
@@ -57,6 +65,9 @@ type Client struct {
 
 	// closeState ensures client resources are released at most once.
 	closeState uint32
+
+	closeIdleConnections func()
+	ownsHTTPTransport    bool
 
 	// requestURL represents the server URL that is the target of all client requests.
 	requestURL string
@@ -81,12 +92,16 @@ type Client struct {
 	// cloud simulator.
 	isCloud bool
 
-	// Internal rate limiting: cloud only
-	rateLimiterMap map[string]common.RateLimiterPair
+	// Internal rate limiting: cloud only.
+	rateLimiterMap map[string]*tableLimiterEntry
+	limitMux       sync.RWMutex
 
-	// Keep an internal map of tablename to next limits update time
-	tableLimitUpdateMap map[string]int64
-	limitMux            sync.RWMutex
+	bgMu                   sync.Mutex
+	bgWG                   sync.WaitGroup
+	bgCtx                  context.Context
+	bgCancel               context.CancelFunc
+	bgClosing              bool
+	limiterMaintenanceOnce sync.Once
 
 	// (possibly negotiated) version of the protocol in use
 	serialVersion int16
@@ -133,7 +148,9 @@ var (
 
 const (
 	// LimiterRefreshNanos is used to update table limits once every 10 minutes
-	LimiterRefreshNanos int64 = 600 * 1000 * 1000 * 1000
+	LimiterRefreshNanos    int64 = 600 * 1000 * 1000 * 1000
+	limiterCleanupInterval       = time.Hour
+	limiterInactiveTTL           = 24 * time.Hour
 	// SessionCookieField is used to check for persistent session cookies
 	SessionCookieField string = "session="
 )
@@ -155,21 +172,29 @@ func NewClient(cfg Config) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
+		cfg.ownsHTTPClient = true
 	}
 
+	bgCtx, bgCancel := context.WithCancel(context.Background())
 	c := &Client{
-		Config:        cfg,
-		HTTPClient:    cfg.httpClient,
-		requestURL:    cfg.Endpoint + sdkutil.DataServiceURI,
-		requestID:     0,
-		serverHost:    cfg.host,
-		executor:      cfg.httpClient,
-		logger:        cfg.Logger,
-		statsControl:  newStatsControl(cfg),
-		isCloud:       cfg.IsCloud() || cfg.IsCloudSim(),
-		serialVersion: proto.DefaultSerialVersion,
-		queryVersion:  proto.DefaultQueryVersion,
-		topology:      nil,
+		Config:            cfg,
+		HTTPClient:        cfg.httpClient,
+		requestURL:        cfg.Endpoint + sdkutil.DataServiceURI,
+		requestID:         0,
+		serverHost:        cfg.host,
+		executor:          cfg.httpClient,
+		logger:            cfg.Logger,
+		statsControl:      newStatsControl(cfg),
+		isCloud:           cfg.IsCloud() || cfg.IsCloudSim(),
+		serialVersion:     proto.DefaultSerialVersion,
+		queryVersion:      proto.DefaultQueryVersion,
+		topology:          nil,
+		bgCtx:             bgCtx,
+		bgCancel:          bgCancel,
+		ownsHTTPTransport: cfg.ownsHTTPClient,
+	}
+	if c.ownsHTTPTransport {
+		c.closeIdleConnections = cfg.httpClient.CloseIdleConnections
 	}
 	c.handleResponse = c.processResponse
 	c.queryLogger, err = newQueryLogger()
@@ -178,8 +203,8 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 
 	if c.isCloud && cfg.RateLimitingEnabled {
-		c.tableLimitUpdateMap = make(map[string]int64)
-		c.rateLimiterMap = make(map[string]common.RateLimiterPair)
+		c.rateLimiterMap = make(map[string]*tableLimiterEntry)
+		c.startLimiterMaintenance()
 	}
 
 	c.oneTimeMessages = make(map[string]struct{})
@@ -200,6 +225,14 @@ func (c *Client) Close() error {
 		return nil
 	}
 
+	c.bgMu.Lock()
+	c.bgClosing = true
+	if c.bgCancel != nil {
+		c.bgCancel()
+	}
+	c.bgMu.Unlock()
+	c.bgWG.Wait()
+
 	if c.statsControl != nil {
 		c.statsControl.shutdown()
 	}
@@ -210,6 +243,10 @@ func (c *Client) Close() error {
 
 	if c.queryLogger != nil {
 		c.queryLogger.Close()
+	}
+
+	if c.closeIdleConnections != nil {
+		c.closeIdleConnections()
 	}
 
 	// do not close logger; it may have been passed to us and
@@ -1189,6 +1226,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 
 	for {
 
+		attemptCause := err
 		if err != nil {
 			isSecErr := nosqlerr.IsSecurityInfoUnavailable(err)
 			isAuthRetry := isStatsAuthRetry(err)
@@ -1445,7 +1483,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 			}
 		}
 
-		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, err)
+		reqCtx, reqCancel, deadlineErr := contextWithRemainingTimeout(reqTimeout, attemptCause)
 		if deadlineErr != nil {
 			httpReq.Body.Close()
 			observeError()
@@ -1461,7 +1499,7 @@ func (c *Client) doExecuteWithLease(ctx context.Context, req Request, lease *req
 			continue
 		}
 
-		responseLease, readErr := readHTTPResponseBodyLease(httpResp)
+		responseLease, readErr := readHTTPResponseBodyLease(httpResp, c.MaxResponseSize)
 		lastRequestLatency = time.Since(requestStart)
 		responseData := responseLease.bytes()
 		lastResponseSize = len(responseData)
@@ -1558,43 +1596,51 @@ func (c *Client) warmupClientAuth() {
 	c.logger.Fine("Auth warmed up successfully")
 }
 
-func (c *Client) tableNeedsRefreshLocked(tableName string) bool {
-	if c.tableLimitUpdateMap == nil {
-		return false
+func (c *Client) limiterEntryLocked(tableName string, now time.Time) *tableLimiterEntry {
+	entry := c.rateLimiterMap[tableName]
+	if entry == nil {
+		entry = &tableLimiterEntry{lastAccessUnixNano: now.UnixNano()}
+		c.rateLimiterMap[tableName] = entry
 	}
-
-	nowNanos := time.Now().UnixNano()
-	then := c.tableLimitUpdateMap[tableName]
-	return then <= nowNanos
+	return entry
 }
 
-func (c *Client) setTableNeedsRefreshLocked(tableName string, needsRefresh bool) {
-	if c.tableLimitUpdateMap == nil {
+func (c *Client) tableNeedsRefreshLocked(tableName string, now time.Time) bool {
+	if c.rateLimiterMap == nil {
+		return false
+	}
+	entry := c.rateLimiterMap[tableName]
+	return entry == nil || !now.Before(entry.nextRefresh)
+}
+
+func (c *Client) setTableNeedsRefreshLocked(tableName string, needsRefresh bool, now time.Time) {
+	if c.rateLimiterMap == nil {
 		return
 	}
-
-	lTable := strings.ToLower(tableName)
-	nowNanos := time.Now().UnixNano()
+	entry := c.limiterEntryLocked(strings.ToLower(tableName), now)
+	atomic.StoreInt64(&entry.lastAccessUnixNano, now.UnixNano())
 	if needsRefresh {
-		c.tableLimitUpdateMap[lTable] = nowNanos - 1
+		entry.nextRefresh = now.Add(-time.Nanosecond)
 	} else {
-		c.tableLimitUpdateMap[lTable] = nowNanos + LimiterRefreshNanos
+		entry.nextRefresh = now.Add(time.Duration(LimiterRefreshNanos))
 	}
 }
 
 func (c *Client) backgroundUpdateLimiters(tableName string) {
 	lTable := strings.ToLower(tableName)
-
+	now := time.Now()
 	c.limitMux.Lock()
-
-	if !c.tableNeedsRefreshLocked(lTable) {
+	if !c.tableNeedsRefreshLocked(lTable, now) {
+		if entry := c.rateLimiterMap[lTable]; entry != nil {
+			atomic.StoreInt64(&entry.lastAccessUnixNano, now.UnixNano())
+		}
 		c.limitMux.Unlock()
 		return
 	}
-	c.setTableNeedsRefreshLocked(lTable, false)
+	c.setTableNeedsRefreshLocked(lTable, false, now)
 	c.limitMux.Unlock()
 
-	go c.updateTableLimiters(lTable)
+	c.startBackground(func(ctx context.Context) { c.updateTableLimiters(ctx, lTable) })
 }
 
 func (c *Client) rateLimitingEnabled() bool {
@@ -1606,22 +1652,80 @@ func (c *Client) rateLimitingEnabled() bool {
 func (c *Client) getRateLimiterPair(tableName string) (common.RateLimiterPair, bool, bool) {
 	c.limitMux.RLock()
 	defer c.limitMux.RUnlock()
-
 	if c.rateLimiterMap == nil {
 		return common.RateLimiterPair{}, false, false
 	}
-
-	rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
-	return rp, ok, true
+	entry, ok := c.rateLimiterMap[strings.ToLower(tableName)]
+	if !ok {
+		return common.RateLimiterPair{}, false, true
+	}
+	atomic.StoreInt64(&entry.lastAccessUnixNano, time.Now().UnixNano())
+	if !entry.hasLimiters {
+		return common.RateLimiterPair{}, false, true
+	}
+	return entry.limiters, true, true
 }
 
 func (c *Client) setTableLimitRefreshTime(tableName string, refreshTimeNanos int64) {
 	c.limitMux.Lock()
 	defer c.limitMux.Unlock()
-
-	if c.tableLimitUpdateMap != nil {
-		c.tableLimitUpdateMap[strings.ToLower(tableName)] = refreshTimeNanos
+	if c.rateLimiterMap == nil {
+		return
 	}
+	now := time.Now()
+	entry := c.limiterEntryLocked(strings.ToLower(tableName), now)
+	atomic.StoreInt64(&entry.lastAccessUnixNano, now.UnixNano())
+	entry.nextRefresh = time.Unix(0, refreshTimeNanos)
+}
+
+func (c *Client) startBackground(fn func(context.Context)) bool {
+	c.bgMu.Lock()
+	if c.bgClosing {
+		c.bgMu.Unlock()
+		return false
+	}
+	c.bgWG.Add(1)
+	ctx := c.bgCtx
+	c.bgMu.Unlock()
+
+	go func() {
+		defer c.bgWG.Done()
+		fn(ctx)
+	}()
+	return true
+}
+
+func (c *Client) startLimiterMaintenance() {
+	c.limiterMaintenanceOnce.Do(func() {
+		c.startBackground(c.runLimiterMaintenance)
+	})
+}
+
+func (c *Client) runLimiterMaintenance(ctx context.Context) {
+	ticker := time.NewTicker(limiterCleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case now := <-ticker.C:
+			c.cleanupRateLimitersAt(now)
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (c *Client) cleanupRateLimitersAt(now time.Time) int {
+	cutoff := now.Add(-limiterInactiveTTL).UnixNano()
+	removed := 0
+	c.limitMux.Lock()
+	defer c.limitMux.Unlock()
+	for tableName, entry := range c.rateLimiterMap {
+		if atomic.LoadInt64(&entry.lastAccessUnixNano) <= cutoff {
+			delete(c.rateLimiterMap, tableName)
+			removed++
+		}
+	}
+	return removed
 }
 
 // Comsume rate limiter units after successful operation.
@@ -1653,76 +1757,68 @@ func (c *Client) consumeLimiterUnitsWithContext(ctx context.Context, rl common.R
 
 func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
 	lTable := strings.ToLower(tableName)
-
+	now := time.Now()
 	c.limitMux.Lock()
 	defer c.limitMux.Unlock()
-
 	if c.rateLimiterMap == nil {
 		return false
 	}
 
-	c.setTableNeedsRefreshLocked(lTable, false)
-
+	entry := c.limiterEntryLocked(lTable, now)
+	atomic.StoreInt64(&entry.lastAccessUnixNano, now.UnixNano())
+	entry.nextRefresh = now.Add(time.Duration(LimiterRefreshNanos))
 	if limits.ReadUnits <= 0 && limits.WriteUnits <= 0 {
-		delete(c.rateLimiterMap, lTable)
+		entry.limiters = common.RateLimiterPair{}
+		entry.hasLimiters = false
 		c.logger.Fine("removing client-side rate limiting from table " + tableName)
 		return false
 	}
 
-	// Adjust units based on configured rate limiter percentage
-	RUs := float64(limits.ReadUnits)
-	WUs := float64(limits.WriteUnits)
+	readUnits := float64(limits.ReadUnits)
+	writeUnits := float64(limits.WriteUnits)
 	if c.RateLimiterPercentage > 0.0 {
-		RUs = (RUs * c.RateLimiterPercentage) / 100.0
-		WUs = (WUs * c.RateLimiterPercentage) / 100.0
+		readUnits = (readUnits * c.RateLimiterPercentage) / 100.0
+		writeUnits = (writeUnits * c.RateLimiterPercentage) / 100.0
 	}
-
-	// Create or update rate limiters in map
-	rp, ok := c.rateLimiterMap[lTable]
-	if ok {
-		rp.ReadLimiter.SetLimitPerSecond(RUs)
-		rp.WriteLimiter.SetLimitPerSecond(WUs)
+	if entry.hasLimiters {
+		entry.limiters.ReadLimiter.SetLimitPerSecond(readUnits)
+		entry.limiters.WriteLimiter.SetLimitPerSecond(writeUnits)
 	} else {
-		// Note: noSQL cloud service has a "burst" availability of
-		// 300 seconds. But we don't know if or how many other clients
-		// may have been using this table, and a duration of 30 seconds
-		// allows for more predictable usage.
-		c.rateLimiterMap[lTable] = common.RateLimiterPair{
-			ReadLimiter:  common.NewSimpleRateLimiterWithDuration(RUs, 30),
-			WriteLimiter: common.NewSimpleRateLimiterWithDuration(WUs, 30),
+		entry.limiters = common.RateLimiterPair{
+			ReadLimiter:  common.NewSimpleRateLimiterWithDuration(readUnits, 30),
+			WriteLimiter: common.NewSimpleRateLimiterWithDuration(writeUnits, 30),
 		}
+		entry.hasLimiters = true
 	}
 
-	c.logger.Fine("Updated table '%s' rate limiters to have RUs=%.1f and WUs=%.1f per second",
-		tableName, RUs, WUs)
-
+	c.logger.Fine("Updated table %q rate limiters to have RUs=%.1f and WUs=%.1f per second",
+		tableName, readUnits, writeUnits)
 	return true
 }
 
-func (c *Client) updateTableLimiters(tableName string) {
-	req := &GetTableRequest{
-		TableName: tableName,
-		Timeout:   5000 * time.Millisecond,
-	}
-	c.logger.Info("Starting GetTableRequest for table '%s'", tableName)
-	res, err := c.GetTable(req)
+func (c *Client) updateTableLimiters(ctx context.Context, tableName string) {
+	req := &GetTableRequest{TableName: tableName, Timeout: 5 * time.Second}
+	c.logger.Info("Starting GetTableRequest for table %q", tableName)
+	result, err := c.executeWithContext(ctx, req)
 	if err != nil {
-		c.logger.Info("GetTableRequest for table '%s' returned error: %v", tableName, err)
-		// allow retry after 100ms
-		c.setTableLimitRefreshTime(tableName, time.Now().UnixNano()+(100*1000*1000))
+		c.logger.Info("GetTableRequest for table %q returned error: %v", tableName, err)
+		if ctx.Err() == nil {
+			c.setTableLimitRefreshTime(tableName, time.Now().Add(100*time.Millisecond).UnixNano())
+		}
 		return
 	}
-	if res == nil {
-		c.logger.Info("GetTableRequest for table '%s' returned nil", tableName)
-		// allow retry after 100ms
-		c.setTableLimitRefreshTime(tableName, time.Now().UnixNano()+(100*1000*1000))
+	res, ok := result.(*TableResult)
+	if !ok || res == nil {
+		c.logger.Info("GetTableRequest for table %q returned no table result", tableName)
+		if ctx.Err() == nil {
+			c.setTableLimitRefreshTime(tableName, time.Now().Add(100*time.Millisecond).UnixNano())
+		}
 		return
 	}
 
-	c.logger.Info("GetTableRequest completed for table '%s'", tableName)
-	// update/add rate limiters for table
+	c.logger.Info("GetTableRequest completed for table %q", tableName)
 	if c.updateRateLimiters(tableName, res.Limits) {
-		c.logger.Info("background goroutine added limiters for table '%s'", tableName)
+		c.logger.Info("background goroutine added limiters for table %q", tableName)
 	}
 }
 
@@ -1879,7 +1975,7 @@ func (c *Client) processResponse(data []byte, httpResp *http.Response, req Reque
 }
 
 func readHTTPResponseBody(httpResp *http.Response) ([]byte, error) {
-	lease, err := readHTTPResponseBodyLease(httpResp)
+	lease, err := readHTTPResponseBodyLease(httpResp, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -2145,37 +2241,33 @@ func isRetryableError(err error) bool {
 // RateLimitingEnabled to true in the client Config to enable rate limiting.
 func (c *Client) EnableRateLimiting(enable bool, usePercent float64) {
 	c.limitMux.Lock()
-	defer c.limitMux.Unlock()
-
 	c.RateLimiterPercentage = usePercent
 	if enable {
-		if c.rateLimiterMap != nil {
-			return
+		if c.rateLimiterMap == nil {
+			c.rateLimiterMap = make(map[string]*tableLimiterEntry)
 		}
-		c.rateLimiterMap = make(map[string]common.RateLimiterPair)
-		c.tableLimitUpdateMap = make(map[string]int64)
 	} else {
-		c.tableLimitUpdateMap = nil
 		c.rateLimiterMap = nil
 	}
+	c.limitMux.Unlock()
 }
 
-// ResetRateLimiters is for testing puposes only.
+// ResetRateLimiters is for testing purposes only.
 func (c *Client) ResetRateLimiters(tableName string) {
 	c.limitMux.RLock()
-	if c.rateLimiterMap == nil {
+	entry, ok := c.rateLimiterMap[strings.ToLower(tableName)]
+	if ok {
+		atomic.StoreInt64(&entry.lastAccessUnixNano, time.Now().UnixNano())
+	}
+	if !ok || !entry.hasLimiters {
 		c.limitMux.RUnlock()
 		return
 	}
-	rp, ok := c.rateLimiterMap[strings.ToLower(tableName)]
-	if !ok {
-		c.limitMux.RUnlock()
-		return
-	}
+	limiters := entry.limiters
 	c.limitMux.RUnlock()
 
-	rp.WriteLimiter.Reset()
-	rp.ReadLimiter.Reset()
+	limiters.WriteLimiter.Reset()
+	limiters.ReadLimiter.Reset()
 }
 
 // VerifyConnection attempts to verify that the connection is useable.
