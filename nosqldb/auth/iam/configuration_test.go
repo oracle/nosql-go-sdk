@@ -521,9 +521,11 @@ compartment = somecompartment
 region=someregion
 `
 
-	homeDir, _ := os.UserHomeDir()
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
 	tmpKeyLocation := path.Join(homeDir, "testKey")
-	e := os.WriteFile(tmpKeyLocation, []byte(testEncryptedPrivateKeyConf), 0777)
+	e := os.WriteFile(tmpKeyLocation, []byte(testEncryptedPrivateKeyConf), 0600)
 	if e != nil {
 		assert.FailNow(t, e.Error())
 	}
@@ -533,7 +535,6 @@ region=someregion
 	tmpConfFile := writeTempFile(data)
 
 	defer removeFileFn(tmpConfFile)
-	defer removeFileFn(tmpKeyLocation)
 
 	provider, err := ConfigurationProviderFromFile(tmpConfFile, testKeyPassphrase)
 	assert.NoError(t, err)

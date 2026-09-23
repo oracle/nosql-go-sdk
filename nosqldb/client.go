@@ -1665,7 +1665,7 @@ func (c *Client) updateRateLimiters(tableName string, limits TableLimits) bool {
 
 	if limits.ReadUnits <= 0 && limits.WriteUnits <= 0 {
 		delete(c.rateLimiterMap, lTable)
-		c.logger.Fine("removing client-side rate limiting from table " + tableName)
+		c.logger.Fine("removing client-side rate limiting from table %s", tableName)
 		return false
 	}
 
@@ -2113,15 +2113,15 @@ func wrapResponseErrors(code int, msg string) error {
 	case nosqlerr.BadProtocolMessage:
 		// V2 proxy will return this message if V3 is used in the driver
 		if strings.Contains(msg, "Invalid driver serial version") {
-			return nosqlerr.New(nosqlerr.UnsupportedProtocol, msg)
+			return nosqlerr.New(nosqlerr.UnsupportedProtocol, "%s", msg)
 		}
 		if strings.Contains(msg, "Invalid query version") {
-			return nosqlerr.New(nosqlerr.UnsupportedQueryVersion, msg)
+			return nosqlerr.New(nosqlerr.UnsupportedQueryVersion, "%s", msg)
 		}
 		return nosqlerr.NewIllegalArgument("bad protocol message: %s", msg)
 
 	default:
-		return nosqlerr.New(errCode, msg)
+		return nosqlerr.New(errCode, "%s", msg)
 	}
 }
 
@@ -2271,6 +2271,6 @@ func (c *Client) SetQueryVersion(qVer int16) {
 func (c *Client) oneTimeMessage(msg string) {
 	if _, ok := c.oneTimeMessages[msg]; !ok {
 		c.oneTimeMessages[msg] = struct{}{}
-		c.logger.Warn(msg)
+		c.logger.Warn("%s", msg)
 	}
 }

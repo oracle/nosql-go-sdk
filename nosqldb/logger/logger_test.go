@@ -85,19 +85,19 @@ func (suite *LoggerTestSuite) TestLogMessage() {
 
 			switch logEntryLevel {
 			case Fine:
-				lgr.Fine(msg)
+				lgr.Fine("%s", msg)
 			case Trace:
-				lgr.Trace(msg)
+				lgr.Trace("%s", msg)
 			case Debug:
-				lgr.Debug(msg)
+				lgr.Debug("%s", msg)
 			case Info:
-				lgr.Info(msg)
+				lgr.Info("%s", msg)
 			case Warn:
-				lgr.Warn(msg)
+				lgr.Warn("%s", msg)
 			case Error:
-				lgr.Error(msg)
+				lgr.Error("%s", msg)
 			case Off:
-				lgr.Log(Off, msg)
+				lgr.Log(Off, "%s", msg)
 			}
 
 			msgPrefix := fmt.Sprintf("Testcase %d-%d: (LoggerLevel=%s, LogEntryLevel=%s): ",

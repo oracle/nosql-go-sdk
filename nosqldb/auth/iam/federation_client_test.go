@@ -238,7 +238,7 @@ func TestX509FederationClient_GetCachedSecurityToken(t *testing.T) {
 func TestX509FederationClient_RenewSecurityTokenSessionKeySupplierError(t *testing.T) {
 	mockSessionKeySupplier := new(mockSessionKeySupplier)
 	expectedErrorMessage := "TestSessionKeySupplierRefreshError"
-	mockSessionKeySupplier.On("Refresh").Return(fmt.Errorf(expectedErrorMessage)).Once()
+	mockSessionKeySupplier.On("Refresh").Return(fmt.Errorf("%s", expectedErrorMessage)).Once()
 
 	mockLeafCertificateRetriever := new(mockCertificateRetriever)
 	mockIntermediateCertificateRetriever := new(mockCertificateRetriever)
@@ -267,7 +267,7 @@ func TestX509FederationClient_RenewSecurityTokenLeafCertificateRetrieverError(t 
 
 	mockLeafCertificateRetriever := new(mockCertificateRetriever)
 	expectedErrorMessage := "TestLeafCertificateRetrieverError"
-	mockLeafCertificateRetriever.On("Refresh").Return(fmt.Errorf(expectedErrorMessage)).Once()
+	mockLeafCertificateRetriever.On("Refresh").Return(fmt.Errorf("%s", expectedErrorMessage)).Once()
 
 	mockIntermediateCertificateRetriever := new(mockCertificateRetriever)
 
@@ -299,7 +299,7 @@ func TestX509FederationClient_RenewSecurityTokenIntermediateCertificateRetriever
 
 	mockIntermediateCertificateRetriever := new(mockCertificateRetriever)
 	expectedErrorMessage := "TestLeafCertificateRetrieverError"
-	mockIntermediateCertificateRetriever.On("Refresh").Return(fmt.Errorf(expectedErrorMessage)).Once()
+	mockIntermediateCertificateRetriever.On("Refresh").Return(fmt.Errorf("%s", expectedErrorMessage)).Once()
 
 	mockSecurityToken := new(mockSecurityToken)
 	mockSecurityToken.On("Valid").Return(false)
