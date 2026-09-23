@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## Unreleased
 
+### Changed
+- now requires go 1.24 or higher
+
 ### Added
 - Added configurable client-side statistics with Java-compatible `REGULAR`,
   `MORE`, and `ALL` profiles, periodic JSON logging, callback delivery, runtime

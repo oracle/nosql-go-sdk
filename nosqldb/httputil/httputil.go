@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -171,7 +172,7 @@ DoRetry:
 		return nil, nosqlerr.NewRequestTimeout("request timed out after %v, "+
 			"number of attempts: %d"+errMsg, timeout, numAttempts)
 	case ctxErr == context.Canceled:
-		return nil, fmt.Errorf("request was canceled" + errMsg)
+		return nil, errors.New("request was canceled: " + errMsg)
 	default:
 		return nil, err
 	}

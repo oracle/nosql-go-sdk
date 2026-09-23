@@ -394,7 +394,11 @@ func runTestWithThreads(t *testing.T,
 	startTime := currentTimeMillis()
 	endTime := startTime + (int64(testDurationSecs) * 1000)
 
-	ch := make(chan int64)
+	type workerResult struct {
+		units int64
+		err   error
+	}
+	ch := make(chan workerResult, numThreads)
 
 	for x := 0; x < numThreads; x++ {
 		go func() {
@@ -404,16 +408,26 @@ func runTestWithThreads(t *testing.T,
 				unitsToConsume := (rand.Int63() % (int64(perSecondLimit) / 50)) + 1
 				_, err := limiter.ConsumeUnitsWithTimeout(unitsToConsume, (100 * time.Millisecond), false)
 				if err != nil {
-					t.Fatalf("unexpected error: %s", err)
+					ch <- workerResult{err: err}
+					return
 				}
 				units += unitsToConsume
 			}
-			ch <- units
+			ch <- workerResult{units: units}
 		}()
 	}
 
+	var workerErr error
 	for x := 0; x < numThreads; x++ {
-		totalUnits += <-ch
+		result := <-ch
+		if result.err != nil {
+			workerErr = result.err
+			continue
+		}
+		totalUnits += result.units
+	}
+	if workerErr != nil {
+		t.Fatalf("unexpected error: %s", workerErr)
 	}
 
 	avgRate := float64(totalUnits) / float64(testDurationSecs)

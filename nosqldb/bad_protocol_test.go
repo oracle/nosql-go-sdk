@@ -133,7 +133,7 @@ func processTestResponse(data []byte, httpResp *http.Response, req nosqldb.Reque
 			errMsg = *s
 		}
 		errCode := nosqlerr.ErrorCode(int(code))
-		err = nosqlerr.New(errCode, errMsg)
+		err = nosqlerr.New(errCode, "%s", errMsg)
 		return nil, err
 	}
 

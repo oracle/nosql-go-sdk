@@ -41,15 +41,15 @@ func (suite *NoSQLErrorsTestSuite) TestNewErrors() {
 	suite.Falsef(e.Retryable(), "RequestTimeout error should not be retryable")
 
 	msg = "cannot get access token from authorization server"
-	e = New(SecurityInfoUnavailable, msg)
+	e = New(SecurityInfoUnavailable, "%s", msg)
 	suite.Equalf(SecurityInfoUnavailable, e.Code, "unexpected error code")
 	suite.Equalf(msg, e.Message, "unexpected error message")
 	suite.Truef(e.Retryable(), "SecurityInfoUnavailable error should be retryable")
 
 	msgOfCause = "table is busy"
-	cause = New(TableBusy, msgOfCause)
+	cause = New(TableBusy, "%s", msgOfCause)
 	msg = "request timed out after 5s"
-	e = NewWithCause(RequestTimeout, cause, msg)
+	e = NewWithCause(RequestTimeout, cause, "%s", msg)
 	suite.Equalf(RequestTimeout, e.Code, "unexpected error code")
 	suite.Containsf(e.Error(), msgOfCause, "unexpected error description")
 	suite.Containsf(e.Error(), msg, "unexpected error description")

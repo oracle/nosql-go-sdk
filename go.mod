@@ -1,6 +1,6 @@
 module github.com/oracle/nosql-go-sdk
 
-go 1.18
+go 1.24
 
 require github.com/stretchr/testify v1.3.1-0.20190712000136-221dbe5ed467
 
