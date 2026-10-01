@@ -328,15 +328,16 @@ func TestExecuteErrorHandling(t *testing.T) {
 
 		// A channel that indicates if the execution has done.
 		doneCh := make(chan struct{})
+		producerDone := make(chan struct{})
 		numErr := len(r.injectErrors)
 		// Inject errors in a separate goroutine.
 		go func() {
+			defer close(producerDone)
 			for _, e := range r.injectErrors {
 				select {
 				case <-doneCh:
 					return
-				default:
-					mockExec.errChan <- e
+				case mockExec.errChan <- e:
 				}
 			}
 		}()
@@ -350,24 +351,28 @@ func TestExecuteErrorHandling(t *testing.T) {
 		}
 
 		close(doneCh)
+		<-producerDone
 
-		var chkErr error
 		if r.expectTimeoutErr {
-			if assert.Truef(t,
+			if !assert.Truef(t,
 				nosqlerr.Is(err, nosqlerr.RequestTimeout),
 				prefixMsg+"expect RequestTimeout, got %v",
 				err) {
-				e := err.(*nosqlerr.Error)
-				// Need to check the cause of RequestTimeout error.
-				chkErr = e.Cause
-			} else {
 				continue
 			}
-
-		} else {
-			chkErr = err
+			// The deadline may expire before the next attempt, leaving no cause.
+			chkErr := err.(*nosqlerr.Error).Cause
+			if chkErr == nil {
+				continue
+			}
+			if e, ok := chkErr.(*url.Error); ok {
+				chkErr = e.Err
+			}
+			assert.Containsf(t, r.injectErrors, chkErr, prefixMsg+"got unexpected timeout cause")
+			continue
 		}
 
+		chkErr := err
 		switch e := chkErr.(type) {
 		case *url.Error:
 			// Check the cause of url.Error
