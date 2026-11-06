@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/).
 
 ## Unreleased
 
+## 1.4.9 - 2026-11-06
+
 ### Changed
 - now requires go 1.24 or higher
 
